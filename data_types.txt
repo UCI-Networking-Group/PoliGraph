@@ -1,0 +1,165 @@
+# custom
+personally identifiable information
+
+# custom
+hostname
+UUID
+BSSID
+SSID
+Bluetooth MAC
+Ethernet MAC
+WiFi MAC
+WiFi SSID
+WiFi BSSID
+gender
+screen resolution
+browser language
+birthdate
+birthday
+
+# location
+geolocation
+geo-location
+geographical location
+GPS location
+geographic location
+longitude
+latitude
+physical location
+device geolocation
+GPS coordinate
+device GPS coordinate
+geographic region
+GPS address
+realtime location
+realtime geolocation
+realtime geo-location
+real-time location
+real-time geolocation
+real-time geo-location
+street name
+time zone
+user location
+zip code
+
+# "\w+ ID"
+account ID
+Acura ID
+caller ID
+console ID
+cookie ID
+device ID
+Honda ID
+networking ID
+online ID
+photo ID
+player ID
+service ID
+session ID
+Student ID
+user ID
+Vehicle Id
+Oculus ID
+Unity ID
+Android ID
+Apple advertising ID
+Android advertising ID
+
+# "\w+ identifier"
+advertising identifier
+application identifier
+device identifier
+persistent identifier
+session identifier
+Tribune identifier
+personal identifier
+
+# "\w+ address"
+billing address
+delivery address
+email address
+home address
+Internet address
+IP address
+MAC address
+payment address
+postal address
+protocol address
+shipping address
+street address
+URL address
+web address
+website address
+Bluetooth address
+Bluetooth MAC address
+Ethernet MAC address
+WiFi MAC address
+media access control address
+
+# "\w+ name"
+account name
+display name
+domain name
+first name
+full name
+host name
+middle name
+maiden name
+legal name
+last name
+login name
+member name
+organization name
+player name
+profile name
+real name
+user name
+billing name
+cardholder name
+recipient name
+discord username
+card holder name
+account holder name
+bank account name
+student name
+surname
+
+# "\w+ number"
+cookie number
+phone Number
+AHFC account number
+telephone number
+routing number
+identification number
+IP number
+business telephone number
+card account number
+card verification number
+cell phone number
+cookie ID number
+credit card number
+daytime telephone number
+debit card number
+device identification number
+driver license number
+driver's license number
+faculty identification number
+financial aid number
+HRCA member number
+fax number
+IMEI number
+payment card number
+personal identification number
+session identification number
+social security number
+student identification number
+Student ID number
+transaction number
+user identification number
+user ID number
+Vehicle Identification Number
+order number
+mobile number
+serial number
+device serial number
+product serial number

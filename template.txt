@@ -1,0 +1,12 @@
+We collect your {DATA} and {DATA}.
+{ORG} collects {DATA}.
+{ORG} may collect your {DATA}.
+{ORG} may share your {DATA} with {ORG}.
+{ORG} may send your {DATA} to {ORG}.
+{DATA} and {DATA} may be shared with {ORG} and {ORG}.
+{DATA} and {DATA} may be sent to {ORG} and {ORG}.
+We share your {DATA} and {DATA} with {ORG} and {ORG}.
+{ORG} may collect some information from you such as {DATA}, {DATA} and {DATA} when you use our our services.
+Data you provide includes {DATA}, {DATA} and {DATA}.
+We may provide {ORG} and {ORG} with your {DATA}, {DATA} and {DATA}.
+Your requests to delete {DATA}, {DATA} and {DATA} is denied.
