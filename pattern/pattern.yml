@@ -1,0 +1,88 @@
+token_mapping:
+  dative_verb:
+  - send
+  - give
+  - provide
+  - share
+  general_share_verb:
+  - share
+  - disclose
+  - distribute
+  - exchange
+  - give
+  - provide
+  - sell
+  - send
+  - transfer
+  - transmit
+  - trade
+  general_collect_verb:
+  - use
+  - collect
+  - store
+  - receive
+  - retain
+  - obtain
+  - track
+  - process
+  - access
+  - take
+  - record
+  - request
+  - require
+  - keep
+  - ask
+  - save
+  - log
+  - utilize
+  - analyze
+  - aggregate
+  - get
+  - need
+  - gather
+  - read
+  - share
+  - disclose
+  - distribute
+  - exchange
+  - give
+  - provide
+  - sell
+  - send
+  - transfer
+  - transmit
+  - trade
+  general_include_prep:
+  - as
+  - include
+  - like
+  - about
+  - limit
+  - regard
+patterns:
+  # E collect D
+  - nsubj:ENTITY,ROOT:general_collect_verb,dobj:DATA
+  - nsubj:ENTITY,ROOT:general_collect_verb,dobj:,prep:general_include_prep,pobj:DATA
+  - nsubj:ENTITY,ROOT:general_collect_verb,prep:from,pobj:,prep:general_include_prep,pobj:DATA
+  # E need to collect D
+  - nsubj:ENTITY,ROOT:need,xcomp:general_collect_verb,dobj:DATA
+  - nsubj:ENTITY,ROOT:need,xcomp:general_collect_verb,dobj:,prep:general_include_prep,pobj:DATA
+  - nsubj:ENTITY,ROOT:need,xcomp:general_collect_verb,prep:from,pobj:,prep:general_include_prep,pobj:DATA
+  # E use ... to collect D
+  - nsubj:ENTITY,ROOT:general_collect_verb,xcomp:general_collect_verb,dobj:DATA
+  # E collect ... through D
+  - nsubj:ENTITY,ROOT:general_collect_verb,prep:through,pobj:DATA
+  # ... collect D through E
+  - pobj:ENTITY,prep:through,ROOT:general_collect_verb,dobj:DATA
+  # E ask for D
+  - nsubj:ENTITY,ROOT:ask,prep:for,pobj:DATA
+  # share E D
+  - dative:ENTITY,ROOT:dative_verb,dobj:DATA
+  # share E with D
+  - pobj:ENTITY,prep:with,ROOT:general_share_verb,dobj:DATA
+  - pobj:ENTITY,prep:to,ROOT:general_share_verb,dobj:DATA
+  # E share/provide us with D
+  - dobj:ENTITY,ROOT:general_share_verb,prep:with,pobj:DATA
+  # D is collected by E
+  - pobj:ENTITY,agent:by,ROOT:general_collect_verb,nsubjpass:DATA
+  - nsubj:ENTITY,ROOT:general_collect_verb,nsubjpass:DATA

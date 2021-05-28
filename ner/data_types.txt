@@ -1,11 +1,49 @@
 # custom
+system log
+cookie
+cookies
+web cookie
+HTTP cookie
+non-personally identifiable information
 personally identifiable information
+personal information
+demographic information
+health infomation
+biometric information
+profile information
+account information
+device type
+device information
+browser type
+browser information
+network type
+network information
+system information
+hardware information
+software information
+usage data
+usage information
+OS type
+OS information
+OS version
+software version
 
 # custom
+carrier provider
+user content
+device model
+system version
+software version
+password
+authentication token
+credential
+profile photo
+avatars
 hostname
 UUID
 BSSID
 SSID
+Service Set Identifier
 Bluetooth MAC
 Ethernet MAC
 WiFi MAC
@@ -14,10 +52,20 @@ WiFi BSSID
 gender
 screen resolution
 browser language
+age
 birthdate
+birth date
 birthday
+birth day
+IMEI
+IMSI
+subscriber id
+subscriber identifier
+subscriber identifiers
+International Mobile Subscriber Identity
 
 # location
+location
 geolocation
 geo-location
 geographical location
@@ -62,10 +110,17 @@ Vehicle Id
 Oculus ID
 Unity ID
 Android ID
+ad ID
+ads ID
+advertisement ID
+advertising ID
 Apple advertising ID
 Android advertising ID
+carrier user ID
+unique device ID
 
 # "\w+ identifier"
+ad identifier
 advertising identifier
 application identifier
 device identifier
@@ -73,6 +128,8 @@ persistent identifier
 session identifier
 Tribune identifier
 personal identifier
+Broadcast Service Set Identifier
+Service Set Identifier
 
 # "\w+ address"
 billing address
@@ -81,6 +138,7 @@ email address
 home address
 Internet address
 IP address
+Internet Protocol address
 MAC address
 payment address
 postal address
@@ -118,6 +176,8 @@ billing name
 cardholder name
 recipient name
 discord username
+Facebook username
+Twitter username
 card holder name
 account holder name
 bank account name
@@ -140,6 +200,7 @@ cookie ID number
 credit card number
 daytime telephone number
 debit card number
+device model number
 device identification number
 driver license number
 driver's license number
@@ -148,9 +209,11 @@ financial aid number
 HRCA member number
 fax number
 IMEI number
+IMSI number
 payment card number
 personal identification number
 session identification number
+SSN
 social security number
 student identification number
 Student ID number
