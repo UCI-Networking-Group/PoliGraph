@@ -1,13 +1,16 @@
-
-import re
 import sys
-import yaml
-import spacy
-from collections import defaultdict
-from pathlib import Path
 
+import yaml
+
+from pattern_core import (
+    PatternMatcher,
+    get_chain,
+    get_fixed_ent_type,
+    iter_entity_dtype_pairs,
+)
+import spacy
 from spacy.tokens import Token
-from pattern_core import PatternMatcher, get_fixed_ent_type, iter_entity_dtype_pairs, get_chain
+
 
 def main():
     spacy.prefer_gpu()
@@ -18,11 +21,16 @@ def main():
         pattern_config = yaml.safe_load(fin)
         pattern_matcher = PatternMatcher(pattern_config)
 
-    nlp = spacy.load("en_core_web_trf", exclude=["ner"])
-    nlp_ner = spacy.load(nlp_dir, nlp.vocab)
-    nlp.add_pipe("ner", source=nlp_ner)
-    nlp.add_pipe("merge_entities_mod", after="ner")
-    nlp.add_pipe("merge_noun_chunks")
+    nlp = spacy.load("en_core_web_lg")
+    nlp_ner = spacy.load(nlp_dir)
+    nlp.replace_pipe("ner", nlp_ner.get_pipe("ner"))
+
+    merge_entities = nlp.create_pipe("merge_entities_mod")
+    nlp.add_pipe(merge_entities, after="ner")
+
+    merge_noun_chunks = nlp.create_pipe("merge_noun_chunks")
+    nlp.add_pipe(merge_noun_chunks)
+
     Token.set_extension("fixed_ent_type", getter=get_fixed_ent_type)
 
     text = input("Text:")

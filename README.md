@@ -1,3 +1,3 @@
-# PrivacyTwelve
+# Privacy Policy Analyzer
 
-Useful datasets: https://usableprivacy.org/data
+TODO

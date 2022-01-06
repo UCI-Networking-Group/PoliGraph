@@ -3,7 +3,6 @@ import os
 import random
 
 import spacy
-from spacy.training.example import Example
 from spacy.util import compounding, minibatch
 
 
@@ -24,21 +23,19 @@ def main():
         data = json.load(f)
         TRAIN_DATA = []
         for text, annotations in data:
-            doc = nlp.make_doc(text)
-            TRAIN_DATA.append(Example.from_dict(doc, annotations))
+            TRAIN_DATA.append((text, annotations))
 
     with open('dev_dataset.json') as f:
         data = json.load(f)
         DEV_DATA = []
         for text, annotations in data:
-            doc = nlp.make_doc(text)
-            DEV_DATA.append(Example.from_dict(doc, annotations))
+            DEV_DATA.append((text, annotations))
 
     with open("noise.txt") as f:
         for line in f:
             doc = nlp.make_doc(line.strip())
             labels = [(e.start_char, e.end_char, e.label_) for e in doc.ents]
-            TRAIN_DATA.append(Example.from_dict(doc, {"entities": labels}))
+            TRAIN_DATA.append((text, {"entities": labels}))
 
     os.makedirs("checkpoints", exist_ok=True)
 
@@ -47,18 +44,19 @@ def main():
         losses = {}
         random.shuffle(TRAIN_DATA)
 
-        batches = spacy.util.minibatch(TRAIN_DATA, size=compounding(4.0, 32.0, 1.001))
+        batches = minibatch(TRAIN_DATA, size=compounding(4.0, 32.0, 1.001))
 
         with nlp.disable_pipes(*[pipe for pipe in nlp.pipe_names if pipe != 'ner']):
             for batch in batches:
-                nlp.update(batch, losses=losses, drop=0.3)
+                texts, annotations = zip(*batch)
+                nlp.update(texts, annotations, losses=losses, drop=0.3)
 
             print("Iteration", iteration)
             print("Losses", losses)
 
             # VALIDATION
             scores = nlp.evaluate(DEV_DATA)
-            print(scores)
+            print(scores.scores)
 
         # CHECKPOINT
         nlp.to_disk(os.path.join("checkpoints", str(iteration)))

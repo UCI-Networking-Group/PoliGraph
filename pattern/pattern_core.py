@@ -4,14 +4,15 @@ import re
 import sys
 from types import SimpleNamespace
 
-import spacy
-from spacy import displacy
-from spacy.language import Language
-from spacy.tokens import Token
 import yaml
 
+import spacy
+from spacy import displacy
+from spacy.language import component
+from spacy.tokens import Token
 
-@Language.component(
+
+@component(
     "merge_entities_mod",
     requires=["doc.ents", "token.ent_iob", "token.ent_type"],
     retokenizes=True,
@@ -40,17 +41,17 @@ def get_fixed_ent_type(token):
     if token.ent_type_ == 'DATA':
         return 'DATA'
 
-    lemma = token.lemma_.lower()
+    norm = token.norm_.lower()
 
     if token.ent_type_ == 'ORG':
         return 'ENTITY'
-    elif re.match(r'^(?:third|3rd)[- ]party\b', lemma):
+    elif re.match(r'^(?:third|3rd)[- ]party\b', norm):
         return 'ENTITY'
-    elif token.lemma_.lower() in ('we', 'us'):
+    elif norm in ('we', 'us'):
         return 'ENTITY'
-    elif token.lemma_.lower().startswith('our '):
+    elif norm.startswith('our '):
         return 'ENTITY'
-    elif token.lemma_.lower().startswith('this '):
+    elif norm.startswith('this '):
         return 'ENTITY'
 
     return ""
@@ -218,11 +219,16 @@ def main():
         pattern_config = yaml.safe_load(fin)
         pattern_matcher = PatternMatcher(pattern_config)
 
-    nlp = spacy.load("en_core_web_trf", exclude=["ner"])
-    nlp_ner = spacy.load(nlp_dir, nlp.vocab)
-    nlp.add_pipe("ner", source=nlp_ner)
-    nlp.add_pipe("merge_entities_mod", after="ner")
-    nlp.add_pipe("merge_noun_chunks")
+    nlp = spacy.load("en_core_web_lg")
+    nlp_ner = spacy.load(nlp_dir)
+    nlp.replace_pipe("ner", nlp_ner.get_pipe("ner"))
+
+    merge_entities = nlp.create_pipe("merge_entities_mod")
+    nlp.add_pipe(merge_entities, after="ner")
+
+    merge_noun_chunks = nlp.create_pipe("merge_noun_chunks")
+    nlp.add_pipe(merge_noun_chunks)
+
     Token.set_extension("fixed_ent_type", getter=get_fixed_ent_type)
 
     for yml_path in yml_dir.glob('*.yml'):
@@ -230,10 +236,7 @@ def main():
 
         for segment in data['segments']:
             text = segment["segment_text"]
-            text = 'We provide customer lists, email addresses and other information identified above to third party companies and contractors'
             doc = nlp(text)
-            import pdb
-            pdb.set_trace()
 
             for sent in doc.sents:
                 for common_parent, ent, dt in iter_entity_dtype_pairs(sent):
