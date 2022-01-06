@@ -52,6 +52,12 @@ $ python -m spacy download en_core_web_lg
 
 ## Usage
 
+Before performing the following commands, download this repository first to local machine:
+
+```
+$ git clone https://github.uci.edu/NetworkingGroup/privacy_policy_analyzer.git
+```
+
 ### Named-entity recognition (NER)
 
 All code related to NER training are inside `ner` folder:
