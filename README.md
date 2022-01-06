@@ -17,13 +17,30 @@ $ mamba create -n policy_analyzer -c anaconda -c conda-forge \
     'spacy==2.3.7' 'cudatoolkit=10.0' cupy cudnn \
     nccl 'requests==2.24.0' cython inflect boto3
 ```
+Run the following instead if there is no GPU/CUDA:
+```
+$ mamba create -n policy_analyzer -c anaconda -c conda-forge \
+    'spacy==2.3.7' 'requests==2.24.0' cython inflect boto3
+```
 
 Install [neuralcoref](https://github.com/huggingface/neuralcoref) library from source:
 
 ```
 $ git clone git@github.com:huggingface/neuralcoref.git
+```
+If the SSH key on the local machine has not been set up yet, this command might throw the following error:
+```
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+```
+We simply have to run the following `git clone` command instead:
+```
+git clone https://github.com/huggingface/neuralcoref.git
+```
+Next, run the following two commands:
+```
 $ cd neuralcoref
-$ python setup.py
+$ pip install -e .
 ```
 
 Install spaCy's English NLP pipelines:
