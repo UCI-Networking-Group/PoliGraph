@@ -23,7 +23,7 @@ def main():
     templates = list(load_list('template.txt'))
 
     spacy.prefer_gpu()
-    nlp = spacy.load('en_core_web_trf')
+    nlp = spacy.load('en_core_web_lg')
 
     entities = []
     for ent in load_list('entities.txt'):
