@@ -15,12 +15,12 @@ Create a new conda environment with most dependencies installed using mamba:
 ```
 $ mamba create -n policy_analyzer -c anaconda -c conda-forge \
     'spacy==2.3.7' 'cudatoolkit=10.0' cupy cudnn \
-    nccl 'requests==2.24.0' cython inflect boto3
+    nccl 'requests==2.24.0' cython inflect boto3 pyyaml
 ```
 Run the following instead if there is no GPU/CUDA:
 ```
 $ mamba create -n policy_analyzer -c anaconda -c conda-forge \
-    'spacy==2.3.7' 'requests==2.24.0' cython inflect boto3
+    'spacy==2.3.7' 'requests==2.24.0' cython inflect boto3 pyyaml
 ```
 
 Install [neuralcoref](https://github.com/huggingface/neuralcoref) library from source:
