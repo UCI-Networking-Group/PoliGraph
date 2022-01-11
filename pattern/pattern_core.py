@@ -4,12 +4,11 @@ import re
 import sys
 from types import SimpleNamespace
 
-import yaml
-
 import spacy
 from spacy import displacy
 from spacy.language import component
 from spacy.tokens import Token
+import yaml
 
 
 @component(
@@ -38,6 +37,9 @@ def merge_entities_mod(doc):
 
 
 def get_fixed_ent_type(token):
+    if token.i in token.doc.user_data:
+        return 'DATA'
+
     if token.ent_type_ == 'DATA':
         return 'DATA'
 
