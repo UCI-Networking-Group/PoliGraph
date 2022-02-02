@@ -18,6 +18,22 @@ class DocumentSegment:
         else:
             return f"({self.type}) {repr(self.text)}"
 
+    def get_text_with_context(self):
+        text_buffer = []
+        current_segment = self
+        while current_segment is not None:
+            if current_segment.type == "listitem":
+                text_buffer.append(" ")
+            elif current_segment.type == "text":
+                text_buffer.append(current_segment.text)
+            elif current_segment.type == "heading":
+                text_buffer.append("\n\n")
+                text_buffer.append(current_segment.text)
+
+            current_segment = current_segment.link
+
+        return "".join(reversed(text_buffer)).strip()
+
 
 def process_accessibility_tree(tree):
     heading_stack = [(-1, None)]
@@ -102,6 +118,7 @@ def main():
     segments = process_accessibility_tree(accessibility_tree)
     for seg in segments:
         print(seg)
+        print(seg.get_text_with_context())
 
 
 if __name__ == "__main__":
