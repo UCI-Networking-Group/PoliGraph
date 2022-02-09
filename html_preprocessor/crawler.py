@@ -24,8 +24,12 @@ def main():
     parser.add_argument("output", help="output dir")
     args = parser.parse_args()
 
+    if args.url.split("://")[0] not in ["http", "https", "file"]:
+        args.url = Path(args.url).absolute().as_uri()
+
     with sync_playwright() as p:
-        # firefox generates simpler accessibility tree than chromium
+        # Firefox generates simpler accessibility tree than chromium
+        # Tested on Debian's firefox-esr 91.5.0esr-1~deb11u1
         browser = p.firefox.launch()
 
         page = browser.new_page()
@@ -53,7 +57,6 @@ def main():
         with open(output_dir / "accessibility_tree.json", "w") as fout:
             json.dump(snapshot, fout)
 
-        print(page.title())
         browser.close()
 
 

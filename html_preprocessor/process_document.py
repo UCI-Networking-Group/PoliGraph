@@ -36,11 +36,23 @@ class DocumentSegment:
 
 
 def process_accessibility_tree(tree):
+    IGNORED_ELEMENTS = {"img", "image map", "button", "separator", "whitespace", "list item marker", "insertion"}
+    SECTION_ELEMENTS = {"document", "article", "landmark", "section", "blockquote"}
+    TEXT_CONTAINER_ELEMENTS = {"paragraph", "text", "link", "statictext", "label", "text container", "text leaf"}
+    TODO_ELEMENTS = {"table", "definitionlist"}  # TODO: parse tables and <dl>
+
+    '''
+    heading: "heading"
+    list: "list", "listitem"
+    table: "table", "columnheader", "row", "cell"
+    definition list: "definitionlist", "term", "definition"
+    '''
+
     heading_stack = [(-1, None)]
     segments = []
 
     def extract_text(node):
-        if node["role"] in ["img", "list item marker"]:
+        if node["role"] in IGNORED_ELEMENTS:
             return
 
         if "children" in node:
@@ -50,11 +62,11 @@ def process_accessibility_tree(tree):
             yield node["name"].strip()
 
     def iterate(node):
-        if node["role"] == "table":
-            # TODO: parse tables
+        if node["role"] in TODO_ELEMENTS:
             return
-
-        if node["role"] in ["document", "landmark", "section"]:
+        elif node["role"] in IGNORED_ELEMENTS:
+            return
+        elif node["role"] in SECTION_ELEMENTS:
             for child in node.get("children", []):
                 iterate(child)
         elif node["role"] == "heading":
@@ -69,11 +81,15 @@ def process_accessibility_tree(tree):
             heading_stack.append((level, heading_segment))
             segments.append(heading_segment)
         elif node["role"] == "list":
-            link = segments[-1]
+            link = segments[-1] if segments else None
 
             for child in node.get("children", []):
-                if child["role"] != "listitem":
-                    raise ValueError("Invalid child element of a list")
+                # if child["role"] != "listitem":
+                #     raise ValueError("Invalid child element of a list: " + child["role"])
+
+                # Many HTML lists are illformed so this has to be tolerant
+                if child["role"] in IGNORED_ELEMENTS:
+                    continue
 
                 listitem_segment = DocumentSegment("listitem", link, "")
                 segments.append(listitem_segment)
@@ -93,7 +109,7 @@ def process_accessibility_tree(tree):
                 if len(text_buffer) > 0:
                     seg_in_list = DocumentSegment("text", listitem_segment, " ".join(text_buffer))
                     segments.append(seg_in_list)
-        elif node["role"] in ["paragraph", "link"]:
+        elif node["role"] in TEXT_CONTAINER_ELEMENTS:
             link = heading_stack[-1][1]
 
             text = " ".join(extract_text(node))
