@@ -139,5 +139,7 @@ cython_debug/
 
 __MACOSX
 .DS_Store
-ner/dev_dataset.json
-ner/train_dataset.json
+dev_dataset.json
+train_dataset.json
+dev_dataset.spacy
+train_dataset.spacy

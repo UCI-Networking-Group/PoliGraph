@@ -1,0 +1,272 @@
+alias:
+  IP: ['IP', 'Internet Protocol']
+  MAC: ['MAC', 'media access control']
+  WiFi: ['WiFi', 'wireless', 'WLAN']
+  IDS: ['ID', 'identifier', 'identification number']
+  PHONE: ['phone', 'mobile phone', 'cellphone', 'cell phone']
+  INFO: ['information', 'data']
+  AD: ['ad', 'ads', 'advertising', 'advertisement']
+  OS: ['OS', 'operating system', 'system']
+  LOGIN: ['login name', 'user name', 'username', 'account name']
+
+GENERAL_DATA:
+- aggregate INFO
+- aggregated INFO
+- non-personally identifiable INFO
+- personally identifiable INFO
+- personal INFO
+- consumer INFO
+- demographic INFO
+- health INFO
+- biometric INFO
+- profile INFO
+- account INFO
+- device INFO
+- browser INFO
+- network INFO
+- system INFO
+- hardware INFO
+- software INFO
+- OS INFO
+
+# (A) Identifiers such as a real name, alias, postal address, unique personal
+# identifier, online identifier Internet Protocol address, email address,
+# account name, social security number, driver’s license number, passport
+# number, or other similar identifiers.
+# (x) “Unique identifier” or “Unique personal identifier” means a persistent
+# identifier that can be used to recognize a consumer, a family, or a device
+# that is linked to a consumer or family, over time and across different
+# services, including, but not limited to, a device identifier; an Internet
+# Protocol address; cookies, beacons, pixel tags, mobile ad identifiers, or
+# similar technology; customer number, unique pseudonym, or user alias;
+# telephone numbers, or other forms of persistent or probabilistic identifiers
+# that can be used to identify a particular consumer or device.
+
+# real name
+REAL_NAME:
+- real name
+- full name
+- first name
+- middle name
+- last name
+- maiden name
+- surname
+- given name
+- legal name
+- billing name
+- full billing name
+- cardholder name
+- card holder name
+- recipient name
+- account holder name
+- bank account name
+- student name
+- member name
+
+# account name / alias
+ACCOUNT_NAME:
+- account name
+- display name
+- login name
+- player name
+- profile name
+- user name
+- PIN (number)
+- PIN code
+- personal identification number
+- Discord LOGIN
+- Facebook LOGIN
+- Twitter LOGIN
+- Instagram LOGIN
+- YouTube LOGIN
+- TikTok LOGIN
+- WeChat LOGIN
+- subscriber ID
+- student ID
+- user ID
+
+CONTACT_INFO:
+# email address
+- e-mail address
+- email address
+# postal address
+- home address
+- payment address
+- postal address
+- protocol address
+- shipping address
+- street address
+- billing address
+- delivery address
+- ZIP Code
+- zipcode
+- postal code
+- post code
+- postcode
+# phone/tax numbers
+- PHONE number
+- personal PHONE number
+- business PHONE number
+- daytime PHONE number
+- fax number
+
+PERSON_ID:
+# social security number, driver’s license number, passport number
+- SSN
+- social security number
+- passport number
+- driver's license number
+- driver license number
+- identification number
+- (state) identification card number
+
+PAYMENT_INFO:
+# bank account / financial / payment
+- payment card number
+- card account number
+- card security code
+- card verification number
+- credit card number
+- debit card number
+- bank account number
+- bank account INFO
+- routing number
+
+IDENTIFIERS:
+# device/hardware identifiers
+- (device) serial number
+- Android ID
+- Oculus ID
+- (unique) device ID
+- console ID
+- MAC address
+- Bluetooth MAC (address)
+- Ethernet MAC (address)
+- WiFi MAC (address)
+- Bluetooth (address)
+- IMEI (number)
+- International Mobile Equipment Identity (number)
+- IMSI (number)
+- International Mobile Subscriber Identity (number)
+- (WiFi) BSSID
+- (WiFi) Broadcast Service Set ID
+- (WiFi) SSID
+- (WiFi) Service Set ID
+# software identifiers
+- host name
+- hostname
+- domain name
+- IP address
+- IP number
+- Internet address
+- network address
+- device model number
+- device identification number
+- application ID
+- Unity ID
+# AD ID
+- AD ID
+- Apple AD ID
+- Android AD ID
+# Cookies
+- cookies
+- HTTP cookies
+- web cookies
+- Internet cookies
+- browser cookies
+- web beacon
+- tracking pixel
+- pixel tag
+- session ID
+
+# (F) Internet or other electronic network activity information, including, but
+# not limited to, browsing history, search history, and information regarding a
+# consumer’s interaction with an Internet Web site, application, or
+# advertisement.
+ACTIVITY:
+- usage INFO
+- browsing INFO
+- system log
+- browsing history
+- search history
+
+# (G) Geolocation data.
+GEOLOCATION:
+- location
+- geolocation
+- geo-location
+- geographical location
+- GPS location
+- GPS coordinate
+- GPS address
+- device GPS coordinate
+- geographic location
+- longitude
+- latitude
+- physical location
+- device geolocation
+- realtime location
+- realtime geolocation
+- realtime geo-location
+- real-time location
+- real-time geolocation
+- real-time geo-location
+- user location
+
+# (b) “Biometric information” means an individual’s physiological, biological,
+# or behavioral characteristics, including an individual’s deoxyribonucleic acid
+# (DNA), that can be used, singly or in combination with each other or with
+# other identifying data, to establish individual identity. Biometric
+# information includes, but is not limited to, imagery of the iris, retina,
+# fingerprint, face, hand, palm, vein patterns, and voice recordings, from which
+# an identifier template, such as a faceprint, a minutiae template, or a
+# voiceprint, can be extracted, and keystroke patterns or rhythms, gait patterns
+# or rhythms, and sleep, health, or exercise data that contain identifying 
+# information.
+BIOMETRIC:
+- DNA INFO
+- iris imagery
+- retina imagery
+- iris imagery
+- fingerprint (imagery)
+- face imagery
+- palm imagery
+- vein pattern
+- voice recording
+- faceprint
+- minutiae template
+- voiceprint
+- keystroke pattern
+- keystroke rhythm
+- gait pattern
+- gait rhythm
+- sleep INFO
+- exercise INFO
+
+DEMOGRAPHIC:
+- gender
+- age
+- birthdate
+- birth date
+- birthday
+- birth day
+
+AUTH_TOKEN:
+- password
+- passphrase
+- authentication token
+- credential
+- security question
+
+SOFTWARE_INFO:
+- device type
+- device model
+- browser type
+- network type
+- OS type
+- OS version
+- software version
+- screen resolution
+- browser language
+- user agent (string)
+- carrier provider
