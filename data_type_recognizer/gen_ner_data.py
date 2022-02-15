@@ -6,7 +6,6 @@ import sys
 
 import faker
 import inflect
-from pkg_resources import DEVELOP_DIST
 import spacy
 import tqdm
 import yaml

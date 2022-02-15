@@ -4,10 +4,11 @@ alias:
   WiFi: ['WiFi', 'wireless', 'WLAN']
   IDS: ['ID', 'identifier', 'identification number']
   PHONE: ['phone', 'mobile phone', 'cellphone', 'cell phone']
-  INFO: ['information', 'data']
+  INFO: ['info', 'information', 'data']
   AD: ['ad', 'ads', 'advertising', 'advertisement']
-  OS: ['OS', 'operating system', 'system']
-  LOGIN: ['login name', 'user name', 'username', 'account name']
+  OS: ['OS', 'operating system', 'system', 'iOS', 'Android', 'Windows']
+  LOGIN: ['login name', 'user name', 'username', 'account name', 'ID']
+  SETTING: ['setting', 'preference', 'configuration']
 
 GENERAL_DATA:
 - aggregate INFO
@@ -27,7 +28,10 @@ GENERAL_DATA:
 - system INFO
 - hardware INFO
 - software INFO
+- financial INFO
+- social network INFO
 - OS INFO
+- sensor INFO
 
 # (A) Identifiers such as a real name, alias, postal address, unique personal
 # identifier, online identifier Internet Protocol address, email address,
@@ -157,6 +161,7 @@ IDENTIFIERS:
 - hostname
 - domain name
 - IP address
+- IP (address) SETTING
 - IP number
 - Internet address
 - network address
@@ -169,11 +174,12 @@ IDENTIFIERS:
 - Apple AD ID
 - Android AD ID
 # Cookies
-- cookies
-- HTTP cookies
-- web cookies
-- Internet cookies
-- browser cookies
+- cookie
+- cookie SETTING
+- HTTP cookie
+- web cookie
+- Internet cookie
+- browser cookie
 - web beacon
 - tracking pixel
 - pixel tag
@@ -184,11 +190,14 @@ IDENTIFIERS:
 # consumer’s interaction with an Internet Web site, application, or
 # advertisement.
 ACTIVITY:
+- log info
+- logging info
 - usage INFO
 - browsing INFO
 - system log
 - browsing history
 - search history
+- user activity
 
 # (G) Geolocation data.
 GEOLOCATION:
@@ -250,6 +259,7 @@ DEMOGRAPHIC:
 - birth date
 - birthday
 - birth day
+- date of birth
 
 AUTH_TOKEN:
 - password
@@ -261,12 +271,31 @@ AUTH_TOKEN:
 SOFTWARE_INFO:
 - device type
 - device model
+- device manufacturer
+- platform type
+- CPU model
+- CPU frequency
+- GPU model
+- GPU frequency
 - browser type
 - network type
-- OS type
 - OS version
 - software version
+- API version
 - screen resolution
+- monitor resolution
 - browser language
 - user agent (string)
 - carrier provider
+- language SETTING
+- timezone SETTING
+- system SETTING
+
+SENSOR_DATA:
+- sensor flag
+- accelerometer data
+- proximity sensor data
+- gyroscope data
+- compass data
+- barometer data
+- bluetooth data
