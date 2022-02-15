@@ -237,11 +237,22 @@ def remove_unused_entities(doc):
     requires=["doc.ents", "token.ent_iob", "token.ent_type"],
 )
 def remove_invalid_entities(doc):
+    # REF:
+    ## https://github.com/clir/clearnlp-guidelines/blob/master/md/specifications/dependency_labels.md
+    ## https://www.mathcs.emory.edu/~choi/doc/cu-2012-choi.pdf
+    ## nlp.pipe_labels["parser"]
+    allowed_deps = {
+        "nsubj", "nsubjpass",  # subjects
+        "pobj", "bobj", "dative", "oprd", "attr",  # objects
+        "nmod", "poss", "appos",  # nominals
+        "conj", "ROOT",
+        "dep", "meta"  # unclassified
+    }
+
     ents = []
     for e in doc.ents:
         # discard invalid named entities
-        if e.root.pos_ in ["NOUN", "PROPN"] and \
-            e.root.dep_ in ["pobj", "dobj", "nsubj", "nsubjpass", "dative", "nmod", "poss", "conj", "appos"]:
+        if e.root.pos_ in ["NOUN", "PROPN"] and e.root.dep_ in allowed_deps:
             ents.append(e)
 
     doc.set_ents(ents, default="outside")
