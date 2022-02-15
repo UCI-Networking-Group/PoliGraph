@@ -51,10 +51,10 @@ def main():
         output_dir = Path(args.output)
         output_dir.mkdir(exist_ok=True)
 
-        with open(output_dir / "cleaned.html", "w") as fout:
+        with open(output_dir / "cleaned.html", "w", encoding="utf-8") as fout:
             fout.write(cleaned_html)
 
-        with open(output_dir / "accessibility_tree.json", "w") as fout:
+        with open(output_dir / "accessibility_tree.json", "w", encoding="utf-8") as fout:
             json.dump(snapshot, fout)
 
         browser.close()
