@@ -5,6 +5,7 @@ import argparse
 import enum
 import json
 import logging
+import pickle
 from itertools import chain
 from pathlib import Path
 
@@ -47,14 +48,18 @@ class DocumentSegment(NodeMixin):
 
 
 class PolicyDocument:
-    def __init__(self, workdir, nlp):
+    def __init__(self, workdir, nlp=None):
         self.workdir = Path(workdir)
 
-        with open(self.workdir / "accessibility_tree.json", encoding="utf-8") as fin:
-            accessibility_tree = json.load(fin)
+        if (self.workdir / "document.pickle").exists():
+            with open(self.workdir / "document.pickle", "rb") as fin:
+                self.segments, self.ner_labels = pickle.load(fin)
+        else:
+            with open(self.workdir / "accessibility_tree.json", encoding="utf-8") as fin:
+                accessibility_tree = json.load(fin)
 
-        self.segments = extract_segments_from_accessibility_tree(accessibility_tree, nlp.tokenizer)
-        self.ner_labels = PolicyDocument._init_ner_labels(self.segments, nlp)
+            self.segments = extract_segments_from_accessibility_tree(accessibility_tree, nlp.tokenizer)
+            self.ner_labels = PolicyDocument._init_ner_labels(self.segments, nlp)
 
     def render_ner(self):
         nlp = spacy.blank("en")
@@ -83,6 +88,10 @@ class PolicyDocument:
 
         combined_doc = Doc.from_docs(all_docs)
         displacy.serve(combined_doc, style="ent")
+
+    def save(self):
+        with open(self.workdir / "document.pickle", "wb") as fout:
+            pickle.dump((self.segments, self.ner_labels), fout, pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
     def _init_ner_labels(segments, nlp):
@@ -259,17 +268,11 @@ def remove_invalid_entities(doc):
     return doc
 
 
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("workdir", help="working directory")
-    parser.add_argument("ner", help="NER model directory")
-    args = parser.parse_args()
-
-    spacy.prefer_gpu()
+def setup_models(ner_path):
     nlp = spacy.load("en_core_web_trf")
-    our_ner = spacy.load(args.ner)
+    our_ner = spacy.load(ner_path)
 
+    # Chain NERs: https://github.com/explosion/projects/tree/v3/tutorials/ner_double
     our_ner.replace_listeners("transformer", "ner", ["model.tok2vec"])
     nlp.add_pipe(
         "remove_unused_entities",
@@ -288,7 +291,20 @@ def main():
         after="ner_datatype",
     )
 
+    return nlp
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("workdir", help="working directory")
+    parser.add_argument("ner", help="NER model directory")
+    args = parser.parse_args()
+
+    spacy.prefer_gpu()
+    nlp = setup_models(args.ner)
+
     document = PolicyDocument(args.workdir, nlp)
+    document.save()
     document.render_ner()
 
 
