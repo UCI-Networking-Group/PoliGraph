@@ -59,7 +59,7 @@ class PolicyDocument:
                 accessibility_tree = json.load(fin)
 
             self.segments = extract_segments_from_accessibility_tree(accessibility_tree, nlp.tokenizer)
-            self.ner_labels = PolicyDocument._init_ner_labels(self.segments, nlp)
+            self.ner_labels = self.__init_ner_labels(nlp)
 
     def render_ner(self):
         nlp = spacy.blank("en")
@@ -93,14 +93,13 @@ class PolicyDocument:
         with open(self.workdir / "document.pickle", "wb") as fout:
             pickle.dump((self.segments, self.ner_labels), fout, pickle.HIGHEST_PROTOCOL)
 
-    @staticmethod
-    def _init_ner_labels(segments, nlp):
+    def __init_ner_labels(self, nlp):
         ner_labels = []
         all_docs = []
 
-        for s in segments:
+        for s in self.segments:
             ner_labels.append([])
-            all_docs.append(PolicyDocument._build_doc_from_segments(s.iter_context(), nlp))
+            all_docs.append(self.build_doc(s, nlp))
 
         for doc in nlp.pipe(all_docs):
             token_sources = doc.user_data["source"]
@@ -118,8 +117,15 @@ class PolicyDocument:
 
         return ner_labels
 
-    @staticmethod
-    def _build_doc_from_segments(segments, nlp):
+    def build_doc(self, core_segment, nlp, with_context=True):
+        if core_segment not in self.segments:
+            raise ValueError("Unknown segment")
+
+        if with_context:
+            segments = core_segment.iter_context()
+        else:
+            segments = [core_segment]
+
         tokens = []
         token_ids = []
         previous_segment = None
