@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Process accessibility tree into a PolicyDocument"""
 
-import argparse
 import enum
 import json
 import logging
@@ -298,21 +297,3 @@ def setup_models(ner_path):
     )
 
     return nlp
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("workdir", help="working directory")
-    parser.add_argument("ner", help="NER model directory")
-    args = parser.parse_args()
-
-    spacy.prefer_gpu()
-    nlp = setup_models(args.ner)
-
-    document = PolicyDocument(args.workdir, nlp)
-    document.save()
-    document.render_ner()
-
-
-if __name__ == "__main__":
-    main()
