@@ -112,11 +112,16 @@ class PolicyDocument:
                     continue
 
                 segment_id = ent_start[0]
-                ner_labels[segment_id].append((ent_start[1], ent_end[1] + 1, ent.label_))
+                new_ent_spec = (ent_start[1], ent_end[1] + 1, ent.label_)
+                for left, right, _ in ner_labels[segment_id]:
+                    if len(range(max(left, new_ent_spec[0]), min(right, new_ent_spec[1]))) != 0:
+                        break
+                else:
+                    ner_labels[segment_id].append(new_ent_spec)
 
         return ner_labels
 
-    def build_doc(self, core_segment, nlp, with_context=True):
+    def build_doc(self, core_segment, nlp, with_context=True, apply_pipe=False, load_ner=False):
         if core_segment not in self.segments:
             raise ValueError("Unknown segment")
 
@@ -126,23 +131,35 @@ class PolicyDocument:
             segments = [core_segment]
 
         tokens = []
-        token_ids = []
+        token_sources = []
+        ent_positions = []
         previous_segment = None
 
         for s in segments:
             if previous_segment:
                 if previous_segment.segment_type is SegmentType.HEADING:
                     tokens.extend(["\n", "\n"])
-                    token_ids.extend([None, None])
+                    token_sources.extend([None, None])
+
+            if load_ner:
+                ent_offset = len(tokens)
+                for ent_start, ent_end, ent_label in self.ner_labels[s.segment_id]:
+                    ent_positions.append((ent_offset + ent_start, ent_offset + ent_end, ent_label))
 
             for idx, tok in enumerate(s.tokens):
                 tokens.append(tok)
-                token_ids.append((s.segment_id, idx))
+                token_sources.append((s.segment_id, idx))
 
             previous_segment = s
 
         doc = Doc(nlp.vocab, words=tokens)
-        doc.user_data["source"] = token_ids
+        doc.user_data["source"] = token_sources
+
+        if apply_pipe:
+            doc = nlp(doc)
+
+        if load_ner:
+            doc.set_ents([Span(doc, s, e, l) for s, e, l in ent_positions], default="outside")
 
         return doc
 
