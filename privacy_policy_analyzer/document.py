@@ -9,6 +9,7 @@ import re
 from itertools import chain
 from pathlib import Path
 
+import networkx as nx
 import spacy
 from anytree import NodeMixin
 from spacy import displacy
@@ -51,6 +52,7 @@ class DocumentSegment(NodeMixin):
 class PolicyDocument:
     def __init__(self, workdir, nlp=None):
         self.workdir = Path(workdir)
+        self.token_relationship = nx.DiGraph()
 
         if (self.workdir / "document.pickle").exists():
             with open(self.workdir / "document.pickle", "rb") as fin:
@@ -159,6 +161,7 @@ class PolicyDocument:
             previous_segment = s
 
         doc = Doc(nlp.vocab, words=tokens, spaces=spaces)
+        doc.user_data["document"] = self
         doc.user_data["source"] = token_sources
 
         if apply_pipe:
@@ -168,6 +171,15 @@ class PolicyDocument:
             doc.set_ents([Span(doc, s, e, l) for s, e, l in ent_positions], default="outside")
 
         return doc
+
+    def link(self, token1, token2, relationship):
+        doc1 = token1.doc
+        doc2 = token2.doc
+
+        token1_source = doc1.user_data["source"][token1.i]
+        token2_source = doc2.user_data["source"][token2.i]
+
+        self.token_relationship.add_edge(token1_source, token2_source, relationship=relationship)
 
 
 def extract_segments_from_accessibility_tree(tree, tokenizer):
