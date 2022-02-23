@@ -5,6 +5,7 @@ import enum
 import json
 import logging
 import pickle
+import re
 from itertools import chain
 from pathlib import Path
 
@@ -261,7 +262,7 @@ def extract_segments_from_accessibility_tree(tree, tokenizer):
 def remove_unused_entities(doc):
     ents = []
     for e in doc.ents:
-        if e.label_ not in ["ORDINAL"]:
+        if e.label_ not in ["ORDINAL", "CARDINAL"]:
             ents.append(e)
 
     doc.set_ents(ents, default="outside")
@@ -269,10 +270,12 @@ def remove_unused_entities(doc):
 
 
 @Language.component(
-    "remove_invalid_entities",
+    "adjust_entities",
     requires=["doc.ents", "token.ent_iob", "token.ent_type"],
 )
-def remove_invalid_entities(doc):
+def adjust_entities(doc):
+    """Drop invalid named entities and align them to noun chunks"""
+
     # REF:
     ## https://github.com/clir/clearnlp-guidelines/blob/master/md/specifications/dependency_labels.md
     ## https://www.mathcs.emory.edu/~choi/doc/cu-2012-choi.pdf
@@ -287,9 +290,40 @@ def remove_invalid_entities(doc):
 
     ents = []
     for e in doc.ents:
-        # discard invalid named entities
-        if e.root.pos_ in ["NOUN", "PROPN"] and e.root.dep_ in allowed_deps:
-            ents.append(e)
+        ent_root = e.root
+        if ent_root.pos_ in ["NOUN", "PROPN"] and ent_root.dep_ in allowed_deps:
+            subtoken_pos = {t.i for t in ent_root.subtree}
+            left_edge = ent_root.i
+
+            # keep left tokens as long as they are in the subtree
+            while (left_edge - 1) >= e.start and (left_edge - 1) in subtoken_pos:
+                left_edge -= 1
+
+            # take in more left tokens if they are in the subtree
+            while left_edge - 1 in subtoken_pos:
+                prev_token = doc[left_edge - 1]
+
+                # is_space: drop prefixing spaces; pos_ = X: remove prefixing "e.g."
+                if prev_token.is_space or prev_token.pos_ == 'X':
+                    break
+
+                left_edge -= 1
+
+            # drop prefixing puncts
+            while left_edge < e.start and doc[left_edge].norm_ in ".,!?;:)]}>":
+                left_edge += 1
+
+            # keep right tokens as long as they are in the subtree
+            right_edge = ent_root.i + 1
+            while right_edge < e.end and right_edge in subtoken_pos:
+                right_edge += 1
+
+            ent_span = Span(doc, left_edge, right_edge, e.label_)
+            if re.search('[a-zA-Z0-9]+', ent_span.text):
+                while len(ents) > 0 and ents[-1].end > ent_span.start:
+                    ents.pop()
+
+                ents.append(ent_span)
 
     doc.set_ents(ents, default="outside")
     return doc
@@ -313,8 +347,8 @@ def setup_models(ner_path):
         after="remove_unused_entities",
     )
     nlp.add_pipe(
-        "remove_invalid_entities",
-        name="remove_invalid_entities",
+        "adjust_entities",
+        name="adjust_entities",
         after="ner_datatype",
     )
 
