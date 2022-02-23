@@ -23,12 +23,13 @@ class SegmentType(enum.Enum):
 
 
 class DocumentSegment(NodeMixin):
-    def __init__(self, segment_id, segment_type, tokens, parent=None):
+    def __init__(self, segment_id, segment_type, doc, parent=None):
         super().__init__()
 
         self.segment_id = segment_id
         self.segment_type = segment_type
-        self.tokens = [str(t) for t in tokens]
+        self.tokens = [str(t) for t in doc]
+        self.spaces = [t.whitespace_ != "" for t in doc]
 
         self.parent = parent
 
@@ -76,7 +77,8 @@ class PolicyDocument:
             else:
                 postfix_tokens.append("\n")
 
-            doc = Doc(nlp.vocab, words=prefix_tokens + s.tokens + postfix_tokens)
+            spaces = [False] * len(prefix_tokens) + s.spaces + [False] * len(postfix_tokens)
+            doc = Doc(nlp.vocab, words=prefix_tokens + s.tokens + postfix_tokens, spaces=spaces)
 
             for ent_start, ent_end, ent_label in ents:
                 ent_start += len(prefix_tokens)
@@ -131,6 +133,7 @@ class PolicyDocument:
             segments = [core_segment]
 
         tokens = []
+        spaces = []
         token_sources = []
         ent_positions = []
         previous_segment = None
@@ -139,6 +142,7 @@ class PolicyDocument:
             if previous_segment:
                 if previous_segment.segment_type is SegmentType.HEADING:
                     tokens.extend(["\n", "\n"])
+                    spaces.extend([False, False])
                     token_sources.extend([None, None])
 
             if load_ner:
@@ -146,13 +150,14 @@ class PolicyDocument:
                 for ent_start, ent_end, ent_label in self.ner_labels[s.segment_id]:
                     ent_positions.append((ent_offset + ent_start, ent_offset + ent_end, ent_label))
 
-            for idx, tok in enumerate(s.tokens):
+            for idx, (tok, has_space) in enumerate(zip(s.tokens, s.spaces)):
                 tokens.append(tok)
+                spaces.append(has_space)
                 token_sources.append((s.segment_id, idx))
 
             previous_segment = s
 
-        doc = Doc(nlp.vocab, words=tokens)
+        doc = Doc(nlp.vocab, words=tokens, spaces=spaces)
         doc.user_data["source"] = token_sources
 
         if apply_pipe:
