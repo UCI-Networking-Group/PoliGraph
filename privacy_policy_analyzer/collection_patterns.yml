@@ -1,0 +1,48 @@
+token_mapping:
+  SHARING_VERBS:
+  - disclose
+  - distribute
+  - exchange
+  - give
+  - lease
+  - provide
+  - rent
+  - release
+  - report
+  - sell
+  - send
+  - share
+  - trade
+  - transfer
+  - transmit
+  COLLECTION_VERBS:
+  - collect
+  - gather
+  - obtain
+  - receive
+  - record
+  - store
+  - solicit
+  USE_VERBS:
+  - access
+  - analyze
+  - check
+  - combine
+  - connect
+  - keep
+  - know
+  - process
+  - save
+  - use
+  - utilize
+  GENERAL_COLLECTION_VERBS:
+  - SHARING_VERBS
+  - COLLECTION_VERBS
+  - USE_VERBS
+  SCOPE_PRONS:
+  - some
+  - all
+patterns:
+  # E collect/... D
+  - 'ENTITY:nsubj,GENERAL_COLLECTION_VERBS:root_like,DATA:dobj'
+  - 'ENTITY:nsubj,GENERAL_COLLECTION_VERBS:root_like,SCOPE_PRONS:dobj,of,DATA:pobj'

@@ -5,6 +5,7 @@ import argparse
 import spacy
 from privacy_policy_analyzer.document import PolicyDocument
 from privacy_policy_analyzer.subsumption_annotator import SubsumAnnotator
+from privacy_policy_analyzer.collection_annotator import CollectionAnnotator
 
 
 def main():
@@ -18,11 +19,13 @@ def main():
     nlp = spacy.load("en_core_web_trf")
     # setup_models(args.ner)
 
-    annotator = SubsumAnnotator(nlp)
+    subsum_annotator = SubsumAnnotator(nlp)
+    collection_annotator = CollectionAnnotator(nlp)
 
     for seg in document.segments:
         doc = document.build_doc(seg, nlp, apply_pipe=True, load_ner=True)
-        annotator.annotate(doc)
+        subsum_annotator.annotate(doc)
+        collection_annotator.annotate(doc)
 
 
 if __name__ == "__main__":

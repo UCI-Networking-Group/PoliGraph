@@ -117,7 +117,7 @@ class SubsumAnnotator:
                 "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
             }
         ]
-        #self.matcher.add("SUBSUM_INCLUDING_LIMITED_TO", [pattern])
+        self.matcher.add("SUBSUM_INCLUDING_LIMITED_TO", [pattern])
 
     def annotate(self, doc):
         matches = self.matcher(doc)

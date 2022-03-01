@@ -147,6 +147,8 @@ class PolicyDocument:
                     tokens.extend(["\n", "\n"])
                     spaces.extend([False, False])
                     token_sources.extend([None, None])
+                else:
+                    spaces[-1] = True
 
             if load_ner:
                 ent_offset = len(tokens)
