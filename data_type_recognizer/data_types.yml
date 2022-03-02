@@ -1,25 +1,30 @@
 alias:
-  IP: ['IP', 'Internet Protocol']
-  MAC: ['MAC', 'media access control']
-  WiFi: ['WiFi', 'wireless', 'WLAN']
+  IP: ['IP', 'Internet Protocol', 'TCP/IP']
+  MAC: ['MAC', 'media access control', 'link-layer']
+  WIFI: ['WiFi', 'wireless', 'wireless network', 'WLAN']
   IDS: ['ID', 'identifier', 'identification number']
   PHONE: ['phone', 'mobile phone', 'cellphone', 'cell phone']
   INFO: ['info', 'information', 'data']
   AD: ['ad', 'ads', 'advertising', 'advertisement']
-  OS: ['OS', 'operating system', 'system', 'iOS', 'Android', 'Windows']
+  OS: ['OS', 'operating system', 'system', 'iOS', 'Android', 'Windows', 'macOS']
   LOGIN: ['login name', 'user name', 'username', 'account name', 'ID']
-  SETTING: ['setting', 'preference', 'configuration']
+  SETTING: ['setting', 'preference', 'configuration', 'config']
+  IMAGE: ['image', 'imaging', 'imagery', 'photo']
+  CARD_SECURITY: ['card security', 'card verification', 'CVV', 'CVV2', 'CSC', 'CVC', 'CID']
 
 GENERAL_DATA:
 - aggregate INFO
 - aggregated INFO
 - non-personally identifiable INFO
 - personally identifiable INFO
+- de-identified INFO
 - personal INFO
 - consumer INFO
+- technical INFO
 - demographic INFO
 - health INFO
 - biometric INFO
+- user INFO
 - profile INFO
 - account INFO
 - device INFO
@@ -28,6 +33,7 @@ GENERAL_DATA:
 - system INFO
 - hardware INFO
 - software INFO
+- security INFO
 - financial INFO
 - social network INFO
 - OS INFO
@@ -57,8 +63,7 @@ REAL_NAME:
 - surname
 - given name
 - legal name
-- billing name
-- full billing name
+- (full) billing name
 - cardholder name
 - card holder name
 - recipient name
@@ -85,6 +90,7 @@ ACCOUNT_NAME:
 - YouTube LOGIN
 - TikTok LOGIN
 - WeChat LOGIN
+- WhatsApp LOGIN
 - subscriber ID
 - student ID
 - user ID
@@ -102,6 +108,7 @@ CONTACT_INFO:
 - street address
 - billing address
 - delivery address
+- invoice address
 - ZIP Code
 - zipcode
 - postal code
@@ -119,6 +126,7 @@ PERSON_ID:
 - SSN
 - social security number
 - passport number
+- visa number
 - driver's license number
 - driver license number
 - identification number
@@ -128,13 +136,14 @@ PAYMENT_INFO:
 # bank account / financial / payment
 - payment card number
 - card account number
-- card security code
-- card verification number
+- CARD_SECURITY code
+- CARD_SECURITY number
 - credit card number
 - debit card number
 - bank account number
 - bank account INFO
 - routing number
+- last four digits of card number
 
 IDENTIFIERS:
 # device/hardware identifiers
@@ -143,19 +152,22 @@ IDENTIFIERS:
 - Oculus ID
 - (unique) device ID
 - console ID
+- hardware ID
+- hardware address
 - MAC address
 - Bluetooth MAC (address)
 - Ethernet MAC (address)
-- WiFi MAC (address)
+- WIFI MAC (address)
 - Bluetooth (address)
 - IMEI (number)
 - International Mobile Equipment Identity (number)
 - IMSI (number)
 - International Mobile Subscriber Identity (number)
-- (WiFi) BSSID
-- (WiFi) Broadcast Service Set ID
-- (WiFi) SSID
-- (WiFi) Service Set ID
+- SIM number
+- (WIFI) BSSID
+- (WIFI) Broadcast Service Set ID
+- (WIFI) SSID
+- (WIFI) Service Set ID
 # software identifiers
 - host name
 - hostname
@@ -190,11 +202,13 @@ IDENTIFIERS:
 # consumer’s interaction with an Internet Web site, application, or
 # advertisement.
 ACTIVITY:
-- log info
-- logging info
+- log INFO
+- logging INFO
 - usage INFO
 - browsing INFO
 - system log
+- date of access
+- time of access
 - browsing history
 - search history
 - user activity
@@ -233,20 +247,23 @@ GEOLOCATION:
 # or rhythms, and sleep, health, or exercise data that contain identifying 
 # information.
 BIOMETRIC:
-- DNA INFO
-- iris imagery
-- retina imagery
-- iris imagery
-- fingerprint (imagery)
-- face imagery
-- palm imagery
+- face IMAGE
+- iris IMAGE
+- retina IMAGE
+- fingerprint (IMAGE)
+- palm IMAGE
 - vein pattern
 - voice recording
+- recording of voice (command)
+- voice command
+- audio recording
+- video recording
 - faceprint
 - minutiae template
 - voiceprint
 - keystroke pattern
 - keystroke rhythm
+- rhythm of keystroke
 - gait pattern
 - gait rhythm
 - sleep INFO
@@ -260,6 +277,8 @@ DEMOGRAPHIC:
 - birthday
 - birth day
 - date of birth
+- marital status
+- immigration status
 
 AUTH_TOKEN:
 - password
@@ -270,6 +289,7 @@ AUTH_TOKEN:
 
 SOFTWARE_INFO:
 - device type
+- type of device
 - device model
 - device manufacturer
 - platform type
@@ -278,6 +298,7 @@ SOFTWARE_INFO:
 - GPU model
 - GPU frequency
 - browser type
+- type of browser
 - network type
 - OS version
 - software version
@@ -299,3 +320,14 @@ SENSOR_DATA:
 - compass data
 - barometer data
 - bluetooth data
+
+FILE_CONTENT:
+- file content
+- content of file
+- email content
+- content of email
+- message content
+- content of message
+- crash report
+- crash log
+- log file

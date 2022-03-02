@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-import json
 import random
 import re
-import sys
 
 import faker
 import inflect
@@ -10,6 +8,7 @@ import spacy
 import tqdm
 import yaml
 from requests_cache import CachedSession
+from unidecode import unidecode
 
 
 def load_list(fname):
@@ -82,15 +81,23 @@ class NERDataGenerator:
 
             ent_start = match.span()[0]
             labels.append((ent_start, ent_start + len(replaced_term), label))
+
+            if ent_start == 0 and random.randint(0, 1) == 0:
+                replaced_term = replaced_term[0].upper() + replaced_term[1:]
+
             sentence = sentence.replace(match[0], replaced_term, 1)
 
         return sentence, labels
 
 
 def main():
-    TRAIN_SIZE = 20000
-    DEV_SIZE = 2000
+    TRAIN_SIZE = 40000
+    DEV_SIZE = 10000
     NOISE_RATIO = 0.1
+    NOISE_SOURCES = [
+        "https://www.gutenberg.org/files/84/84-0.txt",
+        "https://www.gutenberg.org/cache/epub/67503/pg67503.txt",
+    ]
 
     spacy.prefer_gpu()
 
@@ -98,12 +105,13 @@ def main():
     nlp.add_pipe("sentencizer")
 
     session = CachedSession("py_request_cache", backend="filesystem", use_temp=True)
-    res = session.get("https://www.gutenberg.org/files/84/84-0.txt")
-
     noise_data = []
-    for paragraph in re.split(r'(?:\r\n){2,}', res.text):
-        paragraph = " ".join(paragraph.split('\r\n'))
-        noise_data.extend(s.text for s in nlp(paragraph).sents)
+
+    for url in NOISE_SOURCES:
+        res = session.get(url)
+        for paragraph in re.split(r'(?:\r\n){2,}', res.text):
+            paragraph = " ".join(paragraph.split('\r\n'))
+            noise_data.extend(unidecode(s.text) for s in nlp(paragraph).sents)
 
     random.shuffle(noise_data)
 

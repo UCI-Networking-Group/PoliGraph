@@ -4,7 +4,9 @@ import argparse
 
 import spacy
 
-from privacy_policy_analyzer.document import PolicyDocument, setup_models
+
+from privacy_policy_analyzer.document import PolicyDocument
+from privacy_policy_analyzer.data_type_recognition import setup_models
 
 
 def main():
@@ -16,9 +18,9 @@ def main():
     spacy.prefer_gpu()
     nlp = setup_models(args.ner)
 
-    document = PolicyDocument(args.workdir, nlp)
+    document = PolicyDocument(args.workdir, nlp=nlp, use_cache=False)
     document.save()
-    document.render_ner()
+    full_doc = document.get_full_doc()
 
 
 if __name__ == "__main__":
