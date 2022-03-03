@@ -25,6 +25,8 @@ def main():
         doc = document.build_doc(seg, nlp, apply_pipe=True, load_ner=False)
         annotator.annotate(doc)
 
+    document.save()
+
 
 if __name__ == "__main__":
     main()

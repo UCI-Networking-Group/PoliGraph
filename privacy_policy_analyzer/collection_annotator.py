@@ -1,19 +1,9 @@
-from privacy_policy_analyzer.subsumption_annotator import expand_token
 import importlib.resources as pkg_resources
-import privacy_policy_analyzer
-import yaml
 from types import SimpleNamespace
 
+import yaml
 
-def validate_entity(root):
-    if root.pos_ not in ["NOUN", "PROPN", "PRON"]:
-        return False
-    elif root.ent_type_ not in {"", "EVENT", "FAC", "LOC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
-        return False
-    elif root.pos_ == "PRON" and root.lemma_ not in {"we", "us"}:
-        return False
-    else:
-        return True
+import privacy_policy_analyzer
 
 
 def discover_entities(token):
@@ -21,12 +11,11 @@ def discover_entities(token):
         if token.dep_ in ["conj", "appos"]:
             for child in token.children:
                 yield from dfs(child, path)
-        elif token.pos_ not in ["NOUN", "PROPN", "PRON"]:
+        elif token._.ent is None:
             for child in token.children:
                 yield from dfs(child, (token,) + path)
         else:
-            if validate_entity(token):
-                yield [token, *path]
+            yield [token, *path]
 
     yield from dfs(token, ())
 
@@ -151,20 +140,17 @@ class CollectionAnnotator:
                             if any(p(full_chain) for p in self.patterns):
                                 entity_tokens, *intermediate_chain, datatype_tokens = full_chain
 
-                                entities = [expand_token(t) for t in entity_tokens]
-                                datatypes = [expand_token(t) for t in datatype_tokens]
+                                entities = [t._.ent for t in entity_tokens]
+                                datatypes = [t._.ent for t in datatype_tokens]
 
+                                print("#" * 40)
                                 print(current_token.sent, end="\n\n")
                                 print(f"> DEP: {entity_tokens[0].dep_}, POS: {entity_tokens[0].pos_}, ENTITIES:", entities)
                                 for item in intermediate_chain:
                                     print(f"> DEP: {item[0].dep_}, POS: {item[0].pos_}, TOKEN:", [t.text for t in item])
                                 print(f"> DEP: {datatype_tokens[0].dep_}, POS: {datatype_tokens[0].pos_}, DATATYPES:", datatypes)
-
                                 print("#" * 40)
 
-                                for t1 in entity_tokens:
-                                    for t2 in datatype_tokens:
-                                        doc.user_data["document"].link(t1, t2, "COLLECT")
-                                        doc.user_data["document"].link(t2, t1, "COLLECTED_BY")
+                                doc.user_data["document"].link(datatype_tokens[0], entity_tokens[0], "COLLECTED_BY")
 
                 current_token = parent_token

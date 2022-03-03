@@ -5,6 +5,7 @@ import enum
 import json
 import logging
 import pickle
+import re
 from itertools import chain
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from anytree import NodeMixin
 from spacy import displacy
 from spacy.tokens import Doc, Span
 from unidecode import unidecode
+
+from privacy_policy_analyzer.utils import expand_token, get_conjuncts
 
 
 class SegmentType(enum.Enum):
@@ -36,6 +39,20 @@ class DocumentSegment(NodeMixin):
     def __repr__(self):
         return f"Segment #{self.segment_id}, type={self.segment_type.name}"
 
+    @property
+    def heading_level(self):
+        if self.segment_type != SegmentType.HEADING:
+            return None
+
+        count = 0
+        s = self
+        while s is not None:
+            if s.segment_type == SegmentType.HEADING:
+                count += 1
+            s = s.parent
+
+        return count
+
     def iter_context(self):
         s = self
         context = []
@@ -47,84 +64,197 @@ class DocumentSegment(NodeMixin):
         yield from reversed(context)
 
 
+class TokenGroupStorage:
+    def __init__(self):
+        self.ent_id_to_group = dict()
+        self.group_to_ent_ids = dict()
+        self.group_count = 0
+
+    def get_group(self, token):
+        ent_id = token._.ent_id
+        return self.ent_id_to_group.get(ent_id)
+
+    def create_group(self, token_list):
+        new_group_id = self.group_count
+        self.group_count += 1
+        self.group_to_ent_ids[new_group_id] = members = set()
+
+        for t in token_list:
+            ent_id = t._.ent_id
+            members.add(ent_id)
+            self.ent_id_to_group[ent_id] = new_group_id
+
+    def merge_groups(self, group1, group2):
+        if group1 == group2:
+            return
+
+        group1_members = self.group_to_ent_ids[group1]
+
+        for ent_id in self.group_to_ent_ids.pop(group2):
+            self.ent_id_to_group[ent_id] = group1
+            group1_members.add(ent_id)
+
+
 class PolicyDocument:
     def __init__(self, workdir, nlp=None, use_cache=True):
         self.workdir = Path(workdir)
+
+        self.token_groups = TokenGroupStorage()
         self.token_relationship = nx.DiGraph()
 
         if use_cache and (self.workdir / "document.pickle").exists():
             with open(self.workdir / "document.pickle", "rb") as fin:
-                self.segments, self.ner_labels = pickle.load(fin)
+                (
+                    self.segments,
+                    self.noun_chunks,
+                    self.token_groups,
+                    self.token_relationship,
+                ) = pickle.load(fin)
         else:
             with open(self.workdir / "accessibility_tree.json", encoding="utf-8") as fin:
                 accessibility_tree = json.load(fin)
 
             self.segments = extract_segments_from_accessibility_tree(accessibility_tree, nlp.tokenizer)
-            self.ner_labels = self.__init_ner_labels(nlp)
-
-    def get_full_doc(self):
-        nlp = spacy.blank("en")
-        all_docs = []
-
-        for ents, s in zip(self.ner_labels, self.segments):
-            prefix_tokens = []
-            postfix_tokens = []
-
-            if s.segment_type is SegmentType.HEADING:
-                prefix_tokens.extend("\n\n#")
-                postfix_tokens.extend("\n\n")
-            elif s.segment_type is SegmentType.LISTITEM:
-                postfix_tokens.append("*")
-            else:
-                postfix_tokens.append("\n")
-
-            spaces = [False] * len(prefix_tokens) + s.spaces + [False] * len(postfix_tokens)
-            doc = Doc(nlp.vocab, words=prefix_tokens + s.tokens + postfix_tokens, spaces=spaces)
-
-            for ent_start, ent_end, ent_label in ents:
-                ent_start += len(prefix_tokens)
-                ent_end += len(prefix_tokens)
-                doc.set_ents([Span(doc, ent_start, ent_end, ent_label)], default="unmodified")
-
-            all_docs.append(doc)
-
-        return Doc.from_docs(all_docs)
+            self.__init_doc(nlp)
 
     def render_ner(self):
         displacy.serve(self.get_full_doc(), style="ent")
 
     def save(self):
         with open(self.workdir / "document.pickle", "wb") as fout:
-            pickle.dump((self.segments, self.ner_labels), fout, pickle.HIGHEST_PROTOCOL)
+            pickle.dump((
+                self.segments,
+                self.noun_chunks,
+                self.token_groups,
+                self.token_relationship,
+            ), fout, pickle.HIGHEST_PROTOCOL)
 
-    def __init_ner_labels(self, nlp):
-        ner_labels = []
-        all_docs = []
+    def __init_doc(self, nlp):
+        def label_unknown_noun_chunks(token):
+            if token.ent_iob_ not in 'BI' and (token.pos_ in ["NOUN", "PROPN"] or token.tag_ == 'PRP'):
+                chunk = expand_token(token)
+                ent = Span(token.doc, chunk.start, chunk.end, "NN")
 
-        for s in self.segments:
-            ner_labels.append([])
-            all_docs.append(self.build_doc(s, nlp))
+                # ignore puncts (due to bad tagging)
+                if re.search(r"[a-zA-Z]", ent.text):
+                    token.doc.set_ents([Span(token.doc, chunk.start, chunk.end, "NN")], default="unmodified")
 
-        for doc in nlp.pipe(all_docs):
-            token_sources = doc.user_data["source"]
+            for child in token.children:
+                label_unknown_noun_chunks(child)
 
-            for ent in doc.ents:
-                ent_start = token_sources[ent.start]
-                ent_end = token_sources[ent.end - 1]
+        # first pass (NER -> noun chunks)
+        self.noun_chunks = noun_chunks = [[] for _ in self.segments]
+        chunk_id = 0
 
-                if ent_start[0] != ent_end[0]:
-                    logging.warning("Entity %s crosses segment border. Skipped")
+        full_doc = self.get_full_doc(nlp)
+        full_doc = nlp(full_doc)
+        token_sources = full_doc.user_data["source"]
+
+        for sent in full_doc.sents:
+            label_unknown_noun_chunks(sent.root)
+
+        for ent in full_doc.ents:
+            # exclude NER types that are not useful (e.g. CARDINAL/PERCENT/DATE...)
+            if ent.label_ not in {"NN", "DATA", "EVENT", "FAC", "LOC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
+                continue
+
+            # find the beginning and end of a chunk within a segment
+            first_source = last_source = None
+
+            i = ent.start
+            while first_source is None:
+                first_source = token_sources[i]
+                i += 1
+
+            i = ent.end
+            while last_source is None:
+                last_source = token_sources[i - 1]
+                i -= 1
+
+            if first_source[0] != last_source[0]:
+                logging.warning("Chunk %r spans multiple segments. Skipped.", ent)
+                continue
+
+            segment_id = first_source[0]
+            left_token_index = first_source[1]
+            right_token_index = last_source[1] + 1
+
+            noun_chunks[segment_id].append((chunk_id, left_token_index, right_token_index, ent.label_))
+            chunk_id += 1
+
+        # second pass (grouping chunks)
+        full_doc = self.get_full_doc(nlp)
+        token_sources = full_doc.user_data["source"]
+
+        # apply tagger/parser but not NER
+        for name, pipe in nlp.pipeline:
+            if name in {"tok2vec", "transformer", "tagger", "parser", "attribute_ruler", "lemmatizer"}:
+                full_doc = pipe(full_doc)
+
+        for ent in full_doc.ents:
+            if self.token_groups.get_group(ent.root) is not None:
+                continue
+
+            new_group = [ent.root]
+            #print(group_id, end=": ")
+            #print(ent, end=" | ")
+
+            for conjunct in get_conjuncts(ent.root):
+                if conjunct._.ent is None:
                     continue
 
-                segment_id = ent_start[0]
-                new_ent_spec = (ent_start[1], ent_end[1] + 1, ent.label_)
-                for left, right, _ in ner_labels[segment_id]:
-                    if len(range(max(left, new_ent_spec[0]), min(right, new_ent_spec[1]))) != 0:
-                        break
-                else:
-                    ner_labels[segment_id].append(new_ent_spec)
+                #print(conjunct, end=" | ")
 
-        return ner_labels
+                new_group.append(conjunct)
+
+            #print()
+            self.token_groups.create_group(new_group)
+
+    def get_full_doc(self, nlp=None):
+        if nlp is None:
+            nlp = spacy.blank("en")
+
+        all_docs = []
+        token_sources = []
+        ner_ids = dict()
+
+        for ent_positions, s in zip(self.noun_chunks, self.segments):
+            if s.segment_type is SegmentType.HEADING:
+                prefix = "\n\n" + "#" * s.heading_level
+                suffix = "\n\n"
+            elif s.segment_type is SegmentType.LISTITEM:
+                prefix = "*"
+                suffix = ""
+            else:
+                prefix = ""
+                suffix = "\n"
+
+            if prefix:
+                all_docs.append(nlp(prefix))
+                token_sources.extend([None] * len(all_docs[-1]))
+
+            doc = Doc(nlp.vocab, words=s.tokens, spaces=s.spaces)
+
+            ents = []
+            for idx, left, right, label in ent_positions:
+                span = Span(doc, left, right, label=label)
+                ents.append(span)
+                ner_ids[left + len(token_sources)] = idx
+
+            doc.set_ents(ents, default="outside")
+
+            all_docs.append(doc)
+            token_sources.extend((s.segment_id, i) for i in range(len(doc)))
+
+            if suffix:
+                all_docs.append(nlp(suffix))
+                token_sources.extend([None] * len(all_docs[-1]))
+
+        full_doc = Doc.from_docs(all_docs)
+        full_doc.user_data["document"] = self
+        full_doc.user_data["source"] = token_sources
+        full_doc.user_data["ner_id"] = ner_ids
+        return full_doc
 
     def build_doc(self, core_segment, nlp, with_context=True, apply_pipe=False, load_ner=False):
         if core_segment not in self.segments:
@@ -152,8 +282,8 @@ class PolicyDocument:
 
             if load_ner:
                 ent_offset = len(tokens)
-                for ent_start, ent_end, ent_label in self.ner_labels[s.segment_id]:
-                    ent_positions.append((ent_offset + ent_start, ent_offset + ent_end, ent_label))
+                for ner_id, ent_start, ent_end, ent_label in self.noun_chunks[s.segment_id]:
+                    ent_positions.append((ner_id, ent_offset + ent_start, ent_offset + ent_end, ent_label))
 
             for idx, (tok, has_space) in enumerate(zip(s.tokens, s.spaces)):
                 tokens.append(tok)
@@ -165,6 +295,7 @@ class PolicyDocument:
         doc = Doc(nlp.vocab, words=tokens, spaces=spaces)
         doc.user_data["document"] = self
         doc.user_data["source"] = token_sources
+        doc.user_data["ner_id"] = dict()
 
         if apply_pipe:
             old_tokenizer = nlp.tokenizer
@@ -173,18 +304,33 @@ class PolicyDocument:
             nlp.tokenizer = old_tokenizer
 
         if load_ner:
-            doc.set_ents([Span(doc, s, e, l) for s, e, l in ent_positions], default="outside")
+            ents = []
+            for idx, left, right, label in ent_positions:
+                span = Span(doc, left, right, label=label)
+                ents.append(span)
+                doc.user_data["ner_id"][left] = idx
+
+            doc.set_ents(ents, default="outside")
 
         return doc
 
+    def group(self, token1, token2):
+        group1 = self.token_groups.get_group(token1)
+        group2 = self.token_groups.get_group(token2)
+
+        if group1 is None or group2 is None:
+            raise RuntimeError("invalid token")
+
+        self.token_groups.merge_groups(group1, group2)
+
     def link(self, token1, token2, relationship):
-        doc1 = token1.doc
-        doc2 = token2.doc
+        e1 = token1._.ent_id
+        e2 = token2._.ent_id
 
-        token1_source = doc1.user_data["source"][token1.i]
-        token2_source = doc2.user_data["source"][token2.i]
+        if e1 is None or e2 is None:
+            raise RuntimeError("invalid token")
 
-        self.token_relationship.add_edge(token1_source, token2_source, relationship=relationship)
+        self.token_relationship.add_edge(e1, e2, relationship=relationship)
 
 
 def extract_segments_from_accessibility_tree(tree, tokenizer):

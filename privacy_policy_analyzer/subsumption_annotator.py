@@ -1,32 +1,5 @@
 from spacy.matcher import DependencyMatcher
 
-
-def expand_token(token):
-    doc = token.doc
-    if token.ent_iob_ != 'O':
-        span_start = span_end = token.i
-
-        while doc[span_start].ent_iob_ != 'B':
-            span_start -= 1
-
-        while span_end < len(doc) and doc[span_end].ent_iob_ != 'O':
-            span_end += 1
-
-        return doc[span_start:span_end]
-    else:
-        subtoken_pos = {t.i for t in token.subtree}
-        left_edge = token.i
-
-        while left_edge - 1 in subtoken_pos:
-            prev_token = doc[left_edge - 1]
-
-            if prev_token.is_space or prev_token.pos_ == 'X' or prev_token.ent_iob_ != 'O':
-                break
-
-            left_edge -= 1
-
-        return doc[left_edge:token.i + 1]
-
  
 def get_conjuncts(token):
     for child in token.rights:
@@ -34,7 +7,7 @@ def get_conjuncts(token):
             yield child
 
 
-class SubsumAnnotator:
+class SubsumptionAnnotator:
     def __init__(self, nlp):
         self.matcher = DependencyMatcher(nlp.vocab)
 
@@ -65,11 +38,11 @@ class SubsumAnnotator:
         ]
         self.matcher.add("SUBSUM_SUCH_AS", [pattern])
 
-        # includes / including / like
+        # including / like
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"ORTH": {"IN": ["include", "including", "like"]}}
+                "RIGHT_ATTRS": {"ORTH": {"IN": ["including", "like"]}}
             },
             {
                 "LEFT_ID": "anchor",
@@ -126,13 +99,19 @@ class SubsumAnnotator:
             _, (match_spec, ) = self.matcher.get(match_id)
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
 
-            lower_tokens = [match_info["lower_token"]]
-            lower_tokens.extend(get_conjuncts(lower_tokens[0]))
+            upper_token = match_info["upper_token"]
+            lower_token = match_info["lower_token"]
 
-            if any(t.ent_iob_ != 'O' for t in lower_tokens):
-                upper_span = expand_token(match_info["upper_token"])
+            if lower_token._.ent is None:
+                continue
 
-                for lower_token in lower_tokens:
-                    lower_span = expand_token(lower_token)
-                    doc.user_data["document"].link(upper_span.root, lower_span.root, "SUBSUM")
-                    print(upper_span, lower_span, sep=" | ")
+            print("+" * 40)
+            print(upper_token.sent, end="\n\n")
+            print(upper_token._.ent, "->", lower_token._.ent._.conjunct_chunks)
+            print("+" * 40)
+
+            try:
+                doc.user_data["document"].link(upper_token, lower_token, "SUBSUM")
+                doc.user_data["document"].group(upper_token, lower_token)
+            except RuntimeError:
+                pass

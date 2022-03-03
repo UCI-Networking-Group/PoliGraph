@@ -3,10 +3,8 @@
 import argparse
 
 import spacy
-
-
-from privacy_policy_analyzer.document import PolicyDocument
 from privacy_policy_analyzer.data_type_recognition import setup_models
+from privacy_policy_analyzer.document import PolicyDocument
 
 
 def main():
@@ -20,7 +18,7 @@ def main():
 
     document = PolicyDocument(args.workdir, nlp=nlp, use_cache=False)
     document.save()
-    full_doc = document.get_full_doc()
+    document.render_ner()
 
 
 if __name__ == "__main__":
