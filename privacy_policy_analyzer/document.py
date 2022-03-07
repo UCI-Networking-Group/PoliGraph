@@ -241,7 +241,10 @@ class PolicyDocument:
                 ents.append(span)
                 ner_ids[left + len(token_sources)] = idx
 
-            doc.set_ents(ents, default="outside")
+            try:
+                doc.set_ents(ents, default="outside")
+            except AttributeError:
+                doc.ents = ents
 
             all_docs.append(doc)
             token_sources.extend((s.segment_id, i) for i in range(len(doc)))
@@ -310,7 +313,10 @@ class PolicyDocument:
                 ents.append(span)
                 doc.user_data["ner_id"][left] = idx
 
-            doc.set_ents(ents, default="outside")
+            try:
+                doc.set_ents(ents, default="outside")
+            except AttributeError:
+                doc.ents = ents
 
         return doc
 

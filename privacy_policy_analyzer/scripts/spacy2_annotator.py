@@ -3,6 +3,7 @@
 import argparse
 from packaging.version import parse as parse_ver
 import spacy
+from spacy.tokens import Span
 from privacy_policy_analyzer.coreference_annotator import CoreferenceAnnotator
 from privacy_policy_analyzer.document import PolicyDocument
 
@@ -22,7 +23,7 @@ def main():
     annotator = CoreferenceAnnotator(nlp)
 
     for seg in document.segments:
-        doc = document.build_doc(seg, nlp, apply_pipe=True, load_ner=False)
+        doc = document.build_doc(seg, nlp, apply_pipe=True, load_ner=True)
         annotator.annotate(doc)
 
     document.save()

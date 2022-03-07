@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 
-COREF_BLACKLISTS = frozenset([
-    "my", "mine", "our", "ours",
-    "you", "your", "yours",
-    "he", "him", "his",
-    "she", "her", "hers",
-    "its", "their", "theirs"
-])
-COREF_ALLOWED_PRONS = frozenset(["it", "them", "this", "these", "that", "those", "the"])
+import math
+import re
 
 
 class CoreferenceAnnotator:
+    COREF_REGEX = re.compile(r"^(?:this|that|these|those) (?:data|information)\b")
+
     def __init__(self, nlp):
         import neuralcoref
         self.coref = neuralcoref.NeuralCoref(nlp.vocab)
@@ -18,27 +14,26 @@ class CoreferenceAnnotator:
     def annotate(self, doc):
         doc = self.coref(doc)
 
-        coref_flag = False
-        filtered_clusters = []
+        for this_mention, score_dict in doc._.coref_scores.items():
+            if self.COREF_REGEX.match(this_mention.lemma_):
+                best_mention, best_score = None, -math.inf
 
-        for cluster in doc._.coref_clusters:
-            for mention in cluster.mentions:
-                if mention[0].lower_ in COREF_BLACKLISTS:
-                    continue
-                elif mention[0].lower_ in COREF_ALLOWED_PRONS:
-                    coref_flag = True
+                for other_mention, score in score_dict.items():
+                    if other_mention.start >= this_mention.start \
+                        or self.COREF_REGEX.match(other_mention.lemma_) \
+                        or other_mention.root.pos_ == "PRON":
+                        continue
 
-                filtered_clusters.append(mention)
+                    if score > 0.0 and score > best_score:
+                        best_score = score
+                        best_mention = other_mention
 
-            coref_flag &= len({s.lemma_ for s in filtered_clusters}) > 1
+                if best_mention is not None:
+                    print("#" * 40)
+                    print(doc, end="\n\n")
+                    print(this_mention, best_mention, sep=" | ")
+                    print("Score =", best_score)
 
-            if coref_flag:
-                first_token = filtered_clusters[0].root
-
-                for span in filtered_clusters[1:]:
-                    doc.user_data["document"].link(first_token, span.root, "COREF")
-                    doc.user_data["document"].link(span.root, first_token, "COREF")
-
-                print("#" * 40)
-                print(doc, end="\n\n")
-                print([t.lower_ for t in filtered_clusters])
+                    doc.user_data["document"].link(this_mention.root, other_mention.root, "COREF")
+                    doc.user_data["document"].link(other_mention.root, this_mention.root, "COREF")
+                    doc.user_data["document"].group(this_mention.root, other_mention.root)
