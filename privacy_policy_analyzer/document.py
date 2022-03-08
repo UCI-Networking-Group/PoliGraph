@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Process accessibility tree into a PolicyDocument"""
 
+import bisect
 import enum
 import json
 import logging
@@ -131,20 +132,25 @@ class PolicyDocument:
 
     def __init_doc(self, nlp):
         def label_unknown_noun_chunks(token):
-            if token.ent_iob_ not in 'BI' and (token.pos_ in ["NOUN", "PROPN"] or token.tag_ == 'PRP'):
-                chunk = expand_token(token)
-                ent = Span(token.doc, chunk.start, chunk.end, "NN")
+            if (token.ent_iob_ not in 'BI'  # not in a named entity
+                and (token.pos_ in ["NOUN", "PROPN"] or token.tag_ == 'PRP')  # noun or pronoun
+                and re.search(r"[a-zA-Z]", token.text) is not None):  # ignore puncts due to bad tagging
 
-                # ignore puncts (due to bad tagging)
-                if re.search(r"[a-zA-Z]", ent.text):
-                    token.doc.set_ents([Span(token.doc, chunk.start, chunk.end, "NN")], default="unmodified")
+                chunk = expand_token(token)
+
+                if chunk.root.lemma_ in ["information", "datum"]:
+                    chunk_type = "DATA"
+                else:
+                    chunk_type = "NN"
+
+                ent = Span(token.doc, chunk.start, chunk.end, chunk_type)
+                token.doc.set_ents([ent], default="unmodified")
 
             for child in token.children:
                 label_unknown_noun_chunks(child)
 
         # first pass (NER -> noun chunks)
-        self.noun_chunks = noun_chunks = [[] for _ in self.segments]
-        chunk_id = 0
+        self.noun_chunks = noun_chunks = []
 
         full_doc = self.get_full_doc(nlp)
         full_doc = nlp(full_doc)
@@ -155,7 +161,7 @@ class PolicyDocument:
 
         for ent in full_doc.ents:
             # exclude NER types that are not useful (e.g. CARDINAL/PERCENT/DATE...)
-            if ent.label_ not in {"NN", "DATA", "EVENT", "FAC", "LOC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
+            if ent.label_ not in {"NN", "DATA", "LAW", "EVENT", "FAC", "LOC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
                 continue
 
             # find the beginning and end of a chunk within a segment
@@ -179,8 +185,7 @@ class PolicyDocument:
             left_token_index = first_source[1]
             right_token_index = last_source[1] + 1
 
-            noun_chunks[segment_id].append((chunk_id, left_token_index, right_token_index, ent.label_))
-            chunk_id += 1
+            noun_chunks.append((segment_id, left_token_index, right_token_index, ent.label_))
 
         # second pass (grouping chunks)
         full_doc = self.get_full_doc(nlp)
@@ -216,30 +221,37 @@ class PolicyDocument:
 
         all_docs = []
         token_sources = []
-        ner_ids = dict()
+        noun_chunk_mapping = dict()
+        chunk_id = 0
 
-        for ent_positions, s in zip(self.noun_chunks, self.segments):
+        for s in self.segments:
             if s.segment_type is SegmentType.HEADING:
-                prefix = "\n\n" + "#" * s.heading_level
-                suffix = "\n\n"
+                prefix = ["\n\n", "#" * s.heading_level]
+                suffix = ["\n\n"]
             elif s.segment_type is SegmentType.LISTITEM:
-                prefix = "*"
-                suffix = ""
+                prefix = ["*"]
+                suffix = []
             else:
-                prefix = ""
-                suffix = "\n"
+                prefix = []
+                suffix = ["\n"]
 
-            if prefix:
-                all_docs.append(nlp(prefix))
+            if len(prefix) > 0:
+                all_docs.append(Doc(nlp.vocab, words=prefix, spaces=[False] * len(prefix)))
                 token_sources.extend([None] * len(all_docs[-1]))
 
             doc = Doc(nlp.vocab, words=s.tokens, spaces=s.spaces)
 
             ents = []
-            for idx, left, right, label in ent_positions:
+            while chunk_id < len(self.noun_chunks):
+                segment_id, left, right, label = self.noun_chunks[chunk_id]
+                if segment_id != s.segment_id:
+                    break
+
                 span = Span(doc, left, right, label=label)
                 ents.append(span)
-                ner_ids[left + len(token_sources)] = idx
+                noun_chunk_mapping[left + len(token_sources)] = chunk_id
+
+                chunk_id += 1
 
             try:
                 doc.set_ents(ents, default="outside")
@@ -249,14 +261,14 @@ class PolicyDocument:
             all_docs.append(doc)
             token_sources.extend((s.segment_id, i) for i in range(len(doc)))
 
-            if suffix:
-                all_docs.append(nlp(suffix))
+            if len(suffix) > 0:
+                all_docs.append(Doc(nlp.vocab, words=suffix, spaces=[False] * len(suffix)))
                 token_sources.extend([None] * len(all_docs[-1]))
 
-        full_doc = Doc.from_docs(all_docs)
+        full_doc = Doc.from_docs(all_docs, ensure_whitespace=False)
         full_doc.user_data["document"] = self
         full_doc.user_data["source"] = token_sources
-        full_doc.user_data["ner_id"] = ner_ids
+        full_doc.user_data["noun_chunk"] = noun_chunk_mapping
         return full_doc
 
     def build_doc(self, core_segment, nlp, with_context=True, apply_pipe=False, load_ner=False):
@@ -285,8 +297,15 @@ class PolicyDocument:
 
             if load_ner:
                 ent_offset = len(tokens)
-                for ner_id, ent_start, ent_end, ent_label in self.noun_chunks[s.segment_id]:
-                    ent_positions.append((ner_id, ent_offset + ent_start, ent_offset + ent_end, ent_label))
+                chunk_id = bisect.bisect_left(self.noun_chunks, (s.segment_id, 0, 0, ""))
+
+                while chunk_id < len(self.noun_chunks):
+                    segment_id, left, right, label = self.noun_chunks[chunk_id]
+                    if segment_id == s.segment_id:
+                        ent_positions.append((chunk_id, ent_offset + left, ent_offset + right, label))
+                        chunk_id += 1
+                    else:
+                        break
 
             for idx, (tok, has_space) in enumerate(zip(s.tokens, s.spaces)):
                 tokens.append(tok)
@@ -298,7 +317,7 @@ class PolicyDocument:
         doc = Doc(nlp.vocab, words=tokens, spaces=spaces)
         doc.user_data["document"] = self
         doc.user_data["source"] = token_sources
-        doc.user_data["ner_id"] = dict()
+        doc.user_data["noun_chunk"] = dict()
 
         if apply_pipe:
             old_tokenizer = nlp.tokenizer
@@ -311,7 +330,7 @@ class PolicyDocument:
             for idx, left, right, label in ent_positions:
                 span = Span(doc, left, right, label=label)
                 ents.append(span)
-                doc.user_data["ner_id"][left] = idx
+                doc.user_data["noun_chunk"][left] = idx
 
             try:
                 doc.set_ents(ents, default="outside")

@@ -56,14 +56,14 @@ def token_to_ent(token):
 
 def token_to_ent_id(token):
     doc = token.doc
-    ner_ids = doc.user_data["ner_id"]
+    noun_chunk_mapping = doc.user_data["noun_chunk"]
 
     span = token_to_ent(token)
 
     if span is None:
         return None
     else:
-        return ner_ids[span.start]
+        return noun_chunk_mapping[span.start]
 
 
 def chunk_to_conjuncts(chunk):

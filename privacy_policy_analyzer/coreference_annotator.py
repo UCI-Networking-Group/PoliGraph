@@ -5,7 +5,7 @@ import re
 
 
 class CoreferenceAnnotator:
-    COREF_REGEX = re.compile(r"^(?:this|that|these|those) (?:data|information)\b")
+    COREF_REGEX = re.compile(r"^(?:this|that|these|those)\b(?:.*\b)?(?:datum|information)\b")
 
     def __init__(self, nlp):
         import neuralcoref
@@ -34,6 +34,6 @@ class CoreferenceAnnotator:
                     print(this_mention, best_mention, sep=" | ")
                     print("Score =", best_score)
 
-                    doc.user_data["document"].link(this_mention.root, other_mention.root, "COREF")
-                    doc.user_data["document"].link(other_mention.root, this_mention.root, "COREF")
-                    doc.user_data["document"].group(this_mention.root, other_mention.root)
+                    doc.user_data["document"].link(this_mention.root, best_mention.root, "COREF")
+                    doc.user_data["document"].link(best_mention.root, this_mention.root, "COREF")
+                    doc.user_data["document"].group(this_mention.root, best_mention.root)
