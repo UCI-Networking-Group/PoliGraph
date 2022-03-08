@@ -47,8 +47,8 @@ def token_to_ent(token):
     while doc[left].ent_iob_ != "B":
         left -= 1
 
-    right = token.i
-    while right < len(doc) and doc[right].ent_iob_ in "BI":
+    right = left + 1
+    while right < len(doc) and doc[right].ent_iob_ == "I":
         right += 1
 
     return doc[left:right]

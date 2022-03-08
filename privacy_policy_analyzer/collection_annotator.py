@@ -1,9 +1,11 @@
 import importlib.resources as pkg_resources
 from types import SimpleNamespace
+from numpy import full
 
 import yaml
 
 import privacy_policy_analyzer
+from privacy_policy_analyzer.utils import get_conjuncts
 
 
 def discover_entities(token):
@@ -24,20 +26,6 @@ def get_first_head(token):
     while token.dep_ in ["conj", "appos"]:
         token = token.head
     return token
-
-
-def get_conjuncts(token):
-    ret = []
-
-    def dfs(current_token):
-        ret.append(current_token)
-
-        for child in current_token.children:
-            if child.dep_ in ["conj", "appos"]:
-                dfs(child)
-
-    dfs(token)
-    return ret
 
 
 class Pattern:
@@ -134,8 +122,8 @@ class CollectionAnnotator:
                             continue
 
                         for entity_chain in discover_entities(child):
-                            full_chain = [get_conjuncts(t) for t in entity_chain]
-                            full_chain.extend(get_conjuncts(t) for t in datatype_chain[::-1])
+                            full_chain = [[t, *get_conjuncts(t)] for t in entity_chain]
+                            full_chain.extend([t, *get_conjuncts(t)] for t in datatype_chain[::-1])
 
                             if any(p(full_chain) for p in self.patterns):
                                 entity_tokens, *intermediate_chain, datatype_tokens = full_chain

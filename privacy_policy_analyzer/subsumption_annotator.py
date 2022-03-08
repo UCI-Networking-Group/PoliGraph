@@ -1,11 +1,5 @@
 from spacy.matcher import DependencyMatcher
 
- 
-def get_conjuncts(token):
-    for child in token.rights:
-        if child.dep_ in ["conj", "appos"] and child.pos_ in ["NOUN", "PROPN", "PRON"]:
-            yield child
-
 
 class SubsumptionAnnotator:
     def __init__(self, nlp):

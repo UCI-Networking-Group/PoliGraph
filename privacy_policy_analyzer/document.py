@@ -71,6 +71,10 @@ class TokenGroupStorage:
         self.group_to_ent_ids = dict()
         self.group_count = 0
 
+    def __getitem__(self, group_id):
+        for ent_id in self.group_to_ent_ids[group_id]:
+            yield ent_id
+
     def get_group(self, token):
         ent_id = token._.ent_id
         return self.ent_id_to_group.get(ent_id)
@@ -222,6 +226,7 @@ class PolicyDocument:
         all_docs = []
         token_sources = []
         noun_chunk_mapping = dict()
+        noun_chunk_from_id = dict()
         chunk_id = 0
 
         for s in self.segments:
@@ -250,6 +255,7 @@ class PolicyDocument:
                 span = Span(doc, left, right, label=label)
                 ents.append(span)
                 noun_chunk_mapping[left + len(token_sources)] = chunk_id
+                noun_chunk_from_id[chunk_id] = left + len(token_sources)
 
                 chunk_id += 1
 
@@ -269,6 +275,7 @@ class PolicyDocument:
         full_doc.user_data["document"] = self
         full_doc.user_data["source"] = token_sources
         full_doc.user_data["noun_chunk"] = noun_chunk_mapping
+        full_doc.user_data["noun_chunk_from_id"] = noun_chunk_from_id
         return full_doc
 
     def build_doc(self, core_segment, nlp, with_context=True, apply_pipe=False, load_ner=False):
@@ -288,7 +295,7 @@ class PolicyDocument:
 
         for s in segments:
             if previous_segment:
-                if previous_segment.segment_type is SegmentType.HEADING:
+                if previous_segment.segment_type is SegmentType.HEADING and s.segment_type != SegmentType.LISTITEM:
                     tokens.extend(["\n", "\n"])
                     spaces.extend([False, False])
                     token_sources.extend([None, None])
@@ -318,6 +325,7 @@ class PolicyDocument:
         doc.user_data["document"] = self
         doc.user_data["source"] = token_sources
         doc.user_data["noun_chunk"] = dict()
+        doc.user_data["noun_chunk_from_id"] = dict()
 
         if apply_pipe:
             old_tokenizer = nlp.tokenizer
@@ -331,6 +339,7 @@ class PolicyDocument:
                 span = Span(doc, left, right, label=label)
                 ents.append(span)
                 doc.user_data["noun_chunk"][left] = idx
+                doc.user_data["noun_chunk_from_id"][idx] = left
 
             try:
                 doc.set_ents(ents, default="outside")
@@ -348,6 +357,15 @@ class PolicyDocument:
 
         self.token_groups.merge_groups(group1, group2)
 
+    def get_groupped_chunks(self, token):
+        doc = token.doc
+        noun_chunk_from_id = doc.user_data["noun_chunk_from_id"]
+        group = self.token_groups.get_group(token)
+
+        for linked_chunk_id in self.token_groups[group]:
+            left = noun_chunk_from_id[linked_chunk_id]
+            yield doc[left]._.ent
+
     def link(self, token1, token2, relationship):
         e1 = token1._.ent_id
         e2 = token2._.ent_id
@@ -356,6 +374,20 @@ class PolicyDocument:
             raise RuntimeError("invalid token")
 
         self.token_relationship.add_edge(e1, e2, relationship=relationship)
+
+    def get_links(self, token):
+        doc = token.doc
+        noun_chunk_from_id = doc.user_data["noun_chunk_from_id"]
+        chunk_id = token._.ent_id
+
+        if chunk_id not in self.token_relationship:
+            return
+
+        for _, dest_chunk_id, data in self.token_relationship.out_edges(chunk_id, data=True):
+            # FIXME: Links should be made between tokens instead of noun chunks in the future
+            relationship = data["relationship"]
+            dest_token = doc[noun_chunk_from_id[dest_chunk_id]]
+            yield dest_token, relationship
 
 
 def extract_segments_from_accessibility_tree(tree, tokenizer):
