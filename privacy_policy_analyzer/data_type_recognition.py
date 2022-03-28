@@ -32,7 +32,7 @@ def adjust_entities(doc):
     ## nlp.pipe_labels["parser"]
     allowed_deps = {
         "nsubj", "nsubjpass",  # subjects
-        "pobj", "bobj", "dative", "oprd", "attr",  # objects
+        "pobj", "dobj", "dative", "oprd", "attr",  # objects
         "nmod", "poss", "appos",  # nominals
         "conj", "ROOT",
         "dep", "meta"  # unclassified
