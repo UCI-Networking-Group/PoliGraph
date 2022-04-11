@@ -136,7 +136,7 @@ class PolicyDocument:
 
     def __init_doc(self, nlp):
         def label_unknown_noun_chunks(token):
-            if (token.ent_iob_ not in 'BI'  # not in a named entity
+            if (token.ent_iob_ == 'O'  # not in a named entity
                 and (token.pos_ in ["NOUN", "PROPN"] or token.tag_ == 'PRP')  # noun or pronoun
                 and re.search(r"[a-zA-Z]", token.text) is not None):  # ignore puncts due to bad tagging
 
@@ -271,11 +271,18 @@ class PolicyDocument:
                 all_docs.append(Doc(nlp.vocab, words=suffix, spaces=[False] * len(suffix)))
                 token_sources.extend([None] * len(all_docs[-1]))
 
-        full_doc = Doc.from_docs(all_docs, ensure_whitespace=False)
+        if len(all_docs) > 0:
+            full_doc = Doc.from_docs(all_docs, ensure_whitespace=False)
+        else:
+            # TODO: handle empty document
+            full_doc = Doc(nlp.vocab, words=[" "])
+            token_sources.append(None)
+
         full_doc.user_data["document"] = self
         full_doc.user_data["source"] = token_sources
         full_doc.user_data["noun_chunk"] = noun_chunk_mapping
         full_doc.user_data["noun_chunk_from_id"] = noun_chunk_from_id
+
         return full_doc
 
     def build_doc(self, core_segment, nlp, with_context=True, apply_pipe=False, load_ner=False):
@@ -391,10 +398,12 @@ class PolicyDocument:
 
 
 def extract_segments_from_accessibility_tree(tree, tokenizer):
-    IGNORED_ELEMENTS = {"img", "image map", "button", "separator", "whitespace", "list item marker", "insertion"}
-    SECTION_ELEMENTS = {"document", "article", "landmark", "section", "blockquote"}
+    IGNORED_ELEMENTS = {"img", "image map", "button", "separator", "whitespace",
+                        "list item marker", "insertion", "diagram", "dialog", "tab"}
+    SECTION_ELEMENTS = {"document", "article", "landmark", "section", "blockquote", "group",
+                        "tablist", "tabpanel", "region"}
     TEXT_CONTAINER_ELEMENTS = {"paragraph", "text", "link", "statictext", "label", "text container", "text leaf"}
-    TODO_ELEMENTS = {"table", "definitionlist"}  # TODO: parse tables and <dl>
+    TODO_ELEMENTS = {"table", "definitionlist", "figure"}  # TODO: parse tables and <dl>
 
     # NOTE:
     # heading: "heading"
