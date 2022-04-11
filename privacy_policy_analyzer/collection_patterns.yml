@@ -1,48 +1,64 @@
 token_mapping:
-  SHARING_VERBS:
-  - disclose
-  - distribute
-  - exchange
-  - give
-  - lease
-  - provide
-  - rent
-  - release
-  - report
-  - sell
-  - send
+  VERB_SHARE_WITH:
   - share
   - trade
+  VERB_PROVIDE_WITH:
+  - supply
+  - provide
+  VERB_PROVIDE_TO:
+  - provide
+  - supply
+  - release
+  - disclose
   - transfer
   - transmit
-  COLLECTION_VERBS:
+  - sell
+  - give
+  VERB_COLLECT_FROM:
   - collect
   - gather
   - obtain
   - receive
-  - record
-  - store
   - solicit
-  USE_VERBS:
-  - access
-  - analyze
-  - check
-  - combine
-  - connect
-  - keep
-  - know
-  - process
-  - save
+  - acquire
+  VERB_USE:
   - use
-  - utilize
-  GENERAL_COLLECTION_VERBS:
-  - SHARING_VERBS
-  - COLLECTION_VERBS
-  - USE_VERBS
+  - keep
+  - access
+  - process
+  - store
+  - save
+  - analyze
+  - record
+  - retain
+  - preserve
+  - VERB_SHARE_WITH
+  - VERB_PROVIDE_WITH
+  - VERB_PROVIDE_TO
+  - VERB_COLLECT_FROM
+  VERB_ASK_TODO:
+  - ask
+  - require
+  - need
+  VERB_NEED_TODO:
+  - need
+  - choose
   SCOPE_PRONS:
   - some
   - all
 patterns:
-  # E collect/... D
-  - 'ENTITY:nsubj,GENERAL_COLLECTION_VERBS:root_like,DATA:dobj'
-  - 'ENTITY:nsubj,GENERAL_COLLECTION_VERBS:root_like,SCOPE_PRONS:dobj,of,DATA:pobj'
+  # E use D
+  - ENTITY:nsubj,VERB_USE,DATA:dobj
+  - ENTITY:pobj,by:agent,VERB_USE,DATA:nsubjpass
+  # ... share E with D
+  - ENTITY:pobj,with:prep,VERB_SHARE_WITH,DATA:dobj
+  - ENTITY:pobj,with:prep,VERB_SHARE_WITH,DATA:nsubjpass
+  # ... provide E with D
+  - ENTITY:dobj,VERB_PROVIDE_WITH,with:prep,DATA:pobj
+  - ENTITY:nsubjpass,VERB_PROVIDE_WITH,with:prep,DATA:pobj
+  # ... provide D to E
+  - ENTITY:pobj,to:prep,VERB_PROVIDE_TO,DATA:dobj
+  - ENTITY:pobj,to:prep,VERB_PROVIDE_TO,DATA:nsubjpass
+  # ... collect D from E
+  - ENTITY:pobj,from:prep,VERB_COLLECT_FROM,DATA:dobj
+  - ENTITY:pobj,from:prep,VERB_COLLECT_FROM,DATA:nsubjpass

@@ -15,7 +15,7 @@ class CoreferenceAnnotator:
         doc = self.coref(doc)
 
         for this_mention, score_dict in doc._.coref_scores.items():
-            if self.COREF_REGEX.match(this_mention.lemma_):
+            if self.COREF_REGEX.match(this_mention.lemma_) and this_mention.root.pos_ in ["NOUN", "PROPN"]:
                 best_mention, best_score = None, -math.inf
 
                 for other_mention, score in score_dict.items():
