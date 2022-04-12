@@ -84,6 +84,8 @@ class PolicyDocument:
             self.segments = extract_segments_from_accessibility_tree(accessibility_tree, nlp.tokenizer)
             self.__init_doc(nlp)
 
+        self.full_doc = self.get_full_doc()
+
     def render_ner(self):
         displacy.serve(self.get_full_doc(), style="ent")
 
@@ -299,7 +301,14 @@ class PolicyDocument:
 
         for _, dest_source, data in self.token_relationship.out_edges(token._.src, data=True):
             relationship = data["relationship"]
-            dest_token = doc[source_rmap[dest_source]]
+
+            try:
+                dest_token = doc[source_rmap[dest_source]]
+            except KeyError:
+                full_doc = self.full_doc
+                rmap = full_doc.user_data["source_rmap"]
+                dest_token = full_doc[rmap[dest_source]]
+
             yield dest_token, relationship
 
 

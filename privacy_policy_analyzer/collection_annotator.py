@@ -1,6 +1,5 @@
 import importlib.resources as pkg_resources
 from types import SimpleNamespace
-from numpy import full
 
 import yaml
 
@@ -104,20 +103,31 @@ class CollectionAnnotator:
     def annotate(self, doc):
         policy_document = doc.user_data["document"]
 
-        def like_data(ent):
-            if ent.label_ == "DATA":
-                return True
-            elif ent.label_ == "NN":
-                for linked_token, relationship in policy_document.get_links(ent[0]):
-                    if relationship in ["SUBSUM", "COREF"] and linked_token.ent_type_ == "DATA":
-                        return True
+        def like_data(tok):
+            """Check if the phrase started by the token is a data type or subsums a data type"""
+            # Use BFS here to avoid a loop.
+            bfs_queue = [tok]
+            seen = {tok}
+            i = 0
+
+            while i < len(bfs_queue):
+                tok = bfs_queue[i]
+                i += 1
+
+                if tok.ent_type_ == "DATA":
+                    return True
+                elif tok.ent_type_ == "NN":
+                    for linked_token, relationship in policy_document.get_links(tok):
+                        if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
+                            bfs_queue.append(linked_token)
+                            seen.add(linked_token)
 
             return False
 
         possible_datatypes = set()
 
         for e in doc.ents:
-            if like_data(e):
+            if like_data(e[0]):
                 possible_datatypes.add(get_first_head(e.root))
 
         for datatype_token in possible_datatypes:

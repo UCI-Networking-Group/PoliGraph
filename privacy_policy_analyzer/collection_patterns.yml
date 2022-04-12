@@ -28,6 +28,7 @@ token_mapping:
   - process
   - store
   - save
+  - log
   - analyze
   - record
   - retain
