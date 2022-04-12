@@ -17,7 +17,7 @@ from spacy import displacy
 from spacy.tokens import Doc, Span
 from unidecode import unidecode
 
-from privacy_policy_analyzer.utils import expand_token, get_conjuncts
+from privacy_policy_analyzer.utils import expand_token
 
 
 class SegmentType(enum.Enum):
@@ -65,46 +65,9 @@ class DocumentSegment(NodeMixin):
         yield from reversed(context)
 
 
-class TokenGroupStorage:
-    def __init__(self):
-        self.ent_id_to_group = dict()
-        self.group_to_ent_ids = dict()
-        self.group_count = 0
-
-    def __getitem__(self, group_id):
-        for ent_id in self.group_to_ent_ids[group_id]:
-            yield ent_id
-
-    def get_group(self, token):
-        ent_id = token._.ent_id
-        return self.ent_id_to_group.get(ent_id)
-
-    def create_group(self, token_list):
-        new_group_id = self.group_count
-        self.group_count += 1
-        self.group_to_ent_ids[new_group_id] = members = set()
-
-        for t in token_list:
-            ent_id = t._.ent_id
-            members.add(ent_id)
-            self.ent_id_to_group[ent_id] = new_group_id
-
-    def merge_groups(self, group1, group2):
-        if group1 == group2:
-            return
-
-        group1_members = self.group_to_ent_ids[group1]
-
-        for ent_id in self.group_to_ent_ids.pop(group2):
-            self.ent_id_to_group[ent_id] = group1
-            group1_members.add(ent_id)
-
-
 class PolicyDocument:
     def __init__(self, workdir, nlp=None, use_cache=True):
         self.workdir = Path(workdir)
-
-        self.token_groups = TokenGroupStorage()
         self.token_relationship = nx.DiGraph()
 
         if use_cache and (self.workdir / "document.pickle").exists():
@@ -112,7 +75,6 @@ class PolicyDocument:
                 (
                     self.segments,
                     self.noun_chunks,
-                    self.token_groups,
                     self.token_relationship,
                 ) = pickle.load(fin)
         else:
@@ -130,14 +92,13 @@ class PolicyDocument:
             pickle.dump((
                 self.segments,
                 self.noun_chunks,
-                self.token_groups,
                 self.token_relationship,
             ), fout, pickle.HIGHEST_PROTOCOL)
 
     def __init_doc(self, nlp):
         def label_unknown_noun_chunks(token):
             if (token.ent_iob_ == 'O'  # not in a named entity
-                and (token.pos_ in ["NOUN", "PROPN"] or token.tag_ == 'PRP')  # noun or pronoun
+                and token.pos_ in ["NOUN", "PRON", "PROPN"]  # noun or pronoun
                 and re.search(r"[a-zA-Z]", token.text) is not None):  # ignore puncts due to bad tagging
 
                 chunk = expand_token(token)
@@ -200,33 +161,12 @@ class PolicyDocument:
             if name in {"tok2vec", "transformer", "tagger", "parser", "attribute_ruler", "lemmatizer"}:
                 full_doc = pipe(full_doc)
 
-        for ent in full_doc.ents:
-            if self.token_groups.get_group(ent.root) is not None:
-                continue
-
-            new_group = [ent.root]
-            #print(group_id, end=": ")
-            #print(ent, end=" | ")
-
-            for conjunct in get_conjuncts(ent.root):
-                if conjunct._.ent is None:
-                    continue
-
-                #print(conjunct, end=" | ")
-
-                new_group.append(conjunct)
-
-            #print()
-            self.token_groups.create_group(new_group)
-
     def get_full_doc(self, nlp=None):
         if nlp is None:
             nlp = spacy.blank("en")
 
         all_docs = []
         token_sources = []
-        noun_chunk_mapping = dict()
-        noun_chunk_from_id = dict()
         chunk_id = 0
 
         for s in self.segments:
@@ -254,14 +194,13 @@ class PolicyDocument:
 
                 span = Span(doc, left, right, label=label)
                 ents.append(span)
-                noun_chunk_mapping[left + len(token_sources)] = chunk_id
-                noun_chunk_from_id[chunk_id] = left + len(token_sources)
 
                 chunk_id += 1
 
             try:
                 doc.set_ents(ents, default="outside")
             except AttributeError:
+                # for spaCy 2
                 doc.ents = ents
 
             all_docs.append(doc)
@@ -280,8 +219,7 @@ class PolicyDocument:
 
         full_doc.user_data["document"] = self
         full_doc.user_data["source"] = token_sources
-        full_doc.user_data["noun_chunk"] = noun_chunk_mapping
-        full_doc.user_data["noun_chunk_from_id"] = noun_chunk_from_id
+        full_doc.user_data["source_rmap"] = {src: i for i, src in enumerate(token_sources) if src is not None}
 
         return full_doc
 
@@ -331,8 +269,7 @@ class PolicyDocument:
         doc = Doc(nlp.vocab, words=tokens, spaces=spaces)
         doc.user_data["document"] = self
         doc.user_data["source"] = token_sources
-        doc.user_data["noun_chunk"] = dict()
-        doc.user_data["noun_chunk_from_id"] = dict()
+        doc.user_data["source_rmap"] = {src: i for i, src in enumerate(token_sources) if src is not None}
 
         if apply_pipe:
             old_tokenizer = nlp.tokenizer
@@ -345,8 +282,6 @@ class PolicyDocument:
             for idx, left, right, label in ent_positions:
                 span = Span(doc, left, right, label=label)
                 ents.append(span)
-                doc.user_data["noun_chunk"][left] = idx
-                doc.user_data["noun_chunk_from_id"][idx] = left
 
             try:
                 doc.set_ents(ents, default="outside")
@@ -355,45 +290,16 @@ class PolicyDocument:
 
         return doc
 
-    def group(self, token1, token2):
-        group1 = self.token_groups.get_group(token1)
-        group2 = self.token_groups.get_group(token2)
-
-        if group1 is None or group2 is None:
-            raise RuntimeError("invalid token")
-
-        self.token_groups.merge_groups(group1, group2)
-
-    def get_groupped_chunks(self, token):
-        doc = token.doc
-        noun_chunk_from_id = doc.user_data["noun_chunk_from_id"]
-        group = self.token_groups.get_group(token)
-
-        for linked_chunk_id in self.token_groups[group]:
-            left = noun_chunk_from_id[linked_chunk_id]
-            yield doc[left]._.ent
-
     def link(self, token1, token2, relationship):
-        e1 = token1._.ent_id
-        e2 = token2._.ent_id
-
-        if e1 is None or e2 is None:
-            raise RuntimeError("invalid token")
-
-        self.token_relationship.add_edge(e1, e2, relationship=relationship)
+        self.token_relationship.add_edge(token1._.src, token2._.src, relationship=relationship)
 
     def get_links(self, token):
         doc = token.doc
-        noun_chunk_from_id = doc.user_data["noun_chunk_from_id"]
-        chunk_id = token._.ent_id
+        source_rmap = doc.user_data["source_rmap"]
 
-        if chunk_id not in self.token_relationship:
-            return
-
-        for _, dest_chunk_id, data in self.token_relationship.out_edges(chunk_id, data=True):
-            # FIXME: Links should be made between tokens instead of noun chunks in the future
+        for _, dest_source, data in self.token_relationship.out_edges(token._.src, data=True):
             relationship = data["relationship"]
-            dest_token = doc[noun_chunk_from_id[dest_chunk_id]]
+            dest_token = doc[source_rmap[dest_source]]
             yield dest_token, relationship
 
 

@@ -66,6 +66,12 @@ def token_to_ent_id(token):
         return noun_chunk_mapping[span.start]
 
 
+def token_to_source(token):
+    doc = token.doc
+    source_mapping = doc.user_data["source"]
+    return source_mapping[token.i]
+
+
 def chunk_to_conjuncts(chunk):
     conjuncts = set()
 

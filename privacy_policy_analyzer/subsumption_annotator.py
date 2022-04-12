@@ -86,6 +86,27 @@ class SubsumptionAnnotator:
         ]
         self.matcher.add("SUBSUM_INCLUDING_LIMITED_TO", [pattern])
 
+        # some/all/part of xxx
+        pattern = [
+            {
+                "RIGHT_ID": "anchor",
+                "RIGHT_ATTRS": {"ORTH": "of", "POS": "ADP"}
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": "<",
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": {"ORTH": {"IN": ["some", "all"]},  "POS": {"IN": ["NOUN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": ">",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            }
+        ]
+        self.matcher.add("SUBSUM_SOME_OF", [pattern])
+
     def annotate(self, doc):
         matches = self.matcher(doc)
 
@@ -93,19 +114,18 @@ class SubsumptionAnnotator:
             _, (match_spec, ) = self.matcher.get(match_id)
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
 
-            upper_token = match_info["upper_token"]
-            lower_token = match_info["lower_token"]
+            upper_ent = match_info["upper_token"]._.ent
+            lower_ent = match_info["lower_token"]._.ent
+            lower_conjuncts = lower_ent._.conjunct_chunks
 
-            if lower_token._.ent is None:
+            if upper_ent is None or lower_ent is None:
                 continue
 
             print("+" * 40)
-            print(upper_token.sent, end="\n\n")
-            print(upper_token._.ent, "->", lower_token._.ent._.conjunct_chunks)
+            print(upper_ent[0].sent, end="\n\n")
+            print(upper_ent, "->", lower_conjuncts)
             print("+" * 40)
 
-            try:
-                doc.user_data["document"].link(upper_token, lower_token, "SUBSUM")
-                doc.user_data["document"].group(upper_token, lower_token)
-            except RuntimeError:
-                pass
+            for e in lower_conjuncts:
+                doc.user_data["document"].link(upper_ent[0], e[0], "SUBSUM")
+                doc.user_data["document"].link(e[0], upper_ent[0], "SUBSUMED_BY")

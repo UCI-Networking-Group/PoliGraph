@@ -39,11 +39,10 @@ def main():
             if relationship != "COLLECTED_BY":
                 continue
 
-            entities.extend(document.get_groupped_chunks(dest_token))
+            entities.append(dest_token)
 
         if len(entities) > 0:
-            data_types = [*document.get_groupped_chunks(noun_chunk.root)]
-            print(entities, data_types)
+            print(entities, noun_chunk)
 
 
 if __name__ == "__main__":

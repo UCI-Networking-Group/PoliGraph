@@ -102,10 +102,22 @@ class CollectionAnnotator:
             self.patterns.append(Pattern(p, config["token_mapping"]))
 
     def annotate(self, doc):
+        policy_document = doc.user_data["document"]
+
+        def like_data(ent):
+            if ent.label_ == "DATA":
+                return True
+            elif ent.label_ == "NN":
+                for linked_token, relationship in policy_document.get_links(ent[0]):
+                    if relationship in ["SUBSUM", "COREF"] and linked_token.ent_type_ == "DATA":
+                        return True
+
+            return False
+
         possible_datatypes = set()
 
         for e in doc.ents:
-            if e.label_ == "DATA":
+            if like_data(e):
                 possible_datatypes.add(get_first_head(e.root))
 
         for datatype_token in possible_datatypes:
@@ -139,6 +151,11 @@ class CollectionAnnotator:
                                 print(f"> DEP: {datatype_tokens[0].dep_}, POS: {datatype_tokens[0].pos_}, DATATYPES:", datatypes)
                                 print("#" * 40)
 
-                                doc.user_data["document"].link(datatype_tokens[0], entity_tokens[0], "COLLECTED_BY")
+                                for et in entity_tokens:
+                                    if et.ent_type_ != "DATA":
+                                        for dt in datatype_tokens:
+                                            if dt.ent_type_ in ["DATA", "NN"]:
+                                                policy_document.link(et, dt, "COLLECT")
+                                                policy_document.link(dt, et, "COLLECTED_BY")
 
                 current_token = parent_token
