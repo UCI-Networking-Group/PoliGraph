@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Process accessibility tree into a PolicyDocument"""
 
 import bisect
 import enum
@@ -84,7 +83,11 @@ class PolicyDocument:
             self.segments = extract_segments_from_accessibility_tree(accessibility_tree, nlp.tokenizer)
             self.__init_doc(nlp)
 
-        self.full_doc = self.get_full_doc()
+        if spacy.__version__[0] == "2":
+            # get_full_doc doesn't work with spaCy 2
+            self.full_doc = None
+        else:
+            self.full_doc = self.get_full_doc()
 
     def render_ner(self):
         displacy.serve(self.get_full_doc(), style="ent")
@@ -128,7 +131,8 @@ class PolicyDocument:
 
         for ent in full_doc.ents:
             # exclude NER types that are not useful (e.g. CARDINAL/PERCENT/DATE...)
-            if ent.label_ not in {"NN", "DATA", "LAW", "EVENT", "FAC", "LOC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
+            if ent.label_ not in {"NN", "DATA", "LAW", "EVENT", "FAC", "LOC",
+                                  "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
                 continue
 
             # find the beginning and end of a chunk within a segment
@@ -199,12 +203,7 @@ class PolicyDocument:
 
                 chunk_id += 1
 
-            try:
-                doc.set_ents(ents, default="outside")
-            except AttributeError:
-                # for spaCy 2
-                doc.ents = ents
-
+            doc.set_ents(ents, default="outside")
             all_docs.append(doc)
             token_sources.extend((s.segment_id, i) for i in range(len(doc)))
 
@@ -241,12 +240,23 @@ class PolicyDocument:
         previous_segment = None
 
         for s in segments:
-            if previous_segment:
-                if previous_segment.segment_type is SegmentType.HEADING and s.segment_type != SegmentType.LISTITEM:
+            # Propoerly concatenate segments
+            if len(tokens) > 0:
+                if s.segment_type != SegmentType.LISTITEM:
+                    # For LISTITEM, insert a colon if previous segment ends with a word
+                    if tokens[-1].isalnum():
+                        tokens.append(":")
+                        spaces.append(True)
+                        token_sources.append(None)
+                    else:
+                        spaces[-1] = True
+                elif previous_segment.segment_type is SegmentType.HEADING:
+                    # Insert some linebreaks after a heading
                     tokens.extend(["\n", "\n"])
                     spaces.extend([False, False])
                     token_sources.extend([None, None])
                 else:
+                    # Otherwise, just insert a space
                     spaces[-1] = True
 
             if load_ner:
@@ -305,6 +315,9 @@ class PolicyDocument:
             try:
                 dest_token = doc[source_rmap[dest_source]]
             except KeyError:
+                if self.full_doc is None:  # spaCy 2
+                    continue
+
                 full_doc = self.full_doc
                 rmap = full_doc.user_data["source_rmap"]
                 dest_token = full_doc[rmap[dest_source]]
@@ -313,6 +326,8 @@ class PolicyDocument:
 
 
 def extract_segments_from_accessibility_tree(tree, tokenizer):
+    """Process an accessibility tree into a list of DocumentSegment"""
+
     IGNORED_ELEMENTS = {"img", "image map", "button", "separator", "whitespace",
                         "list item marker", "insertion", "diagram", "dialog", "tab"}
     SECTION_ELEMENTS = {"document", "article", "landmark", "section", "blockquote", "group",
@@ -367,12 +382,12 @@ def extract_segments_from_accessibility_tree(tree, tokenizer):
             for child in node.get("children", []):
                 # if child["role"] != "listitem":
                 #     raise ValueError("Invalid child element of a list: " + child["role"])
-
-                # Many HTML lists are illformed so this has to be tolerant
+                # Ideally a listitem child should be here
+                # but many HTML lists are illformed so this has to be tolerant
                 if child["role"] in IGNORED_ELEMENTS:
                     continue
 
-                listitem = new_segment(SegmentType.LISTITEM, "", parent)
+                listitem = None
                 text_buffer = []
 
                 for grandchild in chain(child.get("children", []), [None]):
@@ -380,6 +395,10 @@ def extract_segments_from_accessibility_tree(tree, tokenizer):
                         current_text = " ".join(text_buffer).strip()
 
                         if len(current_text) > 0:
+                            if listitem is None:
+                                # Lazy creation to avoid empty LISTITEM
+                                listitem = new_segment(SegmentType.LISTITEM, "", parent)
+
                             new_segment(SegmentType.TEXT, current_text, listitem)
                             text_buffer.clear()
 
