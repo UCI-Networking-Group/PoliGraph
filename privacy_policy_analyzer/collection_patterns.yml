@@ -21,7 +21,7 @@ token_mapping:
   - receive
   - solicit
   - acquire
-  VERB_USE:
+  VERB_GENERAL_USE:
   - use
   - keep
   - access
@@ -33,24 +33,22 @@ token_mapping:
   - record
   - retain
   - preserve
+  - need
   - VERB_SHARE_WITH
   - VERB_PROVIDE_WITH
   - VERB_PROVIDE_TO
   - VERB_COLLECT_FROM
+  VERB_GENERAL_SHARE:
+  - VERB_SHARE_WITH
+  - VERB_PROVIDE_WITH
+  - VERB_PROVIDE_TO
   VERB_ASK_TODO:
   - ask
   - require
-  - need
-  VERB_NEED_TODO:
-  - need
-  - choose
-  SCOPE_PRONS:
-  - some
-  - all
 patterns:
   # E use D
-  - ENTITY:nsubj,VERB_USE,DATA:dobj
-  - ENTITY:pobj,by:agent,VERB_USE,DATA:nsubjpass
+  - ENTITY:nsubj,VERB_GENERAL_USE,DATA:dobj
+  - ENTITY:pobj,by:agent,VERB_GENERAL_USE,DATA:nsubjpass
   # ... share E with D
   - ENTITY:pobj,with:prep,VERB_SHARE_WITH,DATA:dobj
   - ENTITY:pobj,with:prep,VERB_SHARE_WITH,DATA:nsubjpass
@@ -63,3 +61,5 @@ patterns:
   # ... collect D from E
   - ENTITY:pobj,from:prep,VERB_COLLECT_FROM,DATA:dobj
   - ENTITY:pobj,from:prep,VERB_COLLECT_FROM,DATA:nsubjpass
+  # E ask ... to provide D
+  - ENTITY:nsubj,VERB_ASK_TODO,VERB_GENERAL_SHARE:xcomp,DATA:dobj
