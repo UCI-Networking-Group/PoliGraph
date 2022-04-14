@@ -9,6 +9,7 @@ class CoreferenceAnnotator:
     def annotate(self, doc):
         last_sentence_ents = []
 
+        # Resolve this/that/these/those xxx
         for sent in doc.sents:
             current_sentence_ents = []
 
@@ -27,3 +28,16 @@ class CoreferenceAnnotator:
                 current_sentence_ents.append(ent)
 
             last_sentence_ents = current_sentence_ents
+
+        # appositions are also considered coreferences
+        for ent in doc.ents:
+            if ent.root.dep_ == "appos":
+                prev_ent = ent.root.head._.ent
+
+                if prev_ent is not None:
+                    print("=" * 40)
+                    print(doc, end="\n\n")
+                    print(ent, prev_ent, sep=" | ")
+
+                    doc.user_data["document"].link(ent[0], prev_ent[0], "COREF")
+                    doc.user_data["document"].link(prev_ent[0], ent[0], "COREF")

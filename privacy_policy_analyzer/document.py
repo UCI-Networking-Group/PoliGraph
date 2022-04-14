@@ -172,6 +172,7 @@ class PolicyDocument:
         chunk_id = 0
 
         for s in self.segments:
+            # TODO: This should be consistent with build_doc
             if s.segment_type is SegmentType.HEADING:
                 prefix = ["\n\n", "#" * s.heading_level]
                 suffix = ["\n\n"]
@@ -239,22 +240,29 @@ class PolicyDocument:
         token_sources = []
         ent_positions = []
         previous_segment = None
+        list_count = 0
 
         for s in segments:
             # Propoerly concatenate segments
             if len(tokens) > 0:
-                if s.segment_type != SegmentType.LISTITEM:
-                    # For LISTITEM, insert a colon if previous segment ends with a word
+                if s.segment_type == SegmentType.LISTITEM:
+                    # Add a colon or space before a LISTITEM
                     if tokens[-1].isalnum():
                         tokens.append(":")
                         spaces.append(True)
                         token_sources.append(None)
                     else:
                         spaces[-1] = True
+
+                    list_count += 1
                 elif previous_segment.segment_type is SegmentType.HEADING:
                     # Insert some linebreaks after a heading
                     tokens.extend(["\n", "\n"])
                     spaces.extend([False, False])
+                    token_sources.extend([None, None])
+                elif previous_segment.segment_type is SegmentType.LISTITEM:
+                    tokens.extend(["\n", "*" * list_count])
+                    spaces.extend([False, True])
                     token_sources.extend([None, None])
                 else:
                     # Otherwise, just insert a space
