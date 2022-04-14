@@ -83,11 +83,7 @@ class PolicyDocument:
             self.segments = extract_segments_from_accessibility_tree(accessibility_tree, nlp.tokenizer)
             self.__init_doc(nlp)
 
-        if spacy.__version__[0] == "2":
-            # get_full_doc doesn't work with spaCy 2
-            self.full_doc = None
-        else:
-            self.full_doc = self.get_full_doc()
+        self.full_doc = self.get_full_doc()
 
     def render_ner(self):
         displacy.serve(self.get_full_doc(), style="ent")
@@ -167,7 +163,7 @@ class PolicyDocument:
             if name in {"tok2vec", "transformer", "tagger", "parser", "attribute_ruler", "lemmatizer"}:
                 full_doc = pipe(full_doc)
 
-    def get_full_doc(self, nlp=None):
+    def get_full_doc(self, nlp=None, apply_pipe=False):
         if nlp is None:
             nlp = spacy.blank("en")
 
@@ -221,6 +217,11 @@ class PolicyDocument:
         full_doc.user_data["document"] = self
         full_doc.user_data["source"] = token_sources
         full_doc.user_data["source_rmap"] = {src: i for i, src in enumerate(token_sources) if src is not None}
+
+        if apply_pipe:
+            for name, pipe in nlp.pipeline:
+                if name in {"tok2vec", "transformer", "tagger", "parser", "attribute_ruler", "lemmatizer"}:
+                    full_doc = pipe(full_doc)
 
         return full_doc
 
@@ -295,10 +296,7 @@ class PolicyDocument:
                 span = Span(doc, left, right, label=label)
                 ents.append(span)
 
-            try:
-                doc.set_ents(ents, default="outside")
-            except AttributeError:
-                doc.ents = ents
+            doc.set_ents(ents, default="outside")
 
         return doc
 
@@ -315,9 +313,6 @@ class PolicyDocument:
             try:
                 dest_token = doc[source_rmap[dest_source]]
             except KeyError:
-                if self.full_doc is None:  # spaCy 2
-                    continue
-
                 full_doc = self.full_doc
                 rmap = full_doc.user_data["source_rmap"]
                 dest_token = full_doc[rmap[dest_source]]

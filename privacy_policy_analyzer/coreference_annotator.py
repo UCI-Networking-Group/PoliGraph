@@ -1,39 +1,29 @@
 #!/usr/bin/env python3
 
-import math
-import re
-
+from itertools import chain
 
 class CoreferenceAnnotator:
-    COREF_REGEX = re.compile(r"^(?:this|that|these|those)\b(?:.*\b)?(?:datum|information)\b")
-
     def __init__(self, nlp):
-        import neuralcoref
-        self.coref = neuralcoref.NeuralCoref(nlp.vocab)
+        pass
 
     def annotate(self, doc):
-        doc = self.coref(doc)
+        last_sentence_ents = []
 
-        for this_mention, score_dict in doc._.coref_scores.items():
-            if self.COREF_REGEX.match(this_mention.lemma_) and this_mention.root.pos_ in ["NOUN", "PROPN"]:
-                best_mention, best_score = None, -math.inf
+        for sent in doc.sents:
+            current_sentence_ents = []
 
-                for other_mention, score in score_dict.items():
-                    if other_mention.start >= this_mention.start \
-                        or self.COREF_REGEX.match(other_mention.lemma_) \
-                        or other_mention.root.pos_ == "PRON":
-                        continue
+            for ent in sent.ents:
+                if ent[0].orth_ in {"this", "that", "these", "those"} and ent[0].head == ent[-1]:
+                    for prev_ent in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
+                        if prev_ent[-1].lemma_ == ent[-1].lemma_:
+                            print("=" * 40)
+                            print(doc, end="\n\n")
+                            print(ent, prev_ent, sep=" | ")
 
-                    if score > 0.0 and score > best_score:
-                        best_score = score
-                        best_mention = other_mention
+                            doc.user_data["document"].link(ent[0], prev_ent[0], "COREF")
+                            doc.user_data["document"].link(prev_ent[0], ent[0], "COREF")
+                            break
 
-                if best_mention is not None:
-                    print("#" * 40)
-                    print(doc, end="\n\n")
-                    print(this_mention, best_mention, sep=" | ")
-                    print("Score =", best_score)
+                current_sentence_ents.append(ent)
 
-                    doc.user_data["document"].link(this_mention.root, best_mention.root, "COREF")
-                    doc.user_data["document"].link(best_mention.root, this_mention.root, "COREF")
-                    doc.user_data["document"].group(this_mention.root, best_mention.root)
+            last_sentence_ents = current_sentence_ents
