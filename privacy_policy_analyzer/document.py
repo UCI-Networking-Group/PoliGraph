@@ -126,8 +126,8 @@ class PolicyDocument:
             label_unknown_noun_chunks(sent.root)
 
         for ent in full_doc.ents:
-            # exclude NER types that are not useful (e.g. CARDINAL/PERCENT/DATE...)
-            if ent.label_ not in {"NN", "DATA", "LAW", "EVENT", "FAC", "LOC",
+            # exclude NER types that are not useful (e.g. CARDINAL/PERCENT/DATE/LAW/LOC...)
+            if ent.label_ not in {"NN", "DATA", "EVENT", "FAC",
                                   "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
                 continue
 
