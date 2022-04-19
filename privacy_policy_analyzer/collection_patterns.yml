@@ -63,3 +63,5 @@ patterns:
   - ENTITY:pobj,from:prep,VERB_COLLECT_FROM,DATA:nsubjpass
   # E ask ... to provide D
   - ENTITY:nsubj,VERB_ASK_TODO,VERB_GENERAL_SHARE:xcomp,DATA:dobj
+  # E make use of D
+  - ENTITY:nsubj,make,use,of:prep,DATA:pobj

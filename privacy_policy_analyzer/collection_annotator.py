@@ -66,7 +66,10 @@ class Pattern:
                     current_token = current_token.head
                     conj_tokens.append(current_token)
 
-                    if current_token == chain[i + 1]:
+                    if i + 1 == len(chain):
+                        # TODO: bad NLP
+                        return False
+                    elif current_token == chain[i + 1]:
                         i += 1
             else:
                 while i + 1 < len(chain) and chain[i + 1].dep_ in ["conj", "appos"]:
