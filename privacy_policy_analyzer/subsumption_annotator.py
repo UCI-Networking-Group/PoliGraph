@@ -9,13 +9,13 @@ class SubsumptionAnnotator:
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"ORTH": "as", "DEP": "prep"}
+                "RIGHT_ATTRS": {"LEMMA": "as", "DEP": "prep"}
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": ";",
                 "RIGHT_ID": "r00",
-                "RIGHT_ATTRS": {"ORTH": "such"}
+                "RIGHT_ATTRS": {"LEMMA": "such"}
             },
             {
                 "LEFT_ID": "anchor",
@@ -36,7 +36,7 @@ class SubsumptionAnnotator:
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"ORTH": {"IN": ["including", "like"]}}
+                "RIGHT_ATTRS": {"DEP": "prep", "LEMMA": {"IN": ["include", "like"]}}
             },
             {
                 "LEFT_ID": "anchor",
@@ -53,23 +53,44 @@ class SubsumptionAnnotator:
         ]
         self.matcher.add("SUBSUM_INCLUDING_LIKE", [pattern])
 
+        # include (verb)
+        pattern = [
+            {
+                "RIGHT_ID": "anchor",
+                "RIGHT_ATTRS": {"DEP": "prep", "LEMMA": "include"}
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": "<",
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": ">",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            }
+        ]
+        self.matcher.add("SUBSUM_INCLUDE", [pattern])
+
         # including but not limited to
         pattern = [
             {
                 "RIGHT_ID": "anchor_including",
-                "RIGHT_ATTRS": {"ORTH": "including"}
+                "RIGHT_ATTRS": {"LEMMA": "include"}
             },
             {
                 "LEFT_ID": "anchor_including",
                 "REL_OP": ">",
                 "RIGHT_ID": "anchor_limited",
-                "RIGHT_ATTRS": {"ORTH": "limited"}
+                "RIGHT_ATTRS": {"LEMMA": "limit"}
             },
             {
                 "LEFT_ID": "anchor_limited",
                 "REL_OP": ">",
                 "RIGHT_ID": "anchor_to",
-                "RIGHT_ATTRS": {"ORTH": "to"}
+                "RIGHT_ATTRS": {"LEMMA": "to"}
             },
             {
                 "LEFT_ID": "anchor_including",
@@ -86,7 +107,7 @@ class SubsumptionAnnotator:
         ]
         self.matcher.add("SUBSUM_INCLUDING_LIMITED_TO", [pattern])
 
-        # some/all/any of xxx
+        # some/all/any/types/variety/categories of information
         pattern = [
             {
                 "RIGHT_ID": "anchor",
@@ -96,7 +117,10 @@ class SubsumptionAnnotator:
                 "LEFT_ID": "anchor",
                 "REL_OP": "<",
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"ORTH": {"IN": ["some", "all", "any", "type", "types"]},  "POS": {"IN": ["NOUN", "PRON"]}}
+                "RIGHT_ATTRS": {
+                    "LEMMA": {"IN": ["some", "all", "any", "type", "variety", "category"]},
+                    "POS": {"IN": ["NOUN", "PRON"]}
+                }
             },
             {
                 "LEFT_ID": "anchor",
@@ -129,4 +153,3 @@ class SubsumptionAnnotator:
 
             for lower_ent in lower_conjuncts:
                 doc.user_data["document"].link(upper_ent[0], lower_ent[0], "SUBSUM")
-                doc.user_data["document"].link(lower_ent[0], upper_ent[0], "SUBSUMED_BY")

@@ -5,7 +5,7 @@ import argparse
 import spacy
 from privacy_policy_analyzer.collection_annotator import CollectionAnnotator
 from privacy_policy_analyzer.coreference_annotator import CoreferenceAnnotator
-from privacy_policy_analyzer.document import PolicyDocument
+from privacy_policy_analyzer.document import PolicyDocument, SegmentType
 from privacy_policy_analyzer.subsumption_annotator import SubsumptionAnnotator
 
 
@@ -27,10 +27,13 @@ def main():
         document = PolicyDocument(d)
 
         for seg in document.segments:
-            doc = document.build_doc(seg, nlp, apply_pipe=True, load_ner=True)
-            subsumption_annotator.annotate(doc)
-            coreference_annotator.annotate(doc)
-            collection_annotator.annotate(doc)
+            if seg.segment_type == SegmentType.LISTITEM:
+                continue
+
+            for annotator in subsumption_annotator, coreference_annotator, collection_annotator:
+                for i in range(len(seg.context)):
+                    doc = document.build_doc(seg.context[:i+1], nlp, apply_pipe=True, load_ner=True)
+                    annotator.annotate(doc)
 
         document.save()
 

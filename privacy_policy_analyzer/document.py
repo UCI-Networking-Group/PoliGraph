@@ -36,6 +36,10 @@ class DocumentSegment(NodeMixin):
 
         self.parent = parent
 
+        self.context = [s := self]
+        while (s := s.parent) is not None:
+            self.context.append(s)
+
     def __repr__(self):
         return f"Segment #{self.segment_id}, type={self.segment_type.name}"
 
@@ -52,16 +56,6 @@ class DocumentSegment(NodeMixin):
             s = s.parent
 
         return count
-
-    def iter_context(self):
-        s = self
-        context = []
-
-        while s is not None:
-            context.append(s)
-            s = s.parent
-
-        yield from reversed(context)
 
 
 class PolicyDocument:
@@ -226,44 +220,30 @@ class PolicyDocument:
 
         return full_doc
 
-    def build_doc(self, core_segment, nlp, with_context=True, apply_pipe=False, load_ner=False):
-        if core_segment not in self.segments:
-            raise ValueError("Unknown segment")
-
-        if with_context:
-            segments = core_segment.iter_context()
-        else:
-            segments = [core_segment]
+    def build_doc(self, context, nlp, apply_pipe=False, load_ner=False):
+        if any(s not in self.segments for s in context):
+            raise ValueError("Unknown segment in the provided context")
 
         tokens = []
         spaces = []
         token_sources = []
         ent_positions = []
         previous_segment = None
-        list_count = 0
 
-        for s in segments:
+        for s in reversed(context):
             # Propoerly concatenate segments
             if len(tokens) > 0:
-                if s.segment_type == SegmentType.LISTITEM:
-                    # Add a colon or space before a LISTITEM
-                    if tokens[-1].isalnum():
-                        tokens.append(":")
-                        spaces.append(True)
-                        token_sources.append(None)
-                    else:
-                        spaces[-1] = True
-
-                    list_count += 1
-                elif previous_segment.segment_type is SegmentType.HEADING:
+                if previous_segment.segment_type is SegmentType.HEADING:
                     # Insert some linebreaks after a heading
                     tokens.extend(["\n", "\n"])
                     spaces.extend([False, False])
                     token_sources.extend([None, None])
                 elif previous_segment.segment_type is SegmentType.LISTITEM:
-                    tokens.extend(["\n", "*" * list_count])
-                    spaces.extend([False, True])
-                    token_sources.extend([None, None])
+                    # Add a colon before a LISTITEM
+                    if tokens[-1].isalnum():
+                        tokens.append(":")
+                        spaces.append(True)
+                        token_sources.append(None)
                 else:
                     # Otherwise, just insert a space
                     spaces[-1] = True
