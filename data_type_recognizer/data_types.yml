@@ -25,6 +25,8 @@ GENERAL_DATA:
 - health INFO
 - biometric INFO
 - user INFO
+- user's INFO
+- visitor's INFO
 - profile INFO
 - account INFO
 - device INFO
@@ -37,7 +39,6 @@ GENERAL_DATA:
 - financial INFO
 - social network INFO
 - OS INFO
-- sensor INFO
 
 # (A) Identifiers such as a real name, alias, postal address, unique personal
 # identifier, online identifier Internet Protocol address, email address,
@@ -114,6 +115,9 @@ CONTACT_INFO:
 - postal code
 - post code
 - postcode
+- country of residence
+- country-level location
+- city-level location
 # phone/tax numbers
 - PHONE number
 - personal PHONE number
@@ -182,9 +186,11 @@ IDENTIFIERS:
 - application ID
 - Unity ID
 # AD ID
-- AD ID
+- (device) AD ID
 - Apple AD ID
 - Android AD ID
+- Apple's AD ID
+- Google's AD ID
 # Cookies
 - cookie
 - cookie SETTING
@@ -192,6 +198,9 @@ IDENTIFIERS:
 - web cookie
 - Internet cookie
 - browser cookie
+- entity tag
+- ETag
+- HTTP header
 - web beacon
 - tracking pixel
 - pixel tag
@@ -303,23 +312,30 @@ SOFTWARE_INFO:
 - OS version
 - software version
 - API version
+- type of phone
+- type of mobile device
 - screen resolution
+- screen size
 - monitor resolution
+- monitor size
 - browser language
 - user agent (string)
 - carrier provider
 - language SETTING
 - timezone SETTING
 - system SETTING
+- notification SETTING
 
 SENSOR_DATA:
+- sensory INFO
+- sensor INFO
 - sensor flag
-- accelerometer data
-- proximity sensor data
-- gyroscope data
-- compass data
-- barometer data
-- bluetooth data
+- accelerometer INFO
+- proximity sensor INFO
+- gyroscope INFO
+- compass INFO
+- barometer INFO
+- bluetooth INFO
 
 FILE_CONTENT:
 - file content

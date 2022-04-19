@@ -1,4 +1,4 @@
-# MANUALLY ADDED (40)
+# MANUALLY ADDED (45)
 We collect your {DATA} and {DATA}.
 {ORG} collects {DATA}.
 {ORG} may collect your {DATA}.
@@ -12,6 +12,7 @@ We collect your {DATA} and {DATA}.
 {DATA} may be used by {ORG} .
 We will exchange your {DATA} with {ORG} .
 We may report your {DATA} to {ORG} .
+We might gather {DATA} from {ORG}.
 We need your {DATA} for legal purpose.
 We require you to provide your {DATA}.
 We transmit your {DATA} online.
@@ -19,6 +20,7 @@ We transmit your {DATA} online.
 Your {DATA} may be collected.
 We may distribute your {DATA} to {ORG} .
 We will ask you for your {DATA} and {DATA}.
+We may ask you to provide us with {DATA} and {DATA}.
 Your {DATA} may be distributed to {ORG} .
 We may choose to disclose your {DATA} and {DATA} to third parties.
 We may provide {ORG} and {ORG} with your {DATA}, {DATA} and {DATA}.
@@ -39,8 +41,11 @@ The data which may be provided by {ORG} to us includes {DATA} and {DATA}.
 You can opt out of collection of {DATA}.
 {DATA} - such as your {DATA}, {DATA} and {DATA}.
 If you do not share your {DATA}, you cannot use our website.
+We may make use of your {DATA} in order to improve our service.
+We might keep a record of {DATA} for a month.
+{ORG} will not give or sell {DATA} to any third party.
 
-# FROM APP-350 (60)
+# FROM APP-350 (65)
 Some examples include: {DATA}
 Some examples include: {ORG}
 How we use your information within {ORG}
@@ -83,7 +88,6 @@ How will you know if {ORG} changes this Privacy Policy?
 Please note that if you choose to remove or reject {DATA}, this could affect the functionality our services.
 From {ORG} , the data we receive includes your {DATA}, {DATA} and {DATA}.
 {ORG} does not store your or your friend's {DATA}.
-Our postal address is: {ORG}
 We may also help advertisers better reach our users by providing your {DATA} and {DATA}.
 You can also exercise choice over the collection of {DATA} on your mobile device by {ORG} .
 You may link your account to {ORG} , which allows us to obtain information from those accounts (like your {DATA}).
@@ -101,3 +105,9 @@ For this purpose, we collect and share with other users: a) {DATA}; b) {DATA}; c
 In these terms references to "we", "us" and "our" are references to either {ORG} or {ORG} .
 You also can limit the collection of certain information by deleting {DATA}.
 {ORG} provides its members with {DATA} for the people they already have in their address books.
+To opt out of this type of sharing of {DATA} by {ORG}, please update your settings.
+{DATA} includes the following.
+Privacy Policy of {ORG}.
+The use of such features enables the sharing of {DATA} with your friends.
+{ORG} may disclose {DATA} in the aggregate to third parties including, but not limited to, {ORG}.
+They may independently collect data or solicit information including: 1. {DATA}; 2. {DATA}; 3. {DATA}.
