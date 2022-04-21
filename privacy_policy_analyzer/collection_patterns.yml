@@ -49,7 +49,7 @@ patterns:
   # E use D
   - ENTITY:nsubj,VERB_GENERAL_USE,DATA:dobj
   - ENTITY:pobj,by:agent,VERB_GENERAL_USE,DATA:nsubjpass
-  # ... share E with D
+  # ... share D with E
   - ENTITY:pobj,with:prep,VERB_SHARE_WITH,DATA:dobj
   - ENTITY:pobj,with:prep,VERB_SHARE_WITH,DATA:nsubjpass
   # ... provide E with D

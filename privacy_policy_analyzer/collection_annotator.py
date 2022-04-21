@@ -1,4 +1,5 @@
 import importlib.resources as pkg_resources
+from itertools import chain
 from types import SimpleNamespace
 
 import yaml
@@ -160,22 +161,28 @@ class CollectionAnnotator:
                 full_chain.append(dtype_root)
 
                 if any(p(full_chain) for p in self.patterns):
-                    negation = False
+                    exception = None
 
-                    for token in full_chain:
-                        for child in token.children:
-                            if child.dep_ == "neg":
-                                negation = True
+                    for token in chain([verb], verb.ancestors):
+                        if token.dep_ == "advcl" \
+                            and any(c.pos_ == "SCONJ" and
+                                    c.lemma_ in ["if", "when", "while", "whether"] for c in token.children):
+                            exception = "CLAUSE"
+                            break
+                    else:
+                        for token in full_chain:
+                            if any(c.dep_ == "neg" for c in token.children):
+                                exception = "NEG"
                                 break
 
                     print("#" * 40)
                     print(verb.sent, end="\n\n")
 
-                    if not negation:
+                    if exception is None:
                         print(">", actor, verb.lemma_.upper(), dtype)
                         policy_document.link(actor[0], dtype[0], "COLLECT")
                         policy_document.link(dtype[0], actor[0], "COLLECTED_BY")
                     else:
-                        print("> (NEG)", actor, verb.lemma_.upper(), dtype)
+                        print(f"> ({exception})", actor, verb.lemma_.upper(), dtype)
 
                     print("#" * 40)
