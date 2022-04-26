@@ -113,13 +113,16 @@ class CollectionAnnotator:
                 tok = bfs_queue[i]
                 i += 1
 
-                if tok.ent_type_ == "DATA":
-                    return True
-                elif tok.ent_type_ == "NN":
-                    for linked_token, relationship in policy_document.get_links(tok):
-                        if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
-                            bfs_queue.append(linked_token)
-                            seen.add(linked_token)
+                match tok._.ent_type:
+                    case "DATA":
+                        return True
+                    case "ACTOR":
+                        continue
+                    case "NN":
+                        for linked_token, relationship in policy_document.get_links(tok):
+                            if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
+                                bfs_queue.append(linked_token)
+                                seen.add(linked_token)
 
             return False
 

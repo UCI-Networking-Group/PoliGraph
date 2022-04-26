@@ -16,8 +16,6 @@ from spacy import displacy
 from spacy.tokens import Doc, Span
 from unidecode import unidecode
 
-from privacy_policy_analyzer.utils import expand_token
-
 
 class SegmentType(enum.Enum):
     HEADING = enum.auto()
@@ -91,19 +89,34 @@ class PolicyDocument:
             ), fout, pickle.HIGHEST_PROTOCOL)
 
     def __init_doc(self, nlp):
+        DATATYPE_NOUNS = frozenset({"information", "datum", "address", "number", "identifier"})
+        ACTOR_NOUNS = frozenset({"provider", "service", "partner", "company", "network",
+                                 "site", "advertiser", "service", "website", "processor",
+                                 "application", "platform", "product", "party", "platform"})
+
+        def expand_token_to_noun_chunk(token):
+            doc = token.doc
+
+            subtoken_pos = {t.i for t in token.subtree}
+            left_edge = token.i
+
+            while left_edge - 1 in subtoken_pos:
+                prev_token = doc[left_edge - 1]
+
+                if prev_token.is_space or prev_token.pos_ == 'X':
+                    break
+
+                left_edge -= 1
+
+            return doc[left_edge:token.i + 1]
+
         def label_unknown_noun_chunks(token):
             if (token.ent_iob_ == 'O'  # not in a named entity
                 and token.pos_ in ["NOUN", "PRON", "PROPN"]  # noun or pronoun
                 and re.search(r"[a-zA-Z]", token.text) is not None):  # ignore puncts due to bad tagging
 
-                chunk = expand_token(token)
-
-                if chunk.root.lemma_ in ["information", "datum"]:
-                    chunk_type = "DATA"
-                else:
-                    chunk_type = "NN"
-
-                ent = Span(token.doc, chunk.start, chunk.end, chunk_type)
+                chunk = expand_token_to_noun_chunk(token)
+                ent = Span(token.doc, chunk.start, chunk.end, "NN")
                 token.doc.set_ents([ent], default="unmodified")
 
             for child in token.children:
@@ -121,9 +134,18 @@ class PolicyDocument:
 
         for ent in full_doc.ents:
             # exclude NER types that are not useful (e.g. CARDINAL/PERCENT/DATE/LAW/LOC...)
-            if ent.label_ not in {"NN", "DATA", "EVENT", "FAC",
-                                  "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
+            if ent.label_ not in {"NN", "DATA", "ACTOR", "EVENT", "FAC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
                 continue
+
+            # Rule-based NER completion
+            if ent.root.lemma_.lower() in DATATYPE_NOUNS:
+                label = "DATA"
+            elif ent.root.lemma_.lower() in ACTOR_NOUNS:
+                label = "ACTOR"
+            elif ent.root.pos_ == "PRON" and ent.root.lemma_.lower() in {"i", "we", "you", "he", "she"}:
+                label = "ACTOR"
+            else:
+                label = ent.label_
 
             # find the beginning and end of a chunk within a segment
             first_source = last_source = None
@@ -146,7 +168,7 @@ class PolicyDocument:
             left_token_index = first_source[1]
             right_token_index = last_source[1] + 1
 
-            noun_chunks.append((segment_id, left_token_index, right_token_index, ent.label_))
+            noun_chunks.append((segment_id, left_token_index, right_token_index, label))
 
         # second pass (grouping chunks)
         full_doc = self.get_full_doc(nlp)

@@ -107,30 +107,6 @@ class SubsumptionAnnotator:
         ]
         self.matcher.add("SUBSUM_INCLUDING_LIMITED_TO", [pattern])
 
-        # some/all/any/types/variety/categories of information
-        pattern = [
-            {
-                "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"ORTH": "of", "POS": "ADP"}
-            },
-            {
-                "LEFT_ID": "anchor",
-                "REL_OP": "<",
-                "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {
-                    "LEMMA": {"IN": ["some", "all", "any", "type", "variety", "category"]},
-                    "POS": {"IN": ["NOUN", "PRON"]}
-                }
-            },
-            {
-                "LEFT_ID": "anchor",
-                "REL_OP": ">",
-                "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
-            }
-        ]
-        self.matcher.add("SUBSUM_SOME_OF", [pattern])
-
     def annotate(self, doc):
         matches = self.matcher(doc)
 

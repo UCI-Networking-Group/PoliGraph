@@ -1,34 +1,4 @@
-try:
-    from spacy.tokens import SpanGroup
-except ImportError:
-    pass
-
-
-def expand_token(token):
-    doc = token.doc
-    if token.ent_iob_ != 'O':
-        span_start = span_end = token.i
-
-        while doc[span_start].ent_iob_ != 'B':
-            span_start -= 1
-
-        while span_end < len(doc) and doc[span_end].ent_iob_ != 'O':
-            span_end += 1
-
-        return doc[span_start:span_end]
-    else:
-        subtoken_pos = {t.i for t in token.subtree}
-        left_edge = token.i
-
-        while left_edge - 1 in subtoken_pos:
-            prev_token = doc[left_edge - 1]
-
-            if prev_token.is_space or prev_token.pos_ == 'X' or prev_token.ent_iob_ != 'O':
-                break
-
-            left_edge -= 1
-
-        return doc[left_edge:token.i + 1]
+from spacy.tokens import SpanGroup
 
 
 def get_conjuncts(token):
@@ -73,12 +43,12 @@ def token_to_source(token):
 
 
 def chunk_to_conjuncts(chunk):
-    conjuncts = set()
+    conjuncts = []
 
     def dfs(token):
         chunk = token_to_ent(token)
         if chunk is not None:
-            conjuncts.add(chunk)
+            conjuncts.append(chunk)
 
         for child in token.children:
             if child.dep_ in ["conj", "appos"]:
@@ -86,6 +56,25 @@ def chunk_to_conjuncts(chunk):
 
     doc = chunk.doc
     dfs(chunk.root)
-    group = SpanGroup(doc, name="errors", spans=[s for s in conjuncts])
+    group = SpanGroup(doc, name="conjuncts", spans=conjuncts)
 
     return group
+
+
+def __normalize_ent_label(label):
+    if label == "DATA":
+        return "DATA"
+    elif label in {"ACTOR", "EVENT", "FAC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
+        return "ACTOR"
+    elif label == "NN":
+        return "NN"
+    else:
+        raise ValueError("Invalid NER label")
+
+
+def token_ent_type(token):
+    return __normalize_ent_label(token.ent_type_)
+
+
+def span_ent_type(span):
+    return __normalize_ent_label(span.label_)
