@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
+import csv
 import random
 import re
 
-import faker
 import inflect
 import spacy
 import tqdm
@@ -20,20 +20,20 @@ def load_list(fname):
 
 
 class NERDataGenerator:
-    def __init__(self, template_file, data_type_file):
+    def __init__(self, template_file, data_type_file, actor_entity_list_file):
         self.inflect_engine = inflect.engine()
-        self.faker = faker.Faker()
         
+        self.templates = list(load_list(template_file))
+
         with open(data_type_file) as fin:
             yml_data = yaml.safe_load(fin)
 
         self.term_aliases = yml_data.pop("alias")
-
         self.data_types = []
         for v in yml_data.values():
             self.data_types.extend(v)
 
-        self.templates = list(load_list(template_file))
+        self.actor_entities = list(load_list(actor_entity_list_file))
 
     def __iter__(self):
         return self
@@ -61,7 +61,7 @@ class NERDataGenerator:
         sentence = random.choice(self.templates)
 
         while True:
-            match = re.search('{(?:DATA|ORG)}', sentence)
+            match = re.search('{(?:[A-Z_]+)}', sentence)
 
             if not match:
                 break
@@ -73,11 +73,11 @@ class NERDataGenerator:
 
                 if random.randint(0, 1) == 0:
                     replaced_term = self.inflect_engine.plural(replaced_term)
-            elif match[0] == '{ORG}':
-                label = "ORG"
-                replaced_term = " and "
-                while " and " in replaced_term:
-                    replaced_term = self.faker.company()
+            elif match[0] == '{ACTOR}':
+                label = "ACTOR"
+                replaced_term = random.choice(self.actor_entities)
+            else:
+                raise ValueError("Invalid template: " + sentence)
 
             ent_start = match.span()[0]
             labels.append((ent_start, ent_start + len(replaced_term), label))
@@ -115,7 +115,7 @@ def main():
 
     random.shuffle(noise_data)
 
-    generator = NERDataGenerator("template.txt", "data_types.yml")
+    generator = NERDataGenerator("template.txt", "data_types.yml", "actor_entities.list")
     nlp = spacy.blank("en")
     doc_bin = spacy.tokens.DocBin(attrs=["ENT_IOB", "ENT_TYPE"])
 
@@ -127,7 +127,7 @@ def main():
                 doc = nlp(text)
                 ents = []
                 for start, end, label in annotations:
-                    if label == "DATA":
+                    if label in ["DATA", "ACTOR"]:
                         span = doc.char_span(start, end, label=label)
                         ents.append(span)
 

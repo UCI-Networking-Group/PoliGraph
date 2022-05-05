@@ -1,9 +1,9 @@
 alias:
-  IP: ['IP', 'Internet Protocol', 'TCP/IP']
+  IP: ['IP', 'Internet Protocol', 'TCP/IP', 'IPv4', 'IPv6']
   MAC: ['MAC', 'media access control', 'link-layer']
-  WIFI: ['WiFi', 'wireless', 'wireless network', 'WLAN']
+  WIFI: ['WiFi', 'wireless', 'wireless network', 'WLAN', 'router', 'wireless router']
   IDS: ['ID', 'identifier', 'identification number']
-  PHONE: ['phone', 'mobile phone', 'cellphone', 'cell phone']
+  PHONE: ['phone', 'mobile phone', 'cellphone', 'cell phone', 'telephone']
   INFO: ['info', 'information', 'data']
   AD: ['ad', 'ads', 'advertising', 'advertisement']
   OS: ['OS', 'operating system', 'system', 'iOS', 'Android', 'Windows', 'macOS']
@@ -92,9 +92,9 @@ ACCOUNT_NAME:
 - TikTok LOGIN
 - WeChat LOGIN
 - WhatsApp LOGIN
-- subscriber ID
-- student ID
-- user ID
+- subscriber IDS
+- student IDS
+- user IDS
 
 CONTACT_INFO:
 # email address
@@ -152,11 +152,11 @@ PAYMENT_INFO:
 IDENTIFIERS:
 # device/hardware identifiers
 - (device) serial number
-- Android ID
-- Oculus ID
-- (unique) device ID
-- console ID
-- hardware ID
+- Android IDS
+- Oculus IDS
+- (unique) device IDS
+- console IDS
+- hardware IDS
 - hardware address
 - MAC address
 - Bluetooth MAC (address)
@@ -169,9 +169,10 @@ IDENTIFIERS:
 - International Mobile Subscriber Identity (number)
 - SIM number
 - (WIFI) BSSID
-- (WIFI) Broadcast Service Set ID
+- (WIFI) Broadcast Service Set IDS
 - (WIFI) SSID
-- (WIFI) Service Set ID
+- (WIFI) Service Set IDS
+- GSF IDS
 # software identifiers
 - host name
 - hostname
@@ -183,14 +184,14 @@ IDENTIFIERS:
 - network address
 - device model number
 - device identification number
-- application ID
-- Unity ID
+- application IDS
+- Unity IDS
 # AD ID
-- (device) AD ID
-- Apple AD ID
-- Android AD ID
-- Apple's AD ID
-- Google's AD ID
+- (device) AD IDS
+- Apple AD IDS
+- Android AD IDS
+- Apple's AD IDS
+- Google's AD IDS
 # Cookies
 - cookie
 - cookie SETTING
@@ -204,7 +205,7 @@ IDENTIFIERS:
 - web beacon
 - tracking pixel
 - pixel tag
-- session ID
+- session IDS
 
 # (F) Internet or other electronic network activity information, including, but
 # not limited to, browsing history, search history, and information regarding a
@@ -304,8 +305,10 @@ SOFTWARE_INFO:
 - platform type
 - CPU model
 - CPU frequency
+- number of CPU cores
 - GPU model
 - GPU frequency
+- number of GPUs
 - browser type
 - type of browser
 - network type
