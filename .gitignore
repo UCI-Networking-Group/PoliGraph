@@ -143,3 +143,9 @@ dev_dataset.json
 train_dataset.json
 dev_dataset.spacy
 train_dataset.spacy
+
+*.bak
+# Trained model checkpoints
+data_type_recognizer/output*/
+# Local test data
+examples/
