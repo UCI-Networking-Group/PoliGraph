@@ -1,5 +1,5 @@
 import importlib.resources as pkg_resources
-from itertools import chain
+import itertools
 from types import SimpleNamespace
 
 import yaml
@@ -102,7 +102,7 @@ class CollectionAnnotator:
     def annotate(self, doc):
         policy_document = doc.user_data["document"]
 
-        def like_data(tok):
+        def like_type(tok, target_type):
             """Check if the phrase started by the token is a data type or subsums a data type"""
             # Use BFS here to avoid a loop.
             bfs_queue = [tok]
@@ -113,16 +113,13 @@ class CollectionAnnotator:
                 tok = bfs_queue[i]
                 i += 1
 
-                match tok._.ent_type:
-                    case "DATA":
-                        return True
-                    case "ACTOR":
-                        continue
-                    case "NN":
-                        for linked_token, relationship in policy_document.get_links(tok):
-                            if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
-                                bfs_queue.append(linked_token)
-                                seen.add(linked_token)
+                if tok._.ent_type == target_type:
+                    return True
+                elif tok._.ent_type == "NN":
+                    for linked_token, relationship in policy_document.get_links(tok):
+                        if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
+                            bfs_queue.append(linked_token)
+                            seen.add(linked_token)
 
             return False
 
@@ -130,9 +127,9 @@ class CollectionAnnotator:
         actor_candidates = []
 
         for e in doc.ents:
-            if like_data(e[0]):
+            if like_type(e[0], "DATA"):
                 dtype_candidates.append((e, e.root, list(e.root.ancestors)[::-1]))
-            else:
+            if like_type(e[0], "ACTOR"):
                 actor_candidates.append((e, e.root, list(e.root.ancestors)[::-1]))
 
         for dtype, dtype_root, dtype_ancestors in dtype_candidates:
@@ -166,7 +163,7 @@ class CollectionAnnotator:
                 if any(p(full_chain) for p in self.patterns):
                     exception = None
 
-                    for token in chain([verb], verb.ancestors):
+                    for token in itertools.chain([verb], verb.ancestors):
                         if token.dep_ == "advcl" \
                             and any(c.pos_ == "SCONJ" and
                                     c.lemma_ in ["if", "when", "while", "whether"] for c in token.children):

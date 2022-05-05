@@ -88,11 +88,16 @@ class PolicyDocument:
                 self.token_relationship,
             ), fout, pickle.HIGHEST_PROTOCOL)
 
+        with open(self.workdir / "plaintext.txt", "w") as fout:
+            fout.write(self.full_doc.text)
+
     def __init_doc(self, nlp):
-        DATATYPE_NOUNS = frozenset({"information", "datum", "address", "number", "identifier"})
-        ACTOR_NOUNS = frozenset({"provider", "service", "partner", "company", "network",
-                                 "site", "advertiser", "service", "website", "processor",
-                                 "application", "platform", "product", "party", "platform"})
+        DATATYPE_NOUNS = frozenset({"information", "datum", "address", "number", "identifier", "preference", "setting"})
+        ACTOR_NOUNS = frozenset(['advertiser', 'affiliate', 'app', 'application', 'broker', 'business',
+                                 'carrier', 'company', 'corporation', 'distributor', 'network', 'operator',
+                                 'organization', 'partner', 'party', 'platform', 'processor', 'product',
+                                 'provider', 'publisher', 'service', 'site', 'software', 'subsidiary',
+                                 'vendor', 'website'])
 
         def expand_token_to_noun_chunk(token):
             doc = token.doc
@@ -200,7 +205,7 @@ class PolicyDocument:
                 suffix = ["\n"]
 
             if len(prefix) > 0:
-                all_docs.append(Doc(nlp.vocab, words=prefix, spaces=[False] * len(prefix)))
+                all_docs.append(Doc(nlp.vocab, words=prefix, spaces=[not c.isspace() for c in prefix]))
                 token_sources.extend([None] * len(all_docs[-1]))
 
             doc = Doc(nlp.vocab, words=s.tokens, spaces=s.spaces)
@@ -221,7 +226,7 @@ class PolicyDocument:
             token_sources.extend((s.segment_id, i) for i in range(len(doc)))
 
             if len(suffix) > 0:
-                all_docs.append(Doc(nlp.vocab, words=suffix, spaces=[False] * len(suffix)))
+                all_docs.append(Doc(nlp.vocab, words=suffix, spaces=[not c.isspace() for c in suffix]))
                 token_sources.extend([None] * len(all_docs[-1]))
 
         if len(all_docs) > 0:
@@ -333,8 +338,10 @@ class PolicyDocument:
 def extract_segments_from_accessibility_tree(tree, tokenizer):
     """Process an accessibility tree into a list of DocumentSegment"""
 
-    IGNORED_ELEMENTS = {"img", "image map", "button", "separator", "whitespace",
-                        "list item marker", "insertion", "diagram", "dialog", "tab"}
+    IGNORED_ELEMENTS = {"img", "image map", "button", "separator", "whitespace", "form",
+                        "list item marker", "insertion", "diagram", "dialog", "tab",
+                        "menu", "menubar", "internal frame", "listbox", "progressbar",
+                        "alert", "button", "buttonmenu", "slider", "textbox"}
     SECTION_ELEMENTS = {"document", "article", "landmark", "section", "blockquote", "group",
                         "tablist", "tabpanel", "region"}
     TEXT_CONTAINER_ELEMENTS = {"paragraph", "text", "link", "statictext", "label", "text container", "text leaf"}
