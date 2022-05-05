@@ -57,7 +57,7 @@ class SubsumptionAnnotator:
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"DEP": "prep", "LEMMA": "include"}
+                "RIGHT_ATTRS": {"POS": "VERB", "LEMMA": "include"}
             },
             {
                 "LEFT_ID": "anchor",
@@ -69,7 +69,7 @@ class SubsumptionAnnotator:
                 "LEFT_ID": "anchor",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}, "LEMMA": "dobj"}
             }
         ]
         self.matcher.add("SUBSUM_INCLUDE", [pattern])
@@ -106,6 +106,54 @@ class SubsumptionAnnotator:
             }
         ]
         self.matcher.add("SUBSUM_INCLUDING_LIMITED_TO", [pattern])
+
+        # for example
+        pattern = [
+            {
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "upper_token",
+                "REL_OP": ">",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {"DEP": "appos", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "lower_token",
+                "REL_OP": ">",
+                "RIGHT_ID": "prep_for",
+                "RIGHT_ATTRS": {"LEMMA": "for"}
+            },
+            {
+                "LEFT_ID": "prep_for",
+                "REL_OP": ">",
+                "RIGHT_ID": "example",
+                "RIGHT_ATTRS": {"LEMMA": "example"}
+            },
+        ]
+        self.matcher.add("SUBSUM_FOR_EXAMPLE", [pattern])
+
+        # e.g. / i.e.
+        pattern = [
+            {
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "upper_token",
+                "REL_OP": ">",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {"DEP": "appos", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "lower_token",
+                "REL_OP": ">",
+                "RIGHT_ID": "advmod_eg",
+                "RIGHT_ATTRS": {"LEMMA": {"IN": ["e.g.", "eg", "i.e.", "ie"]}}
+            },
+        ]
+        self.matcher.add("SUBSUM_EG", [pattern])
 
     def annotate(self, doc):
         matches = self.matcher(doc)

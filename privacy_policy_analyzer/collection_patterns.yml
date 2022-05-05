@@ -29,6 +29,7 @@ token_mapping:
   - store
   - save
   - log
+  - utilize
   - analyze
   - record
   - retain
@@ -45,10 +46,19 @@ token_mapping:
   VERB_ASK_TODO:
   - ask
   - require
+  VERB_ENABLE_TODO:
+  - enable
+  - allow
+  - require
 patterns:
   # E use D
   - ENTITY:nsubj,VERB_GENERAL_USE,DATA:dobj
   - ENTITY:pobj,by:agent,VERB_GENERAL_USE,DATA:nsubjpass
+  # NOUN E collect include D
+  - ENTITY:nsubj,VERB_GENERAL_USE:relcl,*:nsubj,include,DATA:dobj
+  - ENTITY:nsubj,VERB_GENERAL_USE:relcl,*:pobj,of,*:nsubj,include,DATA:dobj
+  # E use NOUN about D
+  - ENTITY:nsubj,VERB_GENERAL_USE,*:dobj,about,DATA:pobj
   # ... share D with E
   - ENTITY:pobj,with:prep,VERB_SHARE_WITH,DATA:dobj
   - ENTITY:pobj,with:prep,VERB_SHARE_WITH,DATA:nsubjpass
@@ -63,5 +73,7 @@ patterns:
   - ENTITY:pobj,from:prep,VERB_COLLECT_FROM,DATA:nsubjpass
   # E ask ... to provide D
   - ENTITY:nsubj,VERB_ASK_TODO,VERB_GENERAL_SHARE:xcomp,DATA:dobj
+  # ... allow E to use D
+  - ENTITY:dobj,VERB_ALLOW_TODO,VERB_GENERAL_USE:xcomp,DATA:dobj
   # E make use of D
   - ENTITY:nsubj,make,use,of:prep,DATA:pobj
