@@ -4,6 +4,14 @@ import spacy
 from spacy.language import Language
 from spacy.tokens import Span
 
+DATATYPE_KEYWORDS = frozenset({"information", "data", "datum", "address", "number", "identifier",
+                               "preference", "setting"})
+ACTOR_KEYWORDS = frozenset(['advertiser', 'affiliate', 'analytics', 'app', 'application',
+                            'broker', 'business', 'carrier', 'company', 'corporation',
+                            'distributor', 'network', 'operator', 'organization',
+                            'partner', 'party', 'platform', 'processor', 'product', 'provider', 'publisher',
+                            'service', 'site', 'software', 'subsidiary', 'vendor', 'website'])
+
 
 @Language.component(
     "remove_unused_entities",
@@ -12,6 +20,7 @@ from spacy.tokens import Span
 def remove_unused_entities(doc):
     ents = []
     for e in doc.ents:
+        # Drop ORDINAL/CARDINAL because otherwise "third" in "third party" would become an NE
         if e.label_ not in ["ORDINAL", "CARDINAL"]:
             ents.append(e)
 

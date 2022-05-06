@@ -3,8 +3,8 @@
 import argparse
 
 import spacy
-from privacy_policy_analyzer.data_type_recognition import setup_models
 from privacy_policy_analyzer.document import PolicyDocument
+from privacy_policy_analyzer.named_entity_recognition import setup_models
 
 
 def main():

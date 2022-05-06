@@ -2,6 +2,7 @@
 
 import bisect
 import enum
+from functools import cached_property
 import json
 import logging
 import pickle
@@ -15,6 +16,8 @@ from anytree import NodeMixin
 from spacy import displacy
 from spacy.tokens import Doc, Span
 from unidecode import unidecode
+
+from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS
 
 
 class SegmentType(enum.Enum):
@@ -92,12 +95,6 @@ class PolicyDocument:
             fout.write(self.full_doc.text)
 
     def __init_doc(self, nlp):
-        DATATYPE_NOUNS = frozenset({"information", "datum", "address", "number", "identifier", "preference", "setting"})
-        ACTOR_NOUNS = frozenset(['advertiser', 'affiliate', 'app', 'application', 'broker', 'business',
-                                 'carrier', 'company', 'corporation', 'distributor', 'network', 'operator',
-                                 'organization', 'partner', 'party', 'platform', 'processor', 'product',
-                                 'provider', 'publisher', 'service', 'site', 'software', 'subsidiary',
-                                 'vendor', 'website'])
 
         def expand_token_to_noun_chunk(token):
             doc = token.doc
@@ -138,14 +135,14 @@ class PolicyDocument:
             label_unknown_noun_chunks(sent.root)
 
         for ent in full_doc.ents:
-            # exclude NER types that are not useful (e.g. CARDINAL/PERCENT/DATE/LAW/LOC...)
+            # exclude NER types that are not useful (e.g. PERCENT/DATE/LAW/LOC...)
             if ent.label_ not in {"NN", "DATA", "ACTOR", "EVENT", "FAC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
                 continue
 
             # Rule-based NER completion
-            if ent.root.lemma_.lower() in DATATYPE_NOUNS:
+            if ent.root.lemma_.lower() in DATATYPE_KEYWORDS:
                 label = "DATA"
-            elif ent.root.lemma_.lower() in ACTOR_NOUNS:
+            elif ent.root.lemma_.lower() in ACTOR_KEYWORDS:
                 label = "ACTOR"
             elif ent.root.pos_ == "PRON" and ent.root.lemma_.lower() in {"i", "we", "you", "he", "she"}:
                 label = "ACTOR"
@@ -184,9 +181,13 @@ class PolicyDocument:
             if name in {"tok2vec", "transformer", "tagger", "parser", "attribute_ruler", "lemmatizer"}:
                 full_doc = pipe(full_doc)
 
+    @cached_property
+    def default_nlp(self):
+        return spacy.blank("en")
+
     def get_full_doc(self, nlp=None, apply_pipe=False):
         if nlp is None:
-            nlp = spacy.blank("en")
+            nlp = self.default_nlp
 
         all_docs = []
         token_sources = []
