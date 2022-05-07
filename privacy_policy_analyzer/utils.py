@@ -24,18 +24,6 @@ def token_to_ent(token):
     return doc[left:right]
 
 
-def token_to_ent_id(token):
-    doc = token.doc
-    noun_chunk_mapping = doc.user_data["noun_chunk"]
-
-    span = token_to_ent(token)
-
-    if span is None:
-        return None
-    else:
-        return noun_chunk_mapping[span.start]
-
-
 def token_to_source(token):
     doc = token.doc
     source_mapping = doc.user_data["source"]
