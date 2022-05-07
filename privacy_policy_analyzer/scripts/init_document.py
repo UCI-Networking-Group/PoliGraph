@@ -11,6 +11,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     parser.add_argument("--ner", required=True, help="NER model directory")
+    parser.add_argument("--display", action="store_true", help="Show NER results")
     args = parser.parse_args()
 
     spacy.prefer_gpu()
@@ -20,7 +21,9 @@ def main():
         print(f"Processing {d} ...")
         document = PolicyDocument(d, nlp=nlp, use_cache=False)
         document.save()
-        # document.render_ner()
+
+        if args.display:
+            document.render_ner()
 
 
 if __name__ == "__main__":

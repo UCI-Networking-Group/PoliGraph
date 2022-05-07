@@ -2,11 +2,10 @@
 
 import bisect
 import enum
-from functools import cached_property
 import json
 import logging
 import pickle
-import re
+from functools import cached_property
 from itertools import chain
 from pathlib import Path
 
@@ -17,7 +16,8 @@ from spacy import displacy
 from spacy.tokens import Doc, Span
 from unidecode import unidecode
 
-from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS
+from privacy_policy_analyzer.named_entity_recognition import (ACTOR_KEYWORDS, DATATYPE_KEYWORDS,
+                                                              label_simple_noun_phrases)
 
 
 class SegmentType(enum.Enum):
@@ -95,35 +95,6 @@ class PolicyDocument:
             fout.write(self.full_doc.text)
 
     def __init_doc(self, nlp):
-
-        def expand_token_to_noun_chunk(token):
-            doc = token.doc
-
-            subtoken_pos = {t.i for t in token.subtree}
-            left_edge = token.i
-
-            while left_edge - 1 in subtoken_pos:
-                prev_token = doc[left_edge - 1]
-
-                if prev_token.is_space or prev_token.pos_ == 'X':
-                    break
-
-                left_edge -= 1
-
-            return doc[left_edge:token.i + 1]
-
-        def label_unknown_noun_chunks(token):
-            if (token.ent_iob_ == 'O'  # not in a named entity
-                and token.pos_ in ["NOUN", "PRON", "PROPN"]  # noun or pronoun
-                and re.search(r"[a-zA-Z]", token.text) is not None):  # ignore puncts due to bad tagging
-
-                chunk = expand_token_to_noun_chunk(token)
-                ent = Span(token.doc, chunk.start, chunk.end, "NN")
-                token.doc.set_ents([ent], default="unmodified")
-
-            for child in token.children:
-                label_unknown_noun_chunks(child)
-
         # first pass (NER -> noun chunks)
         self.noun_chunks = noun_chunks = []
 
@@ -131,8 +102,7 @@ class PolicyDocument:
         full_doc = nlp(full_doc)
         token_sources = full_doc.user_data["source"]
 
-        for sent in full_doc.sents:
-            label_unknown_noun_chunks(sent.root)
+        label_simple_noun_phrases(full_doc)
 
         for ent in full_doc.ents:
             # exclude NER types that are not useful (e.g. PERCENT/DATE/LAW/LOC...)
