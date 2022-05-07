@@ -155,6 +155,33 @@ class SubsumptionAnnotator:
         ]
         self.matcher.add("SUBSUM_EG", [pattern])
 
+        # such XXX as YYY
+        pattern = [
+            {
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "upper_token",
+                "REL_OP": ">",
+                "RIGHT_ID": "amod_such",
+                "RIGHT_ATTRS": {"DEP": "amod", "LEMMA": "such"}
+            },
+            {
+                "LEFT_ID": "upper_token",
+                "REL_OP": ">",
+                "RIGHT_ID": "prep_as",
+                "RIGHT_ATTRS": {"DEP": "prep", "LEMMA": "as"}
+            },
+            {
+                "LEFT_ID": "prep_as",
+                "REL_OP": ">",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+        ]
+        self.matcher.add("SUBSUM_SUCH_N_AS", [pattern])
+
     def annotate(self, doc):
         matches = self.matcher(doc)
 
