@@ -116,7 +116,7 @@ class CollectionAnnotator:
                 if tok._.ent_type == target_type:
                     return True
                 elif tok._.ent_type == "NN":
-                    for linked_token, relationship in policy_document.get_links(tok):
+                    for _, linked_token, relationship in policy_document.get_all_links(tok):
                         if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
                             bfs_queue.append(linked_token)
                             seen.add(linked_token)
@@ -164,11 +164,9 @@ class CollectionAnnotator:
                     exception = None
 
                     for token in itertools.chain([verb], verb.ancestors):
-                        if token.dep_ == "advcl" \
-                            and any(c.pos_ == "SCONJ" and
-                                    c.lemma_ in ["if", "when", "while", "whether"] for c in token.children):
+                        if any(c.pos_ == "SCONJ" and
+                               c.lemma_ in ["if", "when", "while", "where", "whether", "how"] for c in token.children):
                             exception = "CLAUSE"
-                            break
                     else:
                         for token in full_chain:
                             if any(c.dep_ == "neg" for c in token.children):

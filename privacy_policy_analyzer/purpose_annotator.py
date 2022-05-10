@@ -80,8 +80,8 @@ class PurposeAnnotator:
         collected_dtypes = []
 
         for e in doc.ents:
-            for _, relationship in document.get_links(e[0]):
-                if relationship == "COLLECTED_BY":
+            for _, _, relationship in document.get_all_links(e[0]):
+                if relationship in ["COLLECT", "COLLECTED_BY"]:
                     collected_dtypes.append(e[0])
 
         if len(collected_dtypes) == 0:

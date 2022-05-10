@@ -10,15 +10,13 @@ from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBase
 
 
 def build_graph(document, nlp, phrase_normalizer, entity_matcher):
-    knowledge_graph = nx.DiGraph()
-
     full_doc = document.get_full_doc(nlp, True)
     normalized_terms = {}
 
     unspecific_terms = {
         "info", "data",
         "third party", "service", "provider",
-        "whom", "who", "which", "that", "they", "other", "this",
+        "whom", "who", "which", "this", "that", "these", "those", "they", "other",
     }
     ignored_terms = {"you", "user", "other", "people"}
     unspec_term_count = 0
@@ -29,26 +27,28 @@ def build_graph(document, nlp, phrase_normalizer, entity_matcher):
         idx = ent.start
         term = None
 
-        if ent._.ent_type in ["ACTOR", "NN"]:
-            term = entity_matcher.match_name(ent.text)
+        #if ent._.ent_type in ["ACTOR", "NN"]:
+        #    term = entity_matcher.match_name(ent.text)
 
         if term is None:
             if (term := phrase_normalizer.normalize(ent)) in unspecific_terms:
                 term = term + f"_{unspec_term_count}"
                 unspec_term_count += 1
 
-        for dest_token, relationship in document.get_links(ent[0]):
+        for _, dest_token, relationship in document.get_all_links(ent[0]):
             if relationship == "COREF":
                 coref_dependency.add_edge(dest_token.i, idx)
                 break
         else:
             normalized_terms[idx] = term
+            print(ent, normalized_terms[idx], sep=" -> ")
 
     # Normalize coreferences to the terms they refer to
     for i in nx.topological_sort(coref_dependency):
         if i not in normalized_terms:
             dest_i, _ = next(iter(coref_dependency.in_edges(i)))
             normalized_terms[i] = normalized_terms[dest_i]
+            print(full_doc[i]._.ent, normalized_terms[idx])
 
     terms_to_remove = []
     for k, v in normalized_terms.items():
@@ -58,8 +58,21 @@ def build_graph(document, nlp, phrase_normalizer, entity_matcher):
     for k in terms_to_remove:
         normalized_terms.pop(k)
 
+    knowledge_graph = nx.DiGraph()
+
     for idx, term in normalized_terms.items():
-        for dest_token, relationship in document.get_links(full_doc[idx]):
+        token = full_doc[idx]
+
+        if term not in knowledge_graph.nodes:
+            knowledge_graph.add_node(term, source=[])
+
+        knowledge_graph.nodes[term]["source"].append(token._.ent.text)
+
+
+    for idx, term in normalized_terms.items():
+        token = full_doc[idx]
+
+        for _, dest_token, relationship in document.get_all_links(token):
             if dest_token.i not in normalized_terms:
                 continue
             elif relationship not in ["SUBSUM", "COLLECT"]:
@@ -67,14 +80,16 @@ def build_graph(document, nlp, phrase_normalizer, entity_matcher):
 
             dest_term = normalized_terms[dest_token.i]
             if dest_term != term:
-                knowledge_graph.add_edge(term, dest_term, label=relationship)
+                knowledge_graph.add_edge(term, dest_term, label=relationship,
+                                         sentences=[token.sent.text, dest_token.sent.text])
 
     # Remove unspecific terms by connecting nodes at two sides
     for term in filter(lambda t: "_" in t, knowledge_graph.nodes):
         for v1, _, data1 in knowledge_graph.in_edges(term, data=True):
             for _, v2, data2 in knowledge_graph.out_edges(term, data=True):
                 if data1["label"] == data2["label"] == "COLLECT":
-                    raise ValueError("Illegal relationships")
+                    # NLP gliches
+                    continue
                 elif data1["label"] == data2["label"] == "SUBSUM":
                     knowledge_graph.add_edge(v1, v2, label="SUBSUM")
                 elif {data1["label"], data2["label"]} == {"COLLECT", "SUBSUM"}:

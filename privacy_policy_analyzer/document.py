@@ -10,6 +10,7 @@ from itertools import chain
 from pathlib import Path
 
 import networkx as nx
+from regex import D
 import spacy
 from anytree import NodeMixin
 from spacy import displacy
@@ -287,23 +288,53 @@ class PolicyDocument:
         return doc
 
     def link(self, token1, token2, relationship):
-        self.token_relationship.add_edge(token1._.src, token2._.src, relationship=relationship)
+        src1 = token1._.src
+        src2 = token2._.src
 
-    def get_links(self, token):
+        if src1 is None or src2 is None:
+            raise ValueError("Invalid token link")
+
+        self.token_relationship.add_edge(src1, src2, relationship=relationship)
+
+    def get_link(self, token1, token2):
+        src1 = token1._.src
+        src2 = token2._.src
+
+        if src1 is None or src2 is None:
+            raise ValueError("Invalid tokens")
+
+        if edge_data := self.token_relationship.get_edge_data(src1, src2):
+            return edge_data["relationship"]
+        else:
+            return None
+
+    def get_all_links(self, token, direction=None):
         doc = token.doc
         source_rmap = doc.user_data["source_rmap"]
 
-        for _, dest_source, data in self.token_relationship.out_edges(token._.src, data=True):
+        match direction:
+            case None | "out":
+                edge_view = self.token_relationship.out_edges(token._.src, data=True)
+            case "in":
+                edge_view = self.token_relationship.in_edges(token._.src, data=True)
+            case _:
+                raise ValueError(f"Invalid direction: {direction}")
+
+        for src, dst, data in edge_view:
             relationship = data["relationship"]
+            src_dst_tokens = []
 
-            try:
-                dest_token = doc[source_rmap[dest_source]]
-            except KeyError:
-                full_doc = self.full_doc
-                rmap = full_doc.user_data["source_rmap"]
-                dest_token = full_doc[rmap[dest_source]]
+            for token_src in src, dst:
+                try:
+                    token = doc[source_rmap[token_src]]
+                except KeyError:
+                    full_doc = self.full_doc
+                    rmap = full_doc.user_data["source_rmap"]
+                    token = full_doc[rmap[token_src]]
 
-            yield dest_token, relationship
+                src_dst_tokens.append(token)
+
+            yield src_dst_tokens[0], src_dst_tokens[1], relationship
 
 
 def extract_segments_from_accessibility_tree(tree, tokenizer):
