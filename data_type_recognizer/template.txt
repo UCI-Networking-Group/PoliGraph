@@ -1,4 +1,4 @@
-# MANUALLY ADDED (55)
+# MANUALLY ADDED (60)
 We collect your {DATA} and {DATA}.
 {ACTOR} collects {DATA}.
 {ACTOR} may collect your {DATA}.
@@ -46,7 +46,7 @@ We may make use of your {DATA} in order to improve our service.
 We might keep a record of {DATA} for a month.
 {ACTOR} will not give or sell {DATA} to any third party.
 We may use {DATA} and {DATA} with your consent.
-We may use third parties, such as {ACTOR} and {ACTOR} to make use of your {DATA}.
+We may use third parties, such as {ACTOR} and {ACTOR} to gather your {DATA}.
 Examples of information {ACTOR} collects include {DATA} and {DATA}.
 {DATA} is defined as below.
 The data you submitted to us, for example, {DATA}, will not be shared with others.
@@ -54,6 +54,11 @@ This information, know as " {DATA} ", may be processed by {ACTOR} .
 These information (collectively, " {DATA} ") is used for the following purposes.
 Above information, except for {DATA}, will be protected.
 For information about data collection by {ACTOR}, please read the privacy policy carefully.
+We do not use visitor's {DATA} for advertising purposes.
+You may request deletion of your account by contacting {ACTOR} .
+We use services provided by {ACTOR} and {ACTOR} .
+The information, including but not limited to, {DATA} and {DATA}, will be released to third parties.
+We preserve information about your {DATA}.
 
 # FROM APP-350 (70)
 Some examples include: {DATA}
@@ -76,7 +81,7 @@ For example, we collect your {DATA}, {DATA} and other information you provide us
 When you link your account with {ACTOR} , we might have access to your {DATA}.
 You should make whatever investigation you feel necessary or appropriate before sending {DATA} to {ACTOR} .
 This Privacy Policy applies to your usage of the software and services provided by {ACTOR} .
-This privacy policy (the "Privacy Policy") describes how {ACTOR} ( {ACTOR} , "we" or "us") uses personal information.
+This privacy policy (the "Privacy Policy") describes how the website (" {ACTOR} ", "we" or "us") uses your information.
 {ACTOR} ("We", "Our", "Us") has developed this Privacy Policy to help you understand how we collect the information.
 your personal information, like your {DATA}, {DATA} ({DATA}), and/or {DATA} ({DATA});
 So {ACTOR} will never share/sell/rent/transfer {DATA} about you to any third party without your consent.

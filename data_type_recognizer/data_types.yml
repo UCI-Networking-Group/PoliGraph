@@ -2,15 +2,17 @@ alias:
   IP: ['IP', 'Internet Protocol', 'TCP/IP', 'IPv4', 'IPv6']
   MAC: ['MAC', 'media access control', 'link-layer']
   WIFI: ['WiFi', 'wireless', 'wireless network', 'WLAN', 'router', 'wireless router']
-  IDS: ['ID', 'identifier', 'identification number']
+  IDS: ['ID', 'identifier', 'identifiers', 'identification number', 'identificator']
   PHONE: ['phone', 'mobile phone', 'cellphone', 'cell phone', 'telephone']
-  INFO: ['info', 'information', 'data']
-  AD: ['ad', 'ads', 'advertising', 'advertisement']
-  OS: ['OS', 'operating system', 'system', 'iOS', 'Android', 'Windows', 'macOS']
+  INFO: ['info', 'information', 'data', 'details']
+  AD: ['ad', 'ads', 'advertising', 'advertisement', 'advertiser']
+  OS: ['OS', 'operating system', 'system', 'Android', 'Apple', 'iOS', 'macOS', 'Oculus',
+       "device's", "Android's", "Apple's", "macOS's", "iOS's", "Oculus's"]
   LOGIN: ['login name', 'user name', 'username', 'account name', 'ID']
   SETTING: ['setting', 'preference', 'configuration', 'config']
-  IMAGE: ['image', 'imaging', 'imagery', 'photo']
+  IMAGE: ['image', 'imaging', 'imagery', 'photo', 'pattern']
   CARD_SECURITY: ['card security', 'card verification', 'CVV', 'CVV2', 'CSC', 'CVC', 'CID']
+  COMPANY: ['DISCORD', 'Facebook', 'Twitter', 'Instagram', 'YouTube', 'TikTok', 'WeChat', 'WhatsApp']
 
 GENERAL_DATA:
 - aggregate INFO
@@ -84,17 +86,11 @@ ACCOUNT_NAME:
 - PIN (number)
 - PIN code
 - personal identification number
-- Discord LOGIN
-- Facebook LOGIN
-- Twitter LOGIN
-- Instagram LOGIN
-- YouTube LOGIN
-- TikTok LOGIN
-- WeChat LOGIN
-- WhatsApp LOGIN
 - subscriber IDS
 - student IDS
 - user IDS
+- COMPANY LOGIN
+- COMPANY IDS
 
 CONTACT_INFO:
 # email address
@@ -151,9 +147,8 @@ PAYMENT_INFO:
 
 IDENTIFIERS:
 # device/hardware identifiers
+- (OS) IDS
 - (device) serial number
-- Android IDS
-- Oculus IDS
 - (unique) device IDS
 - console IDS
 - hardware IDS
@@ -167,7 +162,8 @@ IDENTIFIERS:
 - International Mobile Equipment Identity (number)
 - IMSI (number)
 - International Mobile Subscriber Identity (number)
-- SIM number
+- SIM (serial) number
+- SIM code
 - (WIFI) BSSID
 - (WIFI) Broadcast Service Set IDS
 - (WIFI) SSID
@@ -187,11 +183,9 @@ IDENTIFIERS:
 - application IDS
 - Unity IDS
 # AD ID
-- (device) AD IDS
-- Apple AD IDS
-- Android AD IDS
-- Apple's AD IDS
-- Google's AD IDS
+- IDFA
+- (OS) AD IDS
+- (OS) IDS for ADS
 # Cookies
 - cookie
 - cookie SETTING
@@ -222,6 +216,9 @@ ACTIVITY:
 - browsing history
 - search history
 - user activity
+- package dump
+- application list
+- list of applications
 
 # (G) Geolocation data.
 GEOLOCATION:
@@ -262,20 +259,15 @@ BIOMETRIC:
 - retina IMAGE
 - fingerprint (IMAGE)
 - palm IMAGE
-- vein pattern
+- vein IMAGE
+- minutiae IMAGE
 - voice recording
 - recording of voice (command)
 - voice command
 - audio recording
 - video recording
 - faceprint
-- minutiae template
 - voiceprint
-- keystroke pattern
-- keystroke rhythm
-- rhythm of keystroke
-- gait pattern
-- gait rhythm
 - sleep INFO
 - exercise INFO
 
@@ -289,6 +281,8 @@ DEMOGRAPHIC:
 - date of birth
 - marital status
 - immigration status
+- employment status
+- status of employment
 
 AUTH_TOKEN:
 - password

@@ -6,7 +6,7 @@ import spacy
 import re
 
 class_members = dict()
-nlp = spacy.load("en_core_web_md")
+nlp = spacy.load("en_core_web_sm")
 
 with open("query.csv", "r", encoding="utf-8") as fin:
     for row in csv.DictReader(fin):
@@ -18,11 +18,11 @@ with open("query.csv", "r", encoding="utf-8") as fin:
         except KeyError:
             class_members[class_name] = [name]
 
-actor_keywords = frozenset(['advertiser', 'affiliate', 'app', 'application', 'broker', 'business',
-                            'carrier', 'company', 'corporation', 'distributor', 'network', 'operator',
-                            'organization', 'partner', 'party', 'platform', 'processor', 'product',
-                            'provider', 'publisher', 'service', 'site', 'software', 'subsidiary',
-                            'vendor', 'website'])
+actor_keywords = frozenset(['advertiser', 'affiliate', 'analytics', 'app', 'application',
+                            'broker', 'business', 'carrier', 'company', 'corporation',
+                            'distributor', 'network', 'operator', 'organization',
+                            'partner', 'party', 'platform', 'processor', 'product', 'provider', 'publisher',
+                            'service', 'site', 'software', 'subsidiary', 'vendor', 'website'])
 inflect_engine = inflect.engine()
 selected_class_names = []
 actor_names = set()
@@ -33,15 +33,21 @@ for class_name, members in class_members.items():
         selected_class_names.append(class_name)
 
         plural = inflect_engine.plural_noun(class_name)
-        actor_names.add("the " + class_name)
+        actor_names.add("the {class_name}")
         actor_names.add(plural)
-        actor_names.add("third-party " + plural)
-        actor_names.add("affiliated " + plural)
+        actor_names.add("third-party {plural}")
+        actor_names.add("affiliated {plural}")
 
         for s in members:
             if (not re.match(r'^(?:\w+\.)?\w+\.\w+$', s, re.ASCII) and
                 re.match(r"""^[\w\s,.'"&+-]+$""", s, re.ASCII)):
                 actor_names.add(s)
+
+for class_name in actor_keywords:
+    actor_names.add(f'the {class_name}')
+    actor_names.add(f'our {class_name}')
+    plural = inflect_engine.plural_noun(class_name)
+    actor_names.add(f'third-party {plural}')
 
 with open("actor_entities.list", "w", encoding="utf-8") as fout:
     for name in sorted(actor_names):
