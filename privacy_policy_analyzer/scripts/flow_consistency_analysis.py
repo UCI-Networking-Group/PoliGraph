@@ -9,6 +9,39 @@ from pathlib import Path
 import networkx as nx
 import tldextract
 
+DATA_ONTOLOGY = {
+    "pii": [
+        "advertising id", "android id", "serial number", "router ssid", "mac address", "imei", "sim serial number",
+        "phone number", "email address", "person name"
+    ],
+    "non-pii": [],
+    "contact information": [
+        "phone number", "email address", "person name"
+    ],
+    "unique personal identifier": [
+        "advertising id", "android id", "serial number", "router ssid", "mac address", "imei", "sim serial number",
+        "phone number"
+    ],
+    "online identifier": ["advertising id"],
+    "device identifier": [
+        "advertising id", "android id", "serial number", "router ssid", "mac address", "imei", "sim serial number"
+    ],
+    "probabilistic identifier": ["advertising id"],
+}
+
+ENTITY_ONTOLOGY = {
+    "advertising network": [
+        "Google", "Facebook", "Unity", "AppsFlyer", "Verizon Media", "Chartboost", "Amazon.com",
+        "Start.io", "Tapjoy", "AppLovin", "Liftoff", "ironSource", "AdColony"
+    ],
+    "analytic provider": [
+        "Google", "Facebook", "Unity", "AppsFlyer", "Verizon Media", "ironSource"
+    ],
+    "social network": [
+        "Facebook", "Twitter", "Google"
+    ]
+}
+
 
 def iter_all_hypernyms(graph, first_node):
     seen_nodes = set()
@@ -22,6 +55,20 @@ def iter_all_hypernyms(graph, first_node):
                 yield from dfs(parent)
 
     yield from dfs(first_node)
+
+
+def reverse_dict(d):
+    result = dict()
+
+    for key, li in d.items():
+        for val in li:
+            if val not in result:
+                result[val] = [key]
+            else:
+                result[val].append(key)
+
+    return result
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -49,6 +96,9 @@ def main():
         "consistency_result"])
     writer.writeheader()
 
+    reversed_data_ontology = reverse_dict(DATA_ONTOLOGY)
+    reversed_entity_ontology = reverse_dict(ENTITY_ONTOLOGY)
+
     for package_id, info in data.items():
         kgraph_path = policy_root / info["privacy_policy_id"] / 'graph.gml'
 
@@ -60,8 +110,8 @@ def main():
 
         for flow in info["flows"]:
             data_type = flow["data_type"]
-            endpoints = []
-            datatypes = []
+            clear_endpoints = []
+            clear_datatypes = []
 
             result = {
                 "package_id": package_id,
@@ -79,7 +129,7 @@ def main():
 
             if flow["party"] == "first party":
                 if "first party" in kgraph:
-                    endpoints.append("first party")
+                    clear_endpoints.append("first party")
 
                 result["flow_entity"] = "first party"
             else:
@@ -91,12 +141,12 @@ def main():
                 continue
 
             if data_type in kgraph:
-                datatypes.extend(iter_all_hypernyms(kgraph, data_type))
+                clear_datatypes.extend(iter_all_hypernyms(kgraph, data_type))
 
             if recipient_entity in kgraph:
-                endpoints.extend(iter_all_hypernyms(kgraph, recipient_entity))
+                clear_endpoints.extend(iter_all_hypernyms(kgraph, recipient_entity))
 
-            for e, d in itertools.product(endpoints, datatypes):
+            for e, d in itertools.product(clear_endpoints, clear_datatypes):
                 edge_data = kgraph.get_edge_data(e, d)
 
                 if edge_data and edge_data["label"] == "COLLECT":
@@ -104,6 +154,48 @@ def main():
                     result["policy_data"] = d
                     result["consistency_result"] = "clear"
                     break
+
+            if result["consistency_result"] == "omitted":
+                vague_endpoints = []
+                vague_datatypes = []
+
+                for d in reversed_data_ontology.get(data_type, []):
+                    if d in kgraph:
+                        vague_datatypes.extend(iter_all_hypernyms(kgraph, d))
+
+                for e in reversed_entity_ontology.get(recipient_entity, []):
+                    if e in kgraph:
+                        vague_endpoints.extend(iter_all_hypernyms(kgraph, e))
+
+                # both are vague
+                for e, d in itertools.product(vague_endpoints, vague_datatypes):
+                    edge_data = kgraph.get_edge_data(e, d)
+
+                    if edge_data and edge_data["label"] == "COLLECT":
+                        result["policy_entity"] = e
+                        result["policy_data"] = d
+                        result["consistency_result"] = "vague_both"
+                        break
+
+                # data type being vague
+                for e, d in itertools.product(clear_endpoints, vague_datatypes):
+                    edge_data = kgraph.get_edge_data(e, d)
+
+                    if edge_data and edge_data["label"] == "COLLECT":
+                        result["policy_entity"] = e
+                        result["policy_data"] = d
+                        result["consistency_result"] = "vague_d"
+                        break
+
+                # entity being vague
+                for e, d in itertools.product(vague_endpoints, clear_datatypes):
+                    edge_data = kgraph.get_edge_data(e, d)
+
+                    if edge_data and edge_data["label"] == "COLLECT":
+                        result["policy_entity"] = e
+                        result["policy_data"] = d
+                        result["consistency_result"] = "vague_e"
+                        break
 
             writer.writerow(result)
 
