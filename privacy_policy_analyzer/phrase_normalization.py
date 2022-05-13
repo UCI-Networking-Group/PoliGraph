@@ -1,73 +1,58 @@
-import importlib.resources as pkg_resources
 import json
 import re
 
 import regex
 import spacy
 import tldextract
-import yaml
-
-import privacy_policy_analyzer
 
 
 class RuleBasedPhraseNormalizer:
-    def __init__(self):
-        with pkg_resources.open_text(privacy_policy_analyzer, "phrase_normalization.yml") as fin:
-            config = yaml.safe_load(fin)
+    def __init__(self, phrase_map_rules):
+        self.positive_rules = dict()
+        self.negative_rules = dict()
 
-            self.stop_words = frozenset(config["stop_words"])
-            self.token_map = config["token_map"]
-            self.normalization_rules = dict()
+        for norm_name, regex_list in phrase_map_rules.items():
+            self.negative_rules[norm_name] = []
+            self.positive_rules[norm_name] = []
 
-            for key, regex_list in config["normalization_rules"].items():
-                self.normalization_rules[key] = rules = []
+            for r in (regex_list or []):
+                if r[0] == "!":
+                    r = r[1:]
+                    l = self.negative_rules[norm_name]
+                else:
+                    l = self.positive_rules[norm_name]
 
-                for r in (regex_list or []):
-                    if r[0] != "^":
-                        r = r'\b' + r
-                    if r[-1] != "$":
-                        r = r + r'\b'
-                    r.replace(' ', r'\s+')
-                    rules.append(re.compile(r, re.I))
+                # By default case insensitive. Prefixing "=" to override
+                if r[0] == "=":
+                    r = r[1:]
+                    flags = 0
+                else:
+                    flags = re.I
 
-    def normalize(self, ent):
-        def dfs(token):
-            nonlocal ent
-            yield token.i
+                if r[0] != "^":
+                    r = r'\b' + r
+                if r[-1] != "$":
+                    r = r + r'\b'
+                r.replace(' ', r'\s+')
 
-            if token.dep_ == "amod":
-                accepted_dep = {"advmod", "npadvmod"}
-            elif token.pos_ in ["NOUN", "PROPN"]:
-                accepted_dep = {"amod", "nmod", "compound", "poss"}
-            else:
-                accepted_dep = {}
+                l.append(re.compile(r, flags=flags))
 
-            for c in token.children:
-                if c.dep_ in accepted_dep and c.lemma_ not in self.stop_words and c in ent:
-                    yield from dfs(c)
+    def normalize(self, phrase):
+        for norm_name in self.positive_rules:
+            rejected = False
 
-        doc = ent.doc
-        normalized_string = ""
-        prev_i = None
+            for r in self.negative_rules[norm_name]:
+                if r.search(phrase.lemma_) or r.search(phrase.text):
+                    rejected = True
+                    break
 
-        for i in sorted(dfs(ent.root)):
-            lemma = doc[i].lemma_.lower()
-            norm = self.token_map.get(lemma, lemma)
+            if rejected:
+                continue
 
-            if prev_i is not None:
-                if i != prev_i + 1 or doc[prev_i].whitespace_:
-                    normalized_string += " "
-
-            prev_i = i
-            normalized_string += norm
-
-        for key, regex_list in self.normalization_rules.items():
-            for r in regex_list:
-                if r.search(normalized_string):
-                    return key
-
-        return normalized_string
-
+            for r in self.positive_rules[norm_name]:
+                if r.search(phrase.lemma_) or r.search(phrase.text):
+                    yield norm_name
+                    break
 
 
 class EntityMatcher:
@@ -75,58 +60,81 @@ class EntityMatcher:
         with open(entity_info_file, "r", encoding="utf-8") as fin:
             entity_info = json.load(fin)
 
-        # Use en_core_web_sm because we want a smaller English word list
-        nlp = spacy.load("en_core_web_sm", disable=["parser", "ner", "lemmatizer"])
-        common_english_words = frozenset(nlp.vocab.strings)
+        # en_core_web_md supports is_oov
+        nlp = spacy.load("en_core_web_md", disable=["parser", "ner", "lemmatizer"])
 
-        # Gather all entity names for NLP processing
+        # Gather all names for NLP processing
         self.entity_names = {e: set(i["aliases"]) for e, i in entity_info.items()}
         name_to_doc = dict()
         all_names = set.union(*[s for s in self.entity_names.values()])
 
+        # Domain to entity mapping. Put domain names in all_names as well.
+        self.domain_mapping = dict()
+
+        for entity, info in entity_info.items():
+            for full_domain in info["domains"]:
+                self.domain_mapping[full_domain] = entity
+
+                domain = tldextract.extract(full_domain).domain
+                all_names.add(domain)
+
         for doc in nlp.pipe(all_names):
             name_to_doc[doc.text] = doc
 
-        # Find ngrams for fuzzy matching
-        self.domain_mapping = dict()
-        self.ngram_mapping = dict()
+        # Find all ngrams for fuzzy matching
+        all_ngrams = dict()
 
         for entity, info in entity_info.items():
-            ngrams = set()
+            ngrams = dict()
 
             for name in self.entity_names[entity]:
                 doc = name_to_doc[name]
 
+                # Find all ngrams that do not start/end with a punct/space
+                #   oov_flag: determine whether to do case-sensitive match
+                #   like_name_flag: if false, will be dropped later
                 for i in range(len(doc)):
-                    propn_flag = False
+                    like_name_flag = False
                     oov_flag = False
 
+                    if doc[i].is_space or doc[i].is_punct:
+                        continue
+
                     for j in range(i, len(doc)):
-                        propn_flag |= doc[j].pos_ == "PROPN"
-                        oov_flag |= doc[j].norm_ not in common_english_words
+                        if doc[j].is_space or doc[j].is_punct:
+                            continue
 
-                        if propn_flag:
-                            ngrams.add((doc[i:j+1].text.lower(), oov_flag))
+                        like_name_flag |= doc[j].pos_ == "PROPN"
+                        oov_flag |= doc[j].is_oov
+                        ngrams[doc[i:j+1].text.lower()] = (oov_flag, like_name_flag)
 
-            # Also use domain names as keywords
+            # Also put domain names to ngram list
             for full_domain in info["domains"]:
-                self.domain_mapping[full_domain] = entity
                 domain = tldextract.extract(full_domain).domain
-                ngrams.add((domain, domain not in common_english_words))
 
-            for s, oov_flag in ngrams:
-                if s not in self.ngram_mapping:
-                    self.ngram_mapping[s] = (entity, oov_flag)
-                elif self.ngram_mapping[s] is not None:
-                    self.ngram_mapping[s] = None
+                if domain not in ngrams:
+                    doc = name_to_doc[domain]
+                    oov_flag = any(t.is_oov for t in doc)
+                    ngrams[domain] = (oov_flag, oov_flag)
 
-        # ngrams that uniquely identify entities
-        self.ngram_mapping = {k: v for k, v in self.ngram_mapping.items() if v}
+            # If an ngram can be found in more than one entities, remove it
+            for s, (oov_flag, like_name_flag) in ngrams.items():
+                if s not in all_ngrams:
+                    all_ngrams[s] = (entity, oov_flag, like_name_flag)
+                elif all_ngrams[s] is not None:
+                    all_ngrams[s] = None
 
-        # Main entity name should always be in the ngram_mapping
-        for entity_name in self.entity_names:
-            if (name := entity_name.lower()) not in self.ngram_mapping:
-                self.ngram_mapping[name] = (entity_name, False)
+        # Filter out ngrams that has like_name_flag=True and uniquely identifies entities
+        self.ngram_mapping = dict()
+
+        for ngram, ngram_info in all_ngrams.items():
+            if ngram_info and ngram_info[-1]:
+                self.ngram_mapping[ngram] = (ngram_info[0], ngram_info[1])
+
+        # For well-known online trackers, main entity name should always be in the ngram_mapping
+        for entity, info in entity_info.items():
+            if info["prevalence"] > 2e-5 and entity.lower() not in self.ngram_mapping:
+                self.ngram_mapping[entity.lower()] = (entity, False)
 
         self.keyword_matching_regex = regex.compile(
             r"\b(?:\L<keywords>)\b",
