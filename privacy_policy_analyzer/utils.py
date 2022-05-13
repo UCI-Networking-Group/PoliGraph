@@ -57,7 +57,7 @@ def __normalize_ent_label(label):
     elif label == "NN":
         return "NN"
     else:
-        raise ValueError("Invalid NER label")
+        return "OTHER"
 
 
 def token_ent_type(token):

@@ -99,9 +99,7 @@ class CollectionAnnotator:
         for p in config["patterns"]:
             self.patterns.append(Pattern(p, config["token_mapping"]))
 
-    def annotate(self, doc):
-        policy_document = doc.user_data["document"]
-
+    def annotate_one_doc(self, document, doc):
         def like_type(tok, target_type):
             """Check if the phrase started by the token is a data type or subsums a data type"""
             # Use BFS here to avoid a loop.
@@ -116,7 +114,7 @@ class CollectionAnnotator:
                 if tok._.ent_type == target_type:
                     return True
                 elif tok._.ent_type == "NN":
-                    for _, linked_token, relationship in policy_document.get_all_links(tok):
+                    for _, linked_token, relationship in document.get_all_links(tok):
                         if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
                             bfs_queue.append(linked_token)
                             seen.add(linked_token)
@@ -127,14 +125,14 @@ class CollectionAnnotator:
         actor_candidates = []
 
         for e in doc.ents:
-            if like_type(e[0], "DATA"):
-                dtype_candidates.append((e, e.root, list(e.root.ancestors)[::-1]))
-            if like_type(e[0], "ACTOR"):
-                actor_candidates.append((e, e.root, list(e.root.ancestors)[::-1]))
+            if like_type(e.root, "DATA"):
+                dtype_candidates.append((e, list(e.root.ancestors)[::-1]))
+            if like_type(e.root, "ACTOR"):
+                actor_candidates.append((e, list(e.root.ancestors)[::-1]))
 
-        for dtype, dtype_root, dtype_ancestors in dtype_candidates:
-            for actor, actor_root, actor_ancestors in actor_candidates:
-                if dtype_root.is_ancestor(actor_root) or actor_root.is_ancestor(dtype_root):
+        for dtype, dtype_ancestors in dtype_candidates:
+            for actor, actor_ancestors in actor_candidates:
+                if dtype.root.is_ancestor(actor.root) or actor.root.is_ancestor(dtype.root):
                     continue
 
                 # Remove common ancestors
@@ -154,11 +152,11 @@ class CollectionAnnotator:
                 if verb.pos_ != "VERB":
                     continue
 
-                full_chain = [actor_root]
+                full_chain = [actor.root]
                 full_chain.extend(actor_ancestors[-1:common_ancestor_count-1:-1])
                 full_chain.append(verb)
                 full_chain.extend(dtype_ancestors[common_ancestor_count::])
-                full_chain.append(dtype_root)
+                full_chain.append(dtype.root)
 
                 if any(p(full_chain) for p in self.patterns):
                     exception = None
@@ -178,9 +176,13 @@ class CollectionAnnotator:
 
                     if exception is None:
                         print(">", actor, verb.lemma_.upper(), dtype)
-                        policy_document.link(actor[0], dtype[0], "COLLECT")
-                        policy_document.link(dtype[0], actor[0], "COLLECTED_BY")
+                        document.link(actor.root, dtype.root, "COLLECT")
+                        # document.link(dtype.root, actor.root, "COLLECTED_BY")
                     else:
                         print(f"> ({exception})", actor, verb.lemma_.upper(), dtype)
 
                     print("#" * 40)
+
+    def annotate(self, document):
+        for doc in document.iter_docs():
+            self.annotate_one_doc(document, doc)

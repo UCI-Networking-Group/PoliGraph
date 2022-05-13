@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
 
-import bisect
 import enum
 import json
 import logging
 import pickle
-from functools import cached_property
 from itertools import chain
 from pathlib import Path
 
 import networkx as nx
-from regex import D
 import spacy
 from anytree import NodeMixin
 from spacy import displacy
-from spacy.tokens import Doc, Span
+from spacy.tokens import Doc, DocBin
+from spacy.language import Language
 from unidecode import unidecode
-
-from privacy_policy_analyzer.named_entity_recognition import (ACTOR_KEYWORDS, DATATYPE_KEYWORDS,
-                                                              label_simple_noun_phrases)
 
 
 class SegmentType(enum.Enum):
@@ -60,109 +55,157 @@ class DocumentSegment(NodeMixin):
         return count
 
 
+def assemble_raw_doc(context):
+    tokens = []
+    spaces = []
+    token_sources = []
+    previous_segment = None
+
+    for s in reversed(context):
+        # Propoerly concatenate segments
+        if len(tokens) > 0:
+            if previous_segment.segment_type is SegmentType.HEADING:
+                # Insert some linebreaks after a heading
+                tokens.extend(["\n", "\n"])
+                spaces.extend([False, False])
+                token_sources.extend([None, None])
+            elif previous_segment.segment_type is SegmentType.LISTITEM:
+                # Add a colon before a LISTITEM
+                if tokens[-1].isalnum():
+                    tokens.append(":")
+                    spaces.append(True)
+                    token_sources.append(None)
+            else:
+                # Otherwise, just insert a space
+                spaces[-1] = True
+
+        for idx, (tok, has_space) in enumerate(zip(s.tokens, s.spaces)):
+            tokens.append(tok)
+            spaces.append(has_space)
+            token_sources.append((s.segment_id, idx))
+
+        previous_segment = s
+
+    return {
+        "words": tokens,
+        "spaces": spaces,
+        "user_data": {
+            "source": token_sources,
+            "source_rmap": {src: i for i, src in enumerate(token_sources) if src is not None}
+        }
+    }
+
+
 class PolicyDocument:
-    def __init__(self, workdir, nlp=None, use_cache=True):
-        self.workdir = Path(workdir)
-        self.token_relationship = nx.DiGraph()
+    @classmethod
+    def initialize(cls, workdir, nlp):
+        obj = cls(flag=True)
+        obj.workdir = Path(workdir)
+        obj.token_relationship = nx.DiGraph()
+        obj.nlp = nlp
 
-        if use_cache and (self.workdir / "document.pickle").exists():
-            with open(self.workdir / "document.pickle", "rb") as fin:
-                (
-                    self.segments,
-                    self.noun_chunks,
-                    self.token_relationship,
-                ) = pickle.load(fin)
-        else:
-            with open(self.workdir / "accessibility_tree.json", encoding="utf-8") as fin:
-                accessibility_tree = json.load(fin)
+        with open(obj.workdir / "accessibility_tree.json", encoding="utf-8") as fin:
+            accessibility_tree = json.load(fin)
 
-            self.segments = extract_segments_from_accessibility_tree(accessibility_tree, nlp.tokenizer)
-            self.__init_doc(nlp)
+        obj.segments = extract_segments_from_accessibility_tree(accessibility_tree, nlp.tokenizer)
 
-        self.full_doc = self.get_full_doc()
+        docs = []
+
+        for seg in obj.segments:
+            if seg.segment_type == SegmentType.LISTITEM:
+                continue
+
+            for i in range(len(seg.context)):
+                if seg.context[i].segment_type == SegmentType.LISTITEM:
+                    continue
+
+                raw_doc_params = assemble_raw_doc(seg.context[:i+1])
+                raw_doc = Doc(nlp.vocab, **raw_doc_params)
+                raw_doc.user_data["id"] = (seg.segment_id, i)
+
+                docs.append(raw_doc)
+
+        obj.all_docs = dict()
+
+        for doc in nlp.pipe(docs):
+            # See: https://github.com/explosion/spaCy/discussions/7486
+            doc._.trf_data = None
+
+            doc_id = doc.user_data["id"]
+            obj.all_docs[doc_id] = doc
+
+        return obj
+
+    @classmethod
+    def load(cls, workdir, nlp):
+        obj = cls(flag=True)
+        obj.workdir = Path(workdir)
+        obj.nlp = nlp
+
+        with open(obj.workdir / "document.pickle", "rb") as fin:
+            (obj.token_relationship, obj.segments, docbin_bytes) = pickle.load(fin)
+
+        serialized_docs = DocBin().from_bytes(docbin_bytes)
+        obj.all_docs = dict()
+
+        for doc in serialized_docs.get_docs(nlp.vocab):
+            doc_id = doc.user_data["id"]
+            obj.all_docs[doc_id] = doc
+
+        return obj
+
+    def __init__(self, **kwargs):
+        if kwargs.get("flag") is not True:
+            raise NotImplementedError("Don't call me directly")
+
+        # Make linter happy
+        self.workdir: Path
+        self.all_docs: dict[tuple[int, int], Doc]
+        self.token_relationship: nx.DiGraph
+        self.segments: list[DocumentSegment]
+        self.nlp: Language
+
+    def save(self):
+        serialized_docs = DocBin(store_user_data=True, docs=self.all_docs.values())
+
+        with open(self.workdir / "document.pickle", "wb") as fout:
+            pickle.dump((
+                self.token_relationship,
+                self.segments,
+                serialized_docs.to_bytes(),
+            ), fout, pickle.HIGHEST_PROTOCOL)
+
+        # with open(self.workdir / "plaintext.txt", "w") as fout:
+        #    fout.write(self.get_full_doc().text)
+
+    def iter_docs(self):
+        yield from self.all_docs.values()
 
     def render_ner(self):
         displacy.serve(self.get_full_doc(), style="ent")
 
-    def save(self):
-        with open(self.workdir / "document.pickle", "wb") as fout:
-            pickle.dump((
-                self.segments,
-                self.noun_chunks,
-                self.token_relationship,
-            ), fout, pickle.HIGHEST_PROTOCOL)
+    def get_doc_with_context(self, segment):
+        for i in range(len(segment.context) - 1, 0, -1):
+            if (segment.segment_id, i) in self.all_docs:
+                return self.all_docs[(segment.segment_id, i)]
 
-        with open(self.workdir / "plaintext.txt", "w") as fout:
-            fout.write(self.full_doc.text)
+        return self.all_docs[(segment.segment_id, 0)]
 
-    def __init_doc(self, nlp):
-        # first pass (NER -> noun chunks)
-        self.noun_chunks = noun_chunks = []
+    def get_doc_without_context(self, segment):
+        return self.all_docs[(segment.segment_id, 0)]
 
-        full_doc = self.get_full_doc(nlp)
-        full_doc = nlp(full_doc)
-        token_sources = full_doc.user_data["source"]
+    def get_token_with_src(self, src):
+        segment = self.segments[src[0]]
+        long_doc = self.get_doc_with_context(segment)
+        rmap = long_doc.user_data["source_rmap"]
+        return long_doc[rmap[src]]
 
-        label_simple_noun_phrases(full_doc)
-
-        for ent in full_doc.ents:
-            # exclude NER types that are not useful (e.g. PERCENT/DATE/LAW/LOC...)
-            if ent.label_ not in {"NN", "DATA", "ACTOR", "EVENT", "FAC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
-                continue
-
-            # Rule-based NER completion
-            if ent.root.lemma_.lower() in DATATYPE_KEYWORDS:
-                label = "DATA"
-            elif ent.root.lemma_.lower() in ACTOR_KEYWORDS:
-                label = "ACTOR"
-            elif ent.root.pos_ == "PRON" and ent.root.lemma_.lower() in {"i", "we", "you", "he", "she"}:
-                label = "ACTOR"
-            else:
-                label = ent.label_
-
-            # find the beginning and end of a chunk within a segment
-            first_source = last_source = None
-
-            i = ent.start
-            while first_source is None:
-                first_source = token_sources[i]
-                i += 1
-
-            i = ent.end
-            while last_source is None:
-                last_source = token_sources[i - 1]
-                i -= 1
-
-            if first_source[0] != last_source[0]:
-                logging.warning("Chunk %r spans multiple segments. Skipped.", ent)
-                continue
-
-            segment_id = first_source[0]
-            left_token_index = first_source[1]
-            right_token_index = last_source[1] + 1
-
-            noun_chunks.append((segment_id, left_token_index, right_token_index, label))
-
-        # second pass (grouping chunks)
-        full_doc = self.get_full_doc(nlp)
-        token_sources = full_doc.user_data["source"]
-
-        # apply tagger/parser but not NER
-        for name, pipe in nlp.pipeline:
-            if name in {"tok2vec", "transformer", "tagger", "parser", "attribute_ruler", "lemmatizer"}:
-                full_doc = pipe(full_doc)
-
-    @cached_property
-    def default_nlp(self):
-        return spacy.blank("en")
-
-    def get_full_doc(self, nlp=None, apply_pipe=False):
-        if nlp is None:
-            nlp = self.default_nlp
+    def get_full_doc(self):
+        # TODO: refractor, or maybe remove this
+        nlp = self.nlp
 
         all_docs = []
         token_sources = []
-        chunk_id = 0
 
         for s in self.segments:
             # TODO: This should be consistent with build_doc
@@ -170,10 +213,9 @@ class PolicyDocument:
                 prefix = ["\n\n", "#" * s.heading_level]
                 suffix = ["\n\n"]
             elif s.segment_type is SegmentType.LISTITEM:
-                prefix = ["*"]
-                suffix = []
+                continue
             else:
-                prefix = []
+                prefix = ["*"]
                 suffix = ["\n"]
 
             if len(prefix) > 0:
@@ -181,19 +223,6 @@ class PolicyDocument:
                 token_sources.extend([None] * len(all_docs[-1]))
 
             doc = Doc(nlp.vocab, words=s.tokens, spaces=s.spaces)
-
-            ents = []
-            while chunk_id < len(self.noun_chunks):
-                segment_id, left, right, label = self.noun_chunks[chunk_id]
-                if segment_id != s.segment_id:
-                    break
-
-                span = Span(doc, left, right, label=label)
-                ents.append(span)
-
-                chunk_id += 1
-
-            doc.set_ents(ents, default="outside")
             all_docs.append(doc)
             token_sources.extend((s.segment_id, i) for i in range(len(doc)))
 
@@ -211,81 +240,9 @@ class PolicyDocument:
         full_doc.user_data["document"] = self
         full_doc.user_data["source"] = token_sources
         full_doc.user_data["source_rmap"] = {src: i for i, src in enumerate(token_sources) if src is not None}
-
-        if apply_pipe:
-            for name, pipe in nlp.pipeline:
-                if name in {"tok2vec", "transformer", "tagger", "parser", "attribute_ruler", "lemmatizer"}:
-                    full_doc = pipe(full_doc)
+        full_doc = self.nlp(full_doc)
 
         return full_doc
-
-    def build_doc(self, context, nlp, apply_pipe=False, load_ner=False):
-        if any(s not in self.segments for s in context):
-            raise ValueError("Unknown segment in the provided context")
-
-        tokens = []
-        spaces = []
-        token_sources = []
-        ent_positions = []
-        previous_segment = None
-
-        for s in reversed(context):
-            # Propoerly concatenate segments
-            if len(tokens) > 0:
-                if previous_segment.segment_type is SegmentType.HEADING:
-                    # Insert some linebreaks after a heading
-                    tokens.extend(["\n", "\n"])
-                    spaces.extend([False, False])
-                    token_sources.extend([None, None])
-                elif previous_segment.segment_type is SegmentType.LISTITEM:
-                    # Add a colon before a LISTITEM
-                    if tokens[-1].isalnum():
-                        tokens.append(":")
-                        spaces.append(True)
-                        token_sources.append(None)
-                else:
-                    # Otherwise, just insert a space
-                    spaces[-1] = True
-
-            if load_ner:
-                ent_offset = len(tokens)
-                chunk_id = bisect.bisect_left(self.noun_chunks, (s.segment_id, 0, 0, ""))
-
-                while chunk_id < len(self.noun_chunks):
-                    segment_id, left, right, label = self.noun_chunks[chunk_id]
-                    if segment_id == s.segment_id:
-                        ent_positions.append((chunk_id, ent_offset + left, ent_offset + right, label))
-                        chunk_id += 1
-                    else:
-                        break
-
-            for idx, (tok, has_space) in enumerate(zip(s.tokens, s.spaces)):
-                tokens.append(tok)
-                spaces.append(has_space)
-                token_sources.append((s.segment_id, idx))
-
-            previous_segment = s
-
-        doc = Doc(nlp.vocab, words=tokens, spaces=spaces)
-        doc.user_data["document"] = self
-        doc.user_data["source"] = token_sources
-        doc.user_data["source_rmap"] = {src: i for i, src in enumerate(token_sources) if src is not None}
-
-        if apply_pipe:
-            old_tokenizer = nlp.tokenizer
-            nlp.tokenizer = lambda x: x
-            doc = nlp(doc)
-            nlp.tokenizer = old_tokenizer
-
-        if load_ner:
-            ents = []
-            for idx, left, right, label in ent_positions:
-                span = Span(doc, left, right, label=label)
-                ents.append(span)
-
-            doc.set_ents(ents, default="outside")
-
-        return doc
 
     def link(self, token1, token2, relationship):
         src1 = token1._.src
@@ -312,6 +269,9 @@ class PolicyDocument:
         doc = token.doc
         source_rmap = doc.user_data["source_rmap"]
 
+        if token._.src is None:
+            return
+
         match direction:
             case None | "out":
                 edge_view = self.token_relationship.out_edges(token._.src, data=True)
@@ -328,9 +288,7 @@ class PolicyDocument:
                 try:
                     token = doc[source_rmap[token_src]]
                 except KeyError:
-                    full_doc = self.full_doc
-                    rmap = full_doc.user_data["source_rmap"]
-                    token = full_doc[rmap[token_src]]
+                    token = self.get_token_with_src(token_src)
 
                 src_dst_tokens.append(token)
 

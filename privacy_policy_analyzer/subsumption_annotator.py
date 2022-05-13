@@ -182,7 +182,7 @@ class SubsumptionAnnotator:
         ]
         self.matcher.add("SUBSUM_SUCH_N_AS", [pattern])
 
-    def annotate(self, doc):
+    def annotate_one_doc(self, document, doc):
         matches = self.matcher(doc)
 
         for match_id, matched_tokens in matches:
@@ -198,9 +198,13 @@ class SubsumptionAnnotator:
             lower_conjuncts = lower_ent._.conjunct_chunks
 
             print("+" * 40)
-            print(upper_ent[0].sent, end="\n\n")
+            print(upper_ent.sent, end="\n\n")
             print(upper_ent, "->", lower_conjuncts)
             print("+" * 40)
 
             for lower_ent in lower_conjuncts:
-                doc.user_data["document"].link(upper_ent[0], lower_ent[0], "SUBSUM")
+                document.link(upper_ent.root, lower_ent.root, "SUBSUM")
+
+    def annotate(self, document):
+        for doc in document.iter_docs():
+            self.annotate_one_doc(document, doc)

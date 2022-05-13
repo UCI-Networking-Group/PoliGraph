@@ -74,15 +74,15 @@ class PurposeAnnotator:
         ]
         self.matcher.add("PURPOSE_FOR_PURPOSE", [pattern])
 
-    def annotate(self, doc):
+    def annotate_one_doc(self, document, doc):
         matches = self.matcher(doc)
-        document = doc.user_data["document"]
         collected_dtypes = []
 
-        for e in doc.ents:
-            for _, _, relationship in document.get_all_links(e[0]):
-                if relationship in ["COLLECT", "COLLECTED_BY"]:
-                    collected_dtypes.append(e[0])
+        for noun_phrase in doc.ents:
+            for _, _, relationship in document.get_all_links(noun_phrase.root, "in"):
+                if relationship == "COLLECT":
+                    collected_dtypes.append(noun_phrase.root)
+                    break
 
         if len(collected_dtypes) == 0:
             return
@@ -106,3 +106,7 @@ class PurposeAnnotator:
             print(purpose_root.sent, end="\n\n")
             print(purpose_part)
             print("%" * 40)
+
+    def annotate(self, document):
+        for doc in document.iter_docs():
+            self.annotate_one_doc(document, doc)

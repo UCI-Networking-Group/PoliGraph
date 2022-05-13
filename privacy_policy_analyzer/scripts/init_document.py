@@ -4,22 +4,21 @@ import argparse
 
 import spacy
 from privacy_policy_analyzer.document import PolicyDocument
-from privacy_policy_analyzer.named_entity_recognition import setup_models
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
-    parser.add_argument("--ner", required=True, help="NER model directory")
+    parser.add_argument("--nlp", required=True, help="NLP model directory")
     parser.add_argument("--display", action="store_true", help="Show NER results")
     args = parser.parse_args()
 
     spacy.prefer_gpu()
-    nlp = setup_models(args.ner)
+    nlp = spacy.load(args.nlp)
 
     for d in args.workdirs:
         print(f"Processing {d} ...")
-        document = PolicyDocument(d, nlp=nlp, use_cache=False)
+        document = PolicyDocument.initialize(d, nlp=nlp)
         document.save()
 
         if args.display:
