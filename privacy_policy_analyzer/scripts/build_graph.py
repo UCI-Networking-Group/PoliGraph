@@ -235,6 +235,7 @@ class GraphBuilder:
                 case _:
                     raise ValueError("Invalid type")
 
+            print(phrase, normalized_terms)
             data["normalized_terms"].update(normalized_terms)
 
         return stage1_graph
@@ -276,12 +277,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--nlp", required=True, help="NLP model directory")
     parser.add_argument("-p", "--phrase-map", required=True, help="Path to phrase_map.yml")
-    parser.add_argument("-e", "--entity-map", required=True, help="Path to entity_info.json")
+    parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
 
     nlp = spacy.load(args.nlp)
-    graph_builder = GraphBuilder(args.phrase_map, args.entity_map)
+    graph_builder = GraphBuilder(args.phrase_map, args.entity_info)
 
 
     for d in args.workdirs:
