@@ -3,7 +3,7 @@
 import argparse
 
 import spacy
-from privacy_policy_analyzer.collection_annotator import CollectionAnnotator
+from privacy_policy_analyzer.collection_annotator2 import CollectionAnnotator2
 from privacy_policy_analyzer.coreference_annotator import CoreferenceAnnotator
 from privacy_policy_analyzer.document import PolicyDocument
 from privacy_policy_analyzer.purpose_annotator import PurposeAnnotator
@@ -21,8 +21,8 @@ def main():
 
     annotators = [
         SubsumptionAnnotator(nlp),
-        CollectionAnnotator(nlp),
         CoreferenceAnnotator(nlp),
+        CollectionAnnotator2(nlp),
         PurposeAnnotator(nlp),
         ListAnnotator(nlp),
     ]
