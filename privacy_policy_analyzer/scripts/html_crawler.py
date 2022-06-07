@@ -102,6 +102,7 @@ def main():
             const documentClone = document.cloneNode(true);
             const article = new Readability(documentClone).parse();
             document.body.innerHTML = article.content;
+            for (const elem of document.head.querySelectorAll('script')) elem.remove();
             return article;
         }""", [])
         cleaned_html = page.content()
