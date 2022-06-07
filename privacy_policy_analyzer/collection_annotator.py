@@ -162,14 +162,19 @@ class CollectionAnnotator:
                     exception = None
 
                     for token in itertools.chain([verb], verb.ancestors):
-                        if any(c.pos_ == "SCONJ" and
-                               c.lemma_ in ["if", "when", "while", "where", "whether", "how"] for c in token.children):
+                        if token.dep_ in ["advcl", "acl", "relcl", "acomp", "xcomp", "pcomp", "ccomp"]:
                             exception = "CLAUSE"
-                    else:
+                            break
+
+                    if exception is None:
                         for token in full_chain:
                             if any(c.dep_ == "neg" for c in token.children):
                                 exception = "NEG"
                                 break
+
+                    if exception is None:
+                        if token.sent[-1].norm_ == "?":
+                            exception = "INT"
 
                     print("#" * 40)
                     print(verb.sent, end="\n\n")
