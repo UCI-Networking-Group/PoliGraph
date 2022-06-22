@@ -14,8 +14,8 @@ from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DAT
 from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
 
 
-def expand_phrase(token):
-    doc = token.doc
+def expand_phrase(root_token):
+    doc = root_token.doc
 
     def has_alpha(s):
         return re.search(r"[a-zA-Z]", s, flags=re.ASCII) is not None
@@ -50,36 +50,44 @@ def expand_phrase(token):
         return True
 
     # Noun phrase, try to include simple children
-    left_idx = token.i
-    for child in sorted(token.lefts, reverse=True):
-        if should_include(child):
-            child_indices = sorted(t.i for t in child.subtree)
+    bfs_queue = [root_token]
 
-            if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
-                and left_idx - 1 == child_indices[-1]):
-                left_idx = child_indices[0]
+    while len(bfs_queue) > 0:
+        token = bfs_queue.pop(0)
+
+        left_idx = token.i
+        for child in sorted(token.lefts, reverse=True):
+            if should_include(child):
+                child_indices = sorted(t.i for t in child.subtree)
+
+                if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
+                    and left_idx - 1 == child_indices[-1]):
+                    left_idx = child_indices[0]
+                else:
+                    break
             else:
                 break
-        else:
-            break
 
-    right_idx = token.i + 1
-    for child in sorted(token.rights):
-        if should_include(child):
-            child_indices = sorted(t.i for t in child.subtree)
+        right_idx = token.i + 1
+        for child in sorted(token.rights):
+            if child.dep_ in ["conj", "appos"]:
+                bfs_queue.append(child)
+                break
+            elif should_include(child):
+                child_indices = sorted(t.i for t in child.subtree)
 
-            if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
-                and right_idx == child_indices[0]):
-                right_idx = child_indices[-1] + 1
+                if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
+                    and right_idx == child_indices[0]):
+                    right_idx = child_indices[-1] + 1
+                else:
+                    break
             else:
                 break
-        else:
-            break
 
-    if doc[right_idx - 1].dep_ == "cc":
-        right_idx -= 1
+        if doc[right_idx - 1].dep_ == "cc":
+            right_idx -= 1
 
-    return doc[left_idx:right_idx]
+        yield doc[left_idx:right_idx]
 
 
 def simplify_phrase(phrase):
@@ -88,6 +96,7 @@ def simplify_phrase(phrase):
         "more", "such", "other", "following", "additional",
         "certain", "similar", "limited", "various", "detailed",
         "further", "enough", "e.g.", "i.e.",
+        "which", "that",
     ])
 
     def dfs(token, state):
@@ -148,9 +157,11 @@ class GraphBuilder:
                     # Will eventually remove these nodes
                     stage1_graph.add_node(src, token=token, type="OTHER")
 
-        # Step 2: Infer phrase type using COLLECT relationship
+        # Step 2: Infer phrase type using COLLECT / NOT_COLLECT relationship
         for src1, src2, data in document.token_relationship.edges(data=True):
-            if data["relationship"] == "COLLECT":
+            relationship = data["relationship"]
+
+            if relationship in ["COLLECT", "NOT_COLLECT"]:
                 token1 = document.get_token_with_src(src1)
                 token2 = document.get_token_with_src(src2)
 
@@ -161,7 +172,7 @@ class GraphBuilder:
                     stage1_graph.add_node(src2, token=token2, type="DATA")
 
                 if [stage1_graph.nodes[s]["type"] for s in (src1, src2)] == ["ACTOR", "DATA"]:
-                    stage1_graph.add_edge(src1, src2, relationship="COLLECT")
+                    stage1_graph.add_edge(src1, src2, relationship=relationship)
 
         # Step 3: Infer phrase type using SUBSUM / COREF relationship
         bfs_queue = deque(stage1_graph.nodes)
@@ -200,7 +211,6 @@ class GraphBuilder:
         # Step 5: Infer meaning of each phrase using normalizers
         for src, data in stage1_graph.nodes(data=True):
             token = data["token"]
-            data["phrase"] = phrase = expand_phrase(token)
             data["normalized_terms"] = set()
 
             has_coref = False
@@ -213,30 +223,31 @@ class GraphBuilder:
             if has_coref:
                 continue
 
-            match data["type"]:
-                case "DATA":
-                    normalized_terms = list(self.data_phrase_normalizer.normalize(phrase))
+            for phrase in expand_phrase(token):
+                match data["type"]:
+                    case "DATA":
+                        normalized_terms = list(self.data_phrase_normalizer.normalize(phrase))
 
-                    if len(normalized_terms) == 0:
-                        simplified = " ".join(t.lemma_ for t in simplify_phrase(phrase))
-                        if simplified and simplified not in DATATYPE_KEYWORDS:
-                            normalized_terms.append(simplified)
-                case "ACTOR":
-                    normalized_terms = list(self.actor_phrase_normalizer.normalize(phrase))
+                        if len(normalized_terms) == 0:
+                            simplified = " ".join(t.lemma_ for t in simplify_phrase(phrase))
+                            if simplified and simplified not in DATATYPE_KEYWORDS:
+                                normalized_terms.append(simplified)
+                    case "ACTOR":
+                        normalized_terms = list(self.actor_phrase_normalizer.normalize(phrase))
 
-                    if any(t.pos_ == "PROPN" for t in phrase):
-                        if entity_name := self.entity_mapper.match_name(phrase.text):
-                            normalized_terms.append(entity_name)
+                        if any(t.pos_ == "PROPN" for t in phrase):
+                            if entity_name := self.entity_mapper.match_name(phrase.text):
+                                normalized_terms.append(entity_name)
 
-                    if len(normalized_terms) == 0:
-                        simplified = " ".join(t.lemma_ for t in simplify_phrase(phrase))
-                        if simplified and simplified != "you" and simplified not in ACTOR_KEYWORDS:
-                            normalized_terms.append(simplified)
-                case _:
-                    raise ValueError("Invalid type")
+                        if len(normalized_terms) == 0:
+                            simplified = " ".join(t.lemma_ for t in simplify_phrase(phrase))
+                            if simplified and simplified != "you" and simplified not in ACTOR_KEYWORDS:
+                                normalized_terms.append(simplified)
+                    case _:
+                        raise ValueError("Invalid type")
 
-            print(phrase, normalized_terms)
-            data["normalized_terms"].update(normalized_terms)
+                print(phrase, normalized_terms)
+                data["normalized_terms"].update(normalized_terms)
 
         return stage1_graph
 
@@ -264,11 +275,18 @@ class GraphBuilder:
                     mapped_nodes.append(term)
 
                     if term not in stage2_graph:
-                        stage2_graph.add_node(term, source_tokens=[stage1_node])
+                        stage2_graph.add_node(term, source_tokens=[stage1_node], type=stage1_node_data["type"])
+                    else:
+                        stage2_graph.nodes[term]["source_tokens"].append(stage1_node)
 
             for n1 in mapped_nodes:
                 for n2, relationship in stage2_edges:
-                    stage2_graph.add_edge(n1, n2, label=relationship)
+                    if n1 != n2:
+                        stage2_graph.add_edge(n1, n2, label=relationship)
+
+        for node in list(stage2_graph.nodes()):
+            if stage2_graph.in_degree(node) == stage2_graph.out_degree(node) == 0:
+                stage2_graph.remove_node(node)
 
         return stage2_graph
 
