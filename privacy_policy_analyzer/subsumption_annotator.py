@@ -1,5 +1,7 @@
 from spacy.matcher import DependencyMatcher
 
+from privacy_policy_analyzer.utils import get_conjuncts
+
 
 class SubsumptionAnnotator:
     def __init__(self, nlp):
@@ -61,6 +63,27 @@ class SubsumptionAnnotator:
             },
             {
                 "LEFT_ID": "anchor",
+                "REL_OP": ">",
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}, "DEP": "nsubj"}
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": ">",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}, "DEP": "dobj"}
+            }
+        ]
+        self.matcher.add("SUBSUM_INCLUDE", [pattern])
+
+        # ... which includes (clause)
+        pattern = [
+            {
+                "RIGHT_ID": "anchor",
+                "RIGHT_ATTRS": {"POS": "VERB", "DEP": "relcl", "LEMMA": "include"}
+            },
+            {
+                "LEFT_ID": "anchor",
                 "REL_OP": "<",
                 "RIGHT_ID": "upper_token",
                 "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
@@ -69,10 +92,10 @@ class SubsumptionAnnotator:
                 "LEFT_ID": "anchor",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}, "LEMMA": "dobj"}
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}, "DEP": "dobj"}
             }
         ]
-        self.matcher.add("SUBSUM_INCLUDE", [pattern])
+        self.matcher.add("SUBSUM_WHICH_INCLUDE", [pattern])
 
         # including but not limited to
         pattern = [
@@ -186,6 +209,9 @@ class SubsumptionAnnotator:
         matches = self.matcher(doc)
 
         for match_id, matched_tokens in matches:
+            if any(c.dep_ == "neg" for t in matched_tokens for c in doc[t].children):
+                continue
+
             _, (match_spec, ) = self.matcher.get(match_id)
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
 
@@ -195,14 +221,21 @@ class SubsumptionAnnotator:
             if upper_ent is None or lower_ent is None:
                 continue
 
-            lower_conjuncts = lower_ent._.conjunct_chunks
+            all_lower_ents = [lower_ent]
+
+            for conj in get_conjuncts(lower_ent.root):
+                if all(t.dep_ != "neg" for t in conj.children):
+                    if ent := conj._.ent:
+                        all_lower_ents.append(ent)
+
+            all_lower_ents.sort()
 
             print("+" * 40)
             print(upper_ent.sent, end="\n\n")
-            print(upper_ent, "->", lower_conjuncts)
+            print(upper_ent, "->", all_lower_ents)
             print("+" * 40)
 
-            for lower_ent in lower_conjuncts:
+            for lower_ent in all_lower_ents:
                 document.link(upper_ent.root, lower_ent.root, "SUBSUM")
 
     def annotate(self, document):
