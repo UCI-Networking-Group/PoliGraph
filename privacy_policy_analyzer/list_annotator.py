@@ -6,19 +6,27 @@ class ListAnnotator:
         pass
 
     def try_annotate_segment(self, document, root_segment):
-        if root_segment.segment_type == SegmentType.LISTITEM:
+        child_listitems = []
+
+        for c in root_segment.children:
+            if c.segment_type == SegmentType.LISTITEM and len(c.children) == 1:
+                child_listitems.append(c)
+
+        if len(child_listitems) == 0:
             return
 
         context_doc = document.get_doc_with_context(root_segment)
-        token_map = {t._.src: t for t in context_doc}
+        context_tokens = {t._.src for t in context_doc}
         link_to_apply = dict()
         child_tokens = []
 
-        for c in root_segment.children:
-            if not(c.segment_type == SegmentType.LISTITEM and len(c.children) == 1):
-                # Might work on other segments. But let's not be too progressive
-                continue
+        for token in context_doc:
+            if (token.lemma_, token.dep_) in [("follow", "amod"), ("following", "amod"), ("below", "advmod")]:
+                if ent := token.head._.ent:
+                    link_to_apply[(ent.root, None)] = "SUBSUM"
+                    break
 
+        for c in child_listitems:
             text_segment = c.children[0]
 
             doc = document.get_doc_without_context(text_segment)
@@ -33,13 +41,13 @@ class ListAnnotator:
 
             # In link -- from context to list item
             for token1, _, relationship in document.get_all_links(linked_token, "in"):
-                if token1._.src in token_map:
+                if token1._.src in context_tokens:
                     link_spec = (token1, None)
                     link_to_apply[link_spec] = relationship
 
             # Out links -- from list item to context
             for _, token2, relationship in document.get_all_links(linked_token, "out"):
-                if token2._.src in token_map:
+                if token2._.src in context_tokens:
                     link_spec = (None, token2)
                     link_to_apply[link_spec] = relationship
 

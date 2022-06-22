@@ -318,8 +318,7 @@ class CollectionAnnotator2:
 
         def collect_handler(neg_flag, e1, dt, e2):
             if ((e1 and like_type(e1, "ACTOR")) and
-                (dt and like_type(dt, "DATA")) and
-                (e2 is None or like_type(e2, "ACTOR"))):
+                (dt and like_type(dt, "DATA"))):
 
                 if neg_flag:
                     link_pairs(e1, dt, "NOT_COLLECT")
@@ -329,8 +328,7 @@ class CollectionAnnotator2:
                     print(f"> {e1} COLLECT {dt} FROM {e2}")
                 
         def share_handler(neg_flag, e1, dt, e2):
-            if ((e1 is None or like_type(e1, "ACTOR")) and
-                (dt and like_type(dt, "DATA")) and
+            if ((dt and like_type(dt, "DATA")) and
                 (e2 and like_type(e2, "ACTOR"))):
 
                 if neg_flag:

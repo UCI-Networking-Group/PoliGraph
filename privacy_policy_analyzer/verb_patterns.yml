@@ -109,3 +109,8 @@ patterns:
   - root: ['include']
     match: ['!*:nsubj,VERB_COLLECT_FROM:relcl,@E1:nsubj', '*:nsubj,VERB_COLLECT_FROM:relcl,from,@E2:pobj', '!@DT:dobj']
     transform: ['COLLECT', 'E1', 'DT', 'E2']
+
+  # ... E1 use includes DT
+  - root: ['include']
+    match: ['!*:nsubj,VERB_GENERAL_USE:relcl,@E1:nsubj', '!@DT:dobj']
+    transform: ['USE', 'E1', 'DT']
