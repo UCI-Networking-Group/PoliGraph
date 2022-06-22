@@ -3,10 +3,18 @@ from spacy.tokens import SpanGroup
 
 def get_conjuncts(token):
     for child in token.children:
-        if child.dep_ in ["conj", "appos"]:
+        if child.dep_ == "conj":
             yield child
             yield from get_conjuncts(child)
+        elif child.dep_ == "appos":
+            # appos often appears to be wrong in long doc
+            # take it only when parent and child are in the same segment and parent.i < child.i
+            src1 = token._.src or (-1, 0)
+            src2 = child._.src or (-2, 0)
 
+            if src1[0] == src2[0] and src1[1] < src2[1]:
+                yield child
+                yield from get_conjuncts(child)
 
 def token_to_ent(token):
     doc = token.doc
