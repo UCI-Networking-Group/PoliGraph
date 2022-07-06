@@ -1,52 +1,154 @@
 DATA:
-  person name:
-    - '(first|last|family|middle|given|real|legal|maiden|person|contact|passenger|personal|full|sur)\s*name'
-    - '^your name'
+  personal information:
+    - '^((your|user)\s+)?personal (data|info|information)$'
+
+  personal identifier:
+    - '(personal|user) id(entifier)?'
+    - '(personally|directly)\b.*\bidentif\w+\b.*\b(information|data)'
+    - '=PII'
+    - 'information\b.*\bidentify\b.*\b(you|individual|person|user)'
+    - '!(cannot|no[nt]?)'
+    - '!de-?identif\w+'
+
+  identifier:
+    - '^identifier$'
+
+  # government IDs
+  ssn:
+    - 'social security\b.*\bnumber'
+    - '=SSN'
+  passport number:
+    - 'passport\b.*\b(number|detail|no)'
+
+  # personal characteristics
+  personal characteristic:
+    - '(personal|user|demographic) characteristic'
+
+  date of birth:
+    - 'date of birth'
+    - 'birth\s*(day|date)'
+
+  gender:
+
+  race:
+    - 'race'
+    - 'ethnicity'
+
+  biometric information:
+    - 'biometrics'
+    - 'biometric (data|information|identifier)'
+
+  # biometric
+  voiceprint:
+    - 'voice pattern'
+
+  fingerprint:
+    - 'fingerprint'
+    - '!(device|digital|build|system)'
+
+  # geolocation
   geolocation:
     - '(geo-?(graphic)?\s*)?location'
     - '(geo-?)?locational (information|data|history|detail)'
     - 'geographic (information|data|history|detail)'
     - 'location (base|relate|specific)'
+    - 'location (mapping|tracking) data'
+    - '!(precise|A?GPS|coarse|non-precise|approximate)'
+
+  precise geolocation:
+    - 'precise\b.*\b(geo-?(graphic)?\s*)?location'
     - 'location coordinate'
-    - 'location (gps|mapping|tracking) data'
     - '=A?GPS'
     - '(latitude|longitude)'
+    - '!(non-precise)'
+
+  coarse geolocation:
+    - '(coarse|imprecise|non-precise|approximate)\b.*\b(geo-?(graphic)?\s*)?location'
+
+  # contact information
+  contact information:
+    - 'contact\b.*\b(info(rmation)?|data|detail|list)'
+
+  person name:
+    - '(first|last|family|middle|given|real|legal|maiden|person|contact|passenger|personal|full|sur)\s*name'
+    - '^your name'
+
   phone number:
     - '(tele)?phone (mobile )?number'
     - '(mobile|fax|contact) number'
+
   email address:
     - '(e[\s-]?mail)\b.*\b(address|account|address information)'
+
+  postal address:
+    - '(home|postal|physical|residential|street|billing|accurate|shipping|delivery|your) address'
+
+  # device identifiers
+  device identifier:
+    - '(device|mobile)\b.*\bid(entifier)?'
+    - 'identifier (for|of|link|associate|assign|match|tie|specific)\b.*\bdevice'
+
+  software identifier:
+    - 'software\b.*\bid(entifier)?'
+
+  hardware identifier:
+    - 'hardware\b.*\bid(entifier)?'
+
   imei:
     - 'imei'
     - 'international mobile (equipment |device )id(entification|entity)?'
+
   mac address:
     - 'mac address(es)?'
     - '=MAC'
     - 'media access control'
     - 'network card address(es)?'
     - 'bssids?'
+
   advertising id:
     - 'ad(vertis(ing|er))?\b.*\bid(entifier)?'
     - 'advertising id(entification)? number'
     - 'id(entifier?)?\b.*\badvertising'
     - 'a[ad]id'
     - 'idfa'
+
   gsf id:
+
   android id:
     - 'android[_\s]?(ud)?id(entifier)?'
     - 'android device id(entifier)?'
+
   serial number:
     - "(device|android)('s)? serial (number|no)"
     - '^serial number'
+
   sim serial number:
     - 'imsi'
     - 'international mobile subscriber identification number'
     - 'sim code'
     - 'iccid'
+
   router ssid:
     - 'ssids?'
     - 'id(entifier?)?\b.*\brouter'
     - 'wi[ -]?fi (end|access)[-\s]?point'
+
+  ip address:
+    - '=IP'
+    - 'internet protocol address'
+
+  cookie:
+    - 'cookie'
+
+  web beacon:
+    - 'web (beacon|bug)'
+    - '(clear|transparent|invisible) (gif|graphic|image)s?'
+    - '(pixel|gif) tag'
+
+  # usage / activity data
+  internet activity:
+    - '(internet|website|app(lication)) (activity|usage)'
+
   package dump:
     - 'app(lication)? list'
     - 'package dump'
@@ -54,69 +156,30 @@ DATA:
     - '(package|app(lication)?|icon) instal'
     - 'list of\b.*\b(package|app(lication)?)'
 
-  ip address:
-    - '=IP'
-    - 'internet protocol address'
-  cookie:
-    - 'cookie'
-  web beacon:
-    - 'web (beacon|bug)'
-    - '(clear|transparent|invisible) (gif|graphic|image)s?'
-    - '(pixel|gif) tag'
-  zip code:
-    - '(zip|postal)[+ -]*code'
-  birthday:
-    - 'date of birth'
-    - 'birth\s*(day|date)'
-  social security number:
-    - 'social security\b.*\bnumber'
-    - '=SSN'
-  postal address:
-    - '(home|postal|physical|residential|street|billing|accurate|shipping|delivery|your) address'
-  passport number:
-    - 'passport\b.*\b(number|detail|no)'
-  voice recording:
-    - '(audio|voice|call|sound) recording'
-    - '(voice|sound) data'
+  user interest and behavior:
+    - '(online|browsing|user) behaviour'
+    - 'behaviour of\b.*\b(user|individual|visitor)'
 
+  # others
   non-pii:
     - 'non[- ]*(personally|directly)\b.*\bidentif\w+\b.*\b(information|data)'
     - 'non[- ]*PII'
     - 'information\b.*\b(cannot|no[nt]?)\b.*\bidentify\b.*\b(you|individual|person|user)'
-  pii:
-    - '(personally|directly)\b.*\bidentif\w+\b.*\b(information|data)'
-    - '=PII'
-    - 'information\b.*\bidentify\b.*\b(you|individual|person|user)'
-    - '!(cannot|no[nt]?)'
-    - '!de-?identif\w+'
-  contact information:
-    - 'contact\b.*\b(info(rmation)?|data|detail|list)'
-  commercial information:
-    - 'commercial(ly)\b.*\binformation'
-  biometric information:
-    - 'biometrics'
-    - 'biometric (data|information|identifier)'
-  unique personal identifier:
-    - '(personal|user) id(entifier)?'
-    - '!no[nt]?'
-  online identifier:
-    - 'online id(entifier)?'
-  device identifier:
-    - '(device|mobile)\b.*\bid(entifier)?'
-    - 'identifier (for|of|link|associate|assign|match|tie|specific)\b.*\bdevice'
-  probabilistic identifier:
-    - '((psuedo)?random\w*|probabilistic|statistical)\b.*\b(number|id(entifier))'
+
 
 ACTOR:
   first party:
   - '^(we|us|i)$'
   - '^our (service|(web)?site|product|server|app(lication)?|system|software|company)'
   - '^our .*\b(affiliated?|subsidiary)'
-  - '^our .*\b(parent|group)'
   - '^this (website|site|app(lication)?)'
+
+  third party:
+  - 'third[\s-]?party\b\s*\b(service|provider|partner|vendor|website|site|company|platform|contractor)?$'
 
   advertising provider:
   - 'ad(vertis\w+)?\b.*\b(provider|network|company|platform|vendor|partner|agency|service)'
+  - 'advertiser'
 
   social network:
   - 'social (network\w*|medium)'
@@ -125,3 +188,13 @@ ACTOR:
   - 'analytics?\b.*\b(provider|company|platform|vendor|partner|service|tool)'
   - 'measurement service'
   - 'business analytics'
+
+  email service provider:
+  - 'email\b.*\b(provider|service)'
+  - 'provider of\b.*\bemail'
+
+  content provider:
+  - 'content provider'
+
+  search engine:
+  - 'search (engine|information|result)\b.*\b(provider)?'
