@@ -36,15 +36,27 @@ class CoreferenceAnnotator:
     def annotate_one_doc(self, document, doc):
         last_sentence_ents = []
 
-        # Resolve this/that/these/those xxx
+        # Handle pronouns
         for sent in doc.sents:
             current_sentence_ents = []
 
             for noun_phrase in sent.ents:
                 if (noun_phrase[0].orth_ in {"this", "that", "these", "those"}
                     and noun_phrase[0].head == noun_phrase[-1]):
+                    # Resolve this/that/these/those xxx
                     for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
                         if prev_noun_phrase[-1].lemma_ == noun_phrase[-1].lemma_:
+                            print("=" * 40)
+                            print(doc, end="\n\n")
+                            print(noun_phrase, "|", prev_noun_phrase)
+
+                            document.link(noun_phrase.root, prev_noun_phrase.root, "COREF")
+                            break
+                elif noun_phrase.orth_ == "they":
+                    # Resolve "they" (referring an entity)
+                    for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
+                        if (prev_noun_phrase._.ent_type in ["ACTOR", "NN"] and
+                            prev_noun_phrase.root.tag_ in ["NNS", "NNPS"]):
                             print("=" * 40)
                             print(doc, end="\n\n")
                             print(noun_phrase, "|", prev_noun_phrase)
@@ -56,6 +68,7 @@ class CoreferenceAnnotator:
 
             last_sentence_ents = current_sentence_ents
 
+        # Handle special patterns
         for match_id, matched_tokens in self.matcher(doc):
             _, (match_spec, ) = self.matcher.get(match_id)
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
