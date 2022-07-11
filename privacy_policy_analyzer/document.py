@@ -175,9 +175,6 @@ class PolicyDocument:
                 serialized_docs.to_bytes(),
             ), fout, pickle.HIGHEST_PROTOCOL)
 
-        # with open(self.workdir / "plaintext.txt", "w") as fout:
-        #    fout.write(self.get_full_doc().text)
-
     def iter_docs(self):
         yield from self.all_docs.values()
 
@@ -199,50 +196,6 @@ class PolicyDocument:
         long_doc = self.get_doc_with_context(segment)
         rmap = long_doc.user_data["source_rmap"]
         return long_doc[rmap[src]]
-
-    def get_full_doc(self):
-        # TODO: refractor, or maybe remove this
-        nlp = self.nlp
-
-        all_docs = []
-        token_sources = []
-
-        for s in self.segments:
-            # TODO: This should be consistent with build_doc
-            if s.segment_type is SegmentType.HEADING:
-                prefix = ["\n\n", "#" * s.heading_level]
-                suffix = ["\n\n"]
-            elif s.segment_type is SegmentType.LISTITEM:
-                continue
-            else:
-                prefix = ["*"]
-                suffix = ["\n"]
-
-            if len(prefix) > 0:
-                all_docs.append(Doc(nlp.vocab, words=prefix, spaces=[not c.isspace() for c in prefix]))
-                token_sources.extend([None] * len(all_docs[-1]))
-
-            doc = Doc(nlp.vocab, words=s.tokens, spaces=s.spaces)
-            all_docs.append(doc)
-            token_sources.extend((s.segment_id, i) for i in range(len(doc)))
-
-            if len(suffix) > 0:
-                all_docs.append(Doc(nlp.vocab, words=suffix, spaces=[not c.isspace() for c in suffix]))
-                token_sources.extend([None] * len(all_docs[-1]))
-
-        if len(all_docs) > 0:
-            full_doc = Doc.from_docs(all_docs, ensure_whitespace=False)
-        else:
-            # TODO: handle empty document
-            full_doc = Doc(nlp.vocab, words=[" "])
-            token_sources.append(None)
-
-        full_doc.user_data["document"] = self
-        full_doc.user_data["source"] = token_sources
-        full_doc.user_data["source_rmap"] = {src: i for i, src in enumerate(token_sources) if src is not None}
-        full_doc = self.nlp(full_doc)
-
-        return full_doc
 
     def link(self, token1, token2, relationship):
         src1 = token1._.src
@@ -301,7 +254,8 @@ def extract_segments_from_accessibility_tree(tree, tokenizer):
     IGNORED_ELEMENTS = {"img", "image map", "button", "separator", "whitespace", "form",
                         "list item marker", "insertion", "diagram", "dialog", "tab",
                         "menu", "menubar", "internal frame", "listbox", "progressbar",
-                        "alert", "button", "buttonmenu", "slider", "textbox"}
+                        "alert", "button", "buttonmenu", "slider", "textbox",
+                        "application", "details"}
     SECTION_ELEMENTS = {"document", "article", "landmark", "section", "blockquote", "group",
                         "tablist", "tabpanel", "region"}
     TEXT_CONTAINER_ELEMENTS = {"paragraph", "text", "link", "statictext", "label", "text container", "text leaf"}
