@@ -1,3 +1,4 @@
+import networkx as nx
 from spacy.matcher import DependencyMatcher
 
 from privacy_policy_analyzer.utils import get_conjuncts
@@ -205,7 +206,7 @@ class SubsumptionAnnotator:
         ]
         self.matcher.add("SUBSUM_SUCH_N_AS", [pattern])
 
-    def annotate_one_doc(self, document, doc):
+    def annotate_subsum_patterns(self, document, doc):
         matches = self.matcher(doc)
 
         for match_id, matched_tokens in matches:
@@ -238,6 +239,38 @@ class SubsumptionAnnotator:
             for lower_ent in all_lower_ents:
                 document.link(upper_ent.root, lower_ent.root, "SUBSUM")
 
+    def annotate_first_party_appos(self, document, doc):
+        for sent in doc.sents:
+            appos_graph = nx.Graph()
+            first_party_references = list()
+
+            for token in sent:
+                if token.dep_ == "appos":
+                    appos_graph.add_edge(token.i, token.head.i)
+
+                if (token.lemma_, token.pos_) == ("we", "PRON"):
+                    first_party_references.append(token.i)
+                    appos_graph.add_node(token.i)
+
+            if first_party_references:
+                upper_ent = doc[first_party_references[0]]._.ent
+            else:
+                return
+
+            for idx in nx.multi_source_dijkstra_path_length(appos_graph, first_party_references):
+                lower_ent = doc[idx]._.ent
+
+                if lower_ent is None or idx in first_party_references:
+                    continue
+
+                document.link(upper_ent.root, lower_ent.root, "SUBSUM")
+
+                print("+" * 40)
+                print(sent, end="\n\n")
+                print(upper_ent, "->", lower_ent)
+                print("+" * 40)
+
     def annotate(self, document):
         for doc in document.iter_docs():
-            self.annotate_one_doc(document, doc)
+            self.annotate_first_party_appos(document, doc)
+            self.annotate_subsum_patterns(document, doc)
