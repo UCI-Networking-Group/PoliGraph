@@ -9,14 +9,35 @@ import pickle
 import random
 import time
 
+from bs4 import BeautifulSoup
 import requests
 from requests.exceptions import HTTPError
-from werkzeug.urls import url_fix
+from werkzeug.urls import url_fix, url_join
 
 logging.basicConfig(format='[%(levelname)s] %(message)s', level=logging.INFO)
 
 DATE_RANGE = ("20180101", "20191231")
 DATE_REF = "20190101"
+
+
+def check_meta_redirect(content, base_url):
+    soup = BeautifulSoup(content, "lxml")
+
+    for elem in soup.find_all("meta"):
+        if elem.get("http-equiv", "").lower() == "refresh":
+            try:
+                _, url = elem.get("content", "").lower().split(";", 1)
+            except ValueError:
+                continue
+
+            url = url.strip()
+
+            if url.startswith("url="):
+                url = url[4:]
+
+            return url_join(base_url, url)
+
+    return None
 
 
 def main():
@@ -43,7 +64,7 @@ def main():
         "from": DATE_RANGE[0],
         "to": DATE_RANGE[1],
         "collapse": "timestamp:8",  # 1 result per day
-        "filter": ["statuscode:200", "mimetype:text/html"],
+        "filter": ["statuscode:200|301|302|-", "mimetype:text/html|warc/revisit"],
     }
 
     reference_date = dt.datetime.strptime(DATE_REF, "%Y%m%d")
@@ -84,18 +105,31 @@ def main():
                 best_offset = offset
                 best_timestamp = timestamp_str
 
+        redirected_url = url
+        redirect_limit = 5
+
         if best_timestamp is None:
             req = None
         else:
-            # crawl the webpage
-            wm_url = f'https://web.archive.org/web/{best_timestamp}id_/{url}'
+            while redirected_url is not None and redirect_limit > 0:
+                # crawl the webpage
+                wm_url = f'https://web.archive.org/web/{best_timestamp}id_/{redirected_url}'
 
-            try:
-                req = requests.get(wm_url)
-                req.raise_for_status()
-            except HTTPError:
-                wait_seconds *= 2
-                continue
+                try:
+                    req = requests.get(wm_url)
+
+                    if req.status_code == 404:
+                        req = None
+                        break
+
+                    req.raise_for_status()
+                except (HTTPError, ConnectionError):
+                    wait_seconds *= 2
+                    continue
+
+                if redirected_url := check_meta_redirect(req.content, redirected_url):
+                    logging.info("Redirect to: %s", redirected_url)
+                    redirect_limit -= 1
 
         logging.info("Saving to %s ...", out_path)
 
@@ -105,7 +139,7 @@ def main():
             with open(out_path, "xb") as fout:
                 pickle.dump(req, fout)
         except FileExistsError:
-            continue
+            pass
 
         wait_seconds = 1
 
