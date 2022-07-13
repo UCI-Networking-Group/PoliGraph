@@ -29,11 +29,10 @@ def expand_phrase(root_token):
                 # NLP glitches
                 return current_token.ent_type_ != ""
             case "punct":
-                # Keep punct only it's inside a word (e.g. health-related info) or it's a quotation mark
+                # Keep punct only it's inside a word/entity (e.g. health-related info)
                 flag = (current_token.i > 0 and current_token.i + 1 < len(doc)
                         and doc[current_token.i - 1].whitespace_ == "" and has_alpha(doc[current_token.i - 1].text)
                         and current_token.whitespace_ == "" and has_alpha(doc[current_token.i + 1].text))
-                flag |= current_token.lemma_ in "'\""
                 flag |= current_token.ent_type_ != ""
                 flag |= in_left_modifier
 
@@ -84,7 +83,15 @@ def expand_phrase(root_token):
             else:
                 break
 
+        # strip suffix "cc" words (e.g. and/or)
         if doc[right_idx - 1].dep_ == "cc":
+            right_idx -= 1
+
+        # strip surrounding puncts
+        while doc[left_idx].lemma_ in '"\'([':
+            left_idx += 1
+
+        while doc[right_idx - 1].lemma_ in '"\')]':
             right_idx -= 1
 
         yield doc[left_idx:right_idx]
@@ -136,7 +143,7 @@ class GraphBuilder:
 
     def build_graph(self, document: PolicyDocument):
         stage1_graph = self.__build_graph_stage1(document)
-        stage2_graph = self.__build_graph_stage2(stage1_graph)
+        stage2_graph = self.__build_graph_stage2(document, stage1_graph)
         return stage2_graph
 
     def __build_graph_stage1(self, document: PolicyDocument):
@@ -231,6 +238,7 @@ class GraphBuilder:
                         if len(normalized_terms) == 0:
                             simplified = " ".join(t.lemma_ for t in simplify_phrase(phrase))
                             if simplified and simplified not in DATATYPE_KEYWORDS:
+                                # if simplified in DATATYPE_KEYWORDS, the term is too "common" to be considered
                                 normalized_terms.append(simplified)
                     case "ACTOR":
                         normalized_terms = list(self.actor_phrase_normalizer.normalize(phrase))
@@ -251,44 +259,104 @@ class GraphBuilder:
 
         return stage1_graph
 
-    def __build_graph_stage2(self, stage1_graph: nx.DiGraph):
-        stage2_graph = nx.DiGraph()
-        s1s2_node_map = dict()
+    def __build_graph_stage2(self, document: PolicyDocument, stage1_graph: nx.DiGraph):
+        stage2_graph = nx.MultiDiGraph()
+        s1s2_node_map = dict()  # (source, normalized)
 
         for stage1_node in reversed(list(nx.topological_sort(stage1_graph))):
             stage1_node_data = stage1_graph.nodes[stage1_node]
             s1s2_node_map[stage1_node] = mapped_nodes = []
-            stage2_edges = set()
+            is_coref = False
 
             for _, stage1_endpoint, edge_data in stage1_graph.out_edges(stage1_node, data=True):
-                match edge_data["relationship"]:
-                    case "COREF":
-                        for n in s1s2_node_map[stage1_endpoint]:
-                            stage2_graph.nodes[n]["source_tokens"].append(stage1_node)
-                            mapped_nodes.append(n)
-                    case _ as relationship:
-                        for n in s1s2_node_map[stage1_endpoint]:
-                            stage2_edges.add((n, relationship))
+                if edge_data["relationship"] == "COREF":
+                    is_coref = True
 
-            if len(mapped_nodes) == 0:
+                    for ref_node, ref_node_sources in s1s2_node_map[stage1_endpoint]:
+                        mapped_nodes.append((ref_node, ref_node_sources + [stage1_node]))
+
+            if not is_coref:
                 for term in stage1_node_data["normalized_terms"]:
-                    mapped_nodes.append(term)
+                    mapped_nodes.append((term, [stage1_node]))
 
                     if term not in stage2_graph:
-                        stage2_graph.add_node(term, source_tokens=[stage1_node], type=stage1_node_data["type"])
-                    else:
-                        stage2_graph.nodes[term]["source_tokens"].append(stage1_node)
+                        stage2_graph.add_node(term, type=stage1_node_data["type"])
 
-            for n1 in mapped_nodes:
-                for n2, relationship in stage2_edges:
-                    if n1 != n2:
-                        stage2_graph.add_edge(n1, n2, label=relationship)
+            for _, stage1_endpoint, edge_data in stage1_graph.out_edges(stage1_node, data=True):
+                relationship = edge_data["relationship"]
+
+                if relationship == "COREF":
+                    continue
+
+                for n1, n1_sources in mapped_nodes:
+                    for n2, n2_sources in s1s2_node_map[stage1_endpoint]:
+                        if n1 == n2:
+                            continue
+
+                        if not stage2_graph.has_edge(n1, n2, relationship):
+                            stage2_graph.add_edge(n1, n2, relationship, sources=[], text=[])
+
+                        edge_sources = set(n1_sources) | set(n2_sources)
+                        edge_sentences = []
+
+                        for segment_id in sorted(set(s[0] for s in edge_sources)):
+                            doc = document.get_doc_without_context(document.segments[segment_id])
+
+                            for sent in doc.sents:
+                                if any(t._.src in edge_sources for t in sent):
+                                    edge_sentences.append(sent.text)
+                                    break
+
+                        stage2_graph[n1][n2][relationship]["sources"].append(sorted(edge_sources))
+                        stage2_graph[n1][n2][relationship]["text"].append(" | ".join(edge_sentences))
+
+        # Some sentences lead to subsumption relationship between 1st/3rd parties.
+        # Workaround: Simply ignore all subsumption edges to "first party" / "third party"
+        edges_to_remove = []
+        for u, v, k in stage2_graph.in_edges(["first party", "third party"], keys=True):
+            print(f"Potentially invalid edge: {u} -> {v}")
+            edges_to_remove.append((u, v, k))
+        stage2_graph.remove_edges_from(edges_to_remove)
 
         for node in list(stage2_graph.nodes()):
             if stage2_graph.in_degree(node) == stage2_graph.out_degree(node) == 0:
                 stage2_graph.remove_node(node)
 
         return stage2_graph
+
+
+def trim_graph(graph):
+    important_nodes = set()
+
+    for d1, d2, rel in graph.edges(keys=True):
+        if rel in ["COLLECT", "NOT_COLLECT"]:
+            important_nodes.add(d1)
+            important_nodes.add(d2)
+
+    if important_nodes:
+        dijkstra_results = nx.multi_source_dijkstra_path_length(graph, important_nodes)
+    else:
+        dijkstra_results = {}
+
+    important_nodes.update(dijkstra_results.keys())
+
+    useless_nodes = set(graph.nodes) - important_nodes
+    returned_graph = graph.copy()
+    returned_graph.remove_nodes_from(useless_nodes)
+
+    return returned_graph
+
+
+def colorize_graph(graph):
+    new_graph = nx.MultiDiGraph()
+
+    for label, data in graph.nodes(data=True):
+        new_graph.add_node(label, label=label, type=data["type"])
+
+    for i, (u, v, rel, data) in enumerate(graph.edges(keys=True, data=True)):
+        new_graph.add_edge(u, v, key=f"e{i}", relationship=rel)
+
+    return new_graph
 
 
 def main():
@@ -308,8 +376,12 @@ def main():
 
         document = PolicyDocument.load(d, nlp)
         knowledge_graph = graph_builder.build_graph(document)
+        #trimmed_graph = trim_graph(knowledge_graph)
+        #colored_graph = colorize_graph(trimmed_graph)
 
         nx.write_gml(knowledge_graph, os.path.join(d, "graph.gml"), stringizer=str)
+        #nx.write_gml(trimmed_graph, os.path.join(d, "graph_trimmed.gml"), stringizer=str)
+        #nx.write_graphml(colored_graph, os.path.join(d, "graph_trimmed.graphml"))
 
 
 if __name__ == "__main__":
