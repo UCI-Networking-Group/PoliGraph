@@ -12,6 +12,7 @@ DATA:
 
   identifier:
     - '^identifier$'
+    - '^(other\s+)?(unique|persistent) identifier$'
 
   # government IDs
   ssn:
@@ -67,11 +68,12 @@ DATA:
 
   # contact information
   contact information:
-    - 'contact\b.*\b(info(rmation)?|data|detail|list)'
+    - 'contact\b.*\b(info(rmation)?|data|detail|list|method)'
+    - 'information\b.*\bused to contact\b.*\byou'
 
   person name:
     - '(first|last|family|middle|given|real|legal|maiden|person|contact|passenger|personal|full|sur)\s*name'
-    - '^your name'
+    - '^(your )?name$'
 
   phone number:
     - '(tele)?phone (mobile )?number'
@@ -81,7 +83,8 @@ DATA:
     - '(e[\s-]?mail)\b.*\b(address|account|address information)'
 
   postal address:
-    - '(home|postal|physical|residential|street|billing|accurate|shipping|delivery|your) address'
+    - '(home|work|postal|physical|residential|street|billing|accurate|shipping|delivery|your|mail|mailing|primary) address'
+    - '^address$'
 
   # device identifiers
   device identifier:
@@ -152,7 +155,7 @@ DATA:
   package dump:
     - 'app(lication)? list'
     - 'package dump'
-    - 'instal (package|app(lication)?)'
+    - 'instal (package|app(lication)?|software)'
     - '(package|app(lication)?|icon) instal'
     - 'list of\b.*\b(package|app(lication)?)'
 
@@ -170,12 +173,14 @@ DATA:
 ACTOR:
   first party:
   - '^(we|us|i)$'
-  - '^our (service|(web)?site|product|server|app(lication)?|system|software|company)'
+  - '^our (service|(web)?site|product|server|app(lication)?|system|software|company)$'
   - '^our .*\b(affiliated?|subsidiary)'
-  - '^this (website|site|app(lication)?)'
+  - '^this (website|site|app(lication)?)$'
 
   third party:
   - 'third[\s-]?party\b\s*\b(service|provider|partner|vendor|website|site|company|platform|contractor)?$'
+  - 'third party (we use|service provider)$'
+  - 'service provider$'
 
   advertising provider:
   - 'ad(vertis\w+)?\b.*\b(provider|network|company|platform|vendor|partner|agency|service)'
@@ -185,7 +190,7 @@ ACTOR:
   - 'social (network\w*|medium)'
 
   analytic provider:
-  - 'analytics?\b.*\b(provider|company|platform|vendor|partner|service|tool)'
+  - 'analytics?\b.*\b(provider|company|platform|vendor|partner|service|tool|software)'
   - 'measurement service'
   - 'business analytics'
 
