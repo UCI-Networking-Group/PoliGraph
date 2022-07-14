@@ -1,84 +1,61 @@
 #!/usr/bin/env python3
 
 import argparse
-import csv
 import itertools
 import json
+from collections import deque
 from pathlib import Path
 
 import networkx as nx
 import tldextract
 
-DATA_ONTOLOGY = {
-    "pii": [
-        "advertising id", "android id", "serial number", "router ssid", "mac address", "imei", "sim serial number",
-        "phone number", "email address", "person name"
-    ],
-    "non-pii": [],
-    "contact information": [
-        "phone number", "email address", "person name"
-    ],
-    "unique personal identifier": [
-        "advertising id", "android id", "serial number", "router ssid", "mac address", "imei", "sim serial number",
-        "phone number"
-    ],
-    "online identifier": ["advertising id"],
-    "device identifier": [
-        "advertising id", "android id", "serial number", "router ssid", "mac address", "imei", "sim serial number"
-    ],
-    "probabilistic identifier": ["advertising id"],
-}
 
-ENTITY_ONTOLOGY = {
-    "advertising network": [
-        "Google", "Facebook", "Unity", "AppsFlyer", "Verizon Media", "Chartboost", "Amazon.com",
-        "Start.io", "Tapjoy", "AppLovin", "Liftoff", "ironSource", "AdColony"
-    ],
-    "analytic provider": [
-        "Google", "Facebook", "Unity", "AppsFlyer", "Verizon Media", "ironSource"
-    ],
-    "social network": [
-        "Facebook", "Twitter", "Google"
-    ]
-}
+def iter_hypernyms(graph, start_node):
+    bfs_queue = deque()
+    bfs_queue.append((start_node,))
+    visited_nodes = {start_node}
+
+    while len(bfs_queue) > 0:
+        path = bfs_queue.popleft()
+        yield path
+
+        for parent, _, rel in graph.in_edges(path[-1], keys=True):
+            if parent not in visited_nodes and rel == "SUBSUM":
+                visited_nodes.add(parent)
+                bfs_queue.append((parent,) + path)
 
 
-def iter_all_hypernyms(graph, first_node):
-    seen_nodes = set()
+def cache_parents(graph):
+    precise_nodes = set()
+    parent_node_dict = dict()
 
-    def dfs(node):
-        yield node
-        seen_nodes.add(node)
+    for n, data in graph.nodes(data=True):
+        parent_node_dict[n] = set()
 
-        for parent, _, data in graph.in_edges(node, data=True):
-            if parent not in seen_nodes and data["label"] == "SUBSUM":
-                yield from dfs(parent)
+        if data["is_precise"]:
+            precise_nodes.add(n)
 
-    yield from dfs(first_node)
+    for n1, n2 in nx.topological_sort(nx.line_graph(graph)):
+        parent_node_dict[n2].add(n1)
+        parent_node_dict[n2].update(parent_node_dict[n1])
 
-
-def reverse_dict(d):
-    result = dict()
-
-    for key, li in d.items():
-        for val in li:
-            if val not in result:
-                result[val] = [key]
-            else:
-                result[val].append(key)
-
-    return result
+    return {k: parent_node_dict[k] for k in precise_nodes}
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--flow-json", required=True, help="Flow JSON file")
+    parser.add_argument("flow_json", help="Flow JSON file")
+    parser.add_argument("output", help="Output JSON file")
+    parser.add_argument("-y", "--ontology", required=True, help="Ontology directory")
     parser.add_argument("-p", "--privacy-policy-root", required=True, help="Input privacy policy directories")
-    parser.add_argument("-d", "--entity-info", required=True, help="Path to entity_info.json")
-    parser.add_argument("-o", "--output", required=True, help="Output CSV file")
+    parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     args = parser.parse_args()
 
     policy_root = Path(args.privacy_policy_root)
+    ontology_root = Path(args.ontology)
+
+    data_ontology = nx.read_gml(ontology_root / "data.gml")
+    entity_ontology = nx.read_gml(ontology_root / "entity.gml")
 
     with open(args.flow_json, "r", encoding="utf-8") as fin:
         data = json.load(fin)
@@ -87,17 +64,23 @@ def main():
         domain_map = dict()
 
         for entity, info in json.load(fin).items():
-            for d in info["domains"]:
-                domain_map[d] = entity
+            if entity in entity_ontology:
+                raise ValueError(f"Duplicated entity: {entity}")
 
-    fout = open(args.output, "w", encoding="utf-8")
-    writer = csv.DictWriter(fout, fieldnames=[
-        "package_id", "flow_entity", "flow_data", "policy_entity", "policy_data",
-        "consistency_result"])
-    writer.writeheader()
+            for domain in info["domains"]:
+                domain_map[domain] = entity
 
-    reversed_data_ontology = reverse_dict(DATA_ONTOLOGY)
-    reversed_entity_ontology = reverse_dict(ENTITY_ONTOLOGY)
+            entity_ontology.add_node(entity, is_precise=1)
+
+            for cat in info["categories"] or ["third party"]:
+                if entity_ontology.nodes[cat]["is_precise"]:
+                    raise ValueError(f"Invalid entity category: {cat}")
+
+                entity_ontology.add_edge(cat, entity)
+
+    reversed_data_ontology = cache_parents(data_ontology)
+    reversed_entity_ontology = cache_parents(entity_ontology)
+    all_results = {}
 
     for package_id, info in data.items():
         kgraph_path = policy_root / info["privacy_policy_id"] / 'graph.gml'
@@ -108,32 +91,53 @@ def main():
         kgraph = nx.read_gml(kgraph_path)
         unique_tuples = set()
 
+        all_results[package_id] = flow_results = []
+
+        # Assign party labels to entities (instead of domains) based on both package name and PoliCheck's labels
+        first_party_entities = set()
+
+        ## From package name
+        rev_package_name = ".".join(reversed(package_id.split(".")))
+        base_domain = tldextract.extract(rev_package_name).registered_domain
+
+        if base_domain in domain_map:
+            first_party_entities.add(domain_map[base_domain])
+
+        ## From PoliCheck's label
+        for flow in info["flows"]:
+            base_domain = tldextract.extract(flow["dest_domain"]).registered_domain
+
+            if base_domain in domain_map:
+                flow["entity"] = domain_map[base_domain]
+            else:
+                flow["entity"] = base_domain or "IP_ENDPOINT"  # base domain can be empty if dest is IP
+
+            if flow["party"] == "first party" and flow["entity"] != "IP_ENDPOINT":
+                first_party_entities.add(flow["entity"])
+
         for flow in info["flows"]:
             data_type = flow["data_type"]
-            clear_endpoints = []
-            clear_datatypes = []
+            recipient_entity = flow["entity"]
 
-            result = {
-                "package_id": package_id,
-                "flow_data": data_type,
-                "policy_entity": "",
-                "policy_data": "",
-                "consistency_result": "omitted"
-            }
-
-            base_domain = tldextract.extract(flow["dest_domain"]).registered_domain
-            recipient_entity = base_domain or "IP_ENDPOINT"
+            result = {"flow_data": data_type, "flow_entity": recipient_entity}
 
             if base_domain in domain_map:
                 recipient_entity = domain_map[base_domain]
 
-            if flow["party"] == "first party":
+            hypernym_paths = dict()
+            clear_datatypes = list()
+            clear_endpoints = list()
+            vague_datatypes = list()
+            vague_endpoints = list()
+
+            if recipient_entity in first_party_entities:
                 if "first party" in kgraph:
                     clear_endpoints.append("first party")
+                    hypernym_paths["first party"] = ("first party",)
 
-                result["flow_entity"] = "first party"
+                result["party"] = "first party"
             else:
-                result["flow_entity"] = recipient_entity
+                result["party"] = "third party"
 
             if (flow_tuple := (recipient_entity, data_type)) not in unique_tuples:
                 unique_tuples.add(flow_tuple)
@@ -141,65 +145,65 @@ def main():
                 continue
 
             if data_type in kgraph:
-                clear_datatypes.extend(iter_all_hypernyms(kgraph, data_type))
+                for path in iter_hypernyms(kgraph, data_type):
+                    clear_datatypes.append(path[0])
+                    hypernym_paths[path[0]] = path
 
             if recipient_entity in kgraph:
-                clear_endpoints.extend(iter_all_hypernyms(kgraph, recipient_entity))
+                for path in iter_hypernyms(kgraph, recipient_entity):
+                    clear_endpoints.append(path[0])
+                    hypernym_paths[path[0]] = path
 
-            for e, d in itertools.product(clear_endpoints, clear_datatypes):
-                edge_data = kgraph.get_edge_data(e, d)
+            for d in reversed_data_ontology.get(data_type, []):
+                if d in kgraph:
+                    for path in iter_hypernyms(kgraph, d):
+                        if path[0] not in hypernym_paths:
+                            vague_datatypes.append(path[0])
+                            hypernym_paths[path[0]] = path
 
-                if edge_data and edge_data["label"] == "COLLECT":
-                    result["policy_entity"] = e
-                    result["policy_data"] = d
-                    result["consistency_result"] = "clear"
+            for e in reversed_entity_ontology.get(recipient_entity, []):
+                if e in kgraph:
+                    for path in iter_hypernyms(kgraph, e):
+                        if path[0] not in hypernym_paths:
+                            vague_endpoints.append(path[0])
+                            hypernym_paths[path[0]] = path
+
+            all_to_check = [
+                ("clear", clear_datatypes, clear_endpoints),
+                ("vague_e", clear_datatypes, vague_endpoints),
+                ("vague_d", vague_datatypes, clear_endpoints),
+                ("vague_both", vague_datatypes, vague_endpoints),
+            ]
+
+            result["policies"] = policies = []
+
+            for disclosure_type, datatypes, endpoints in all_to_check:
+                for d, e in itertools.product(datatypes, endpoints):
+                    for rel, consistency in (("COLLECT", "consistent"), ("NOT_COLLECT", "inconsistent")):
+                        if edge_data := kgraph.get_edge_data(e, d, key=rel):
+                            all_sentences = set(edge_data["text"])
+
+                            for item in d, e:
+                                hpath = hypernym_paths[item]
+                                for parent, child in zip(hpath[:-1], hpath[1:]):
+                                    all_sentences.update(kgraph[parent][child]["SUBSUM"]["text"])
+
+                            policies.append({
+                                "consistency": consistency,
+                                "disclosure_type": disclosure_type,
+                                "entity": e,
+                                "data": d,
+                                "text": list(all_sentences),
+                            })
+
+                # Ignore vague ones if clear statements are found
+                if disclosure_type == "clear" and len(policies) > 0:
                     break
 
-            if result["consistency_result"] == "omitted":
-                vague_endpoints = []
-                vague_datatypes = []
+            flow_results.append(result)
 
-                for d in reversed_data_ontology.get(data_type, []):
-                    if d in kgraph:
-                        vague_datatypes.extend(iter_all_hypernyms(kgraph, d))
-
-                for e in reversed_entity_ontology.get(recipient_entity, []):
-                    if e in kgraph:
-                        vague_endpoints.extend(iter_all_hypernyms(kgraph, e))
-
-                # both are vague
-                for e, d in itertools.product(vague_endpoints, vague_datatypes):
-                    edge_data = kgraph.get_edge_data(e, d)
-
-                    if edge_data and edge_data["label"] == "COLLECT":
-                        result["policy_entity"] = e
-                        result["policy_data"] = d
-                        result["consistency_result"] = "vague_both"
-                        break
-
-                # data type being vague
-                for e, d in itertools.product(clear_endpoints, vague_datatypes):
-                    edge_data = kgraph.get_edge_data(e, d)
-
-                    if edge_data and edge_data["label"] == "COLLECT":
-                        result["policy_entity"] = e
-                        result["policy_data"] = d
-                        result["consistency_result"] = "vague_d"
-                        break
-
-                # entity being vague
-                for e, d in itertools.product(vague_endpoints, clear_datatypes):
-                    edge_data = kgraph.get_edge_data(e, d)
-
-                    if edge_data and edge_data["label"] == "COLLECT":
-                        result["policy_entity"] = e
-                        result["policy_data"] = d
-                        result["consistency_result"] = "vague_e"
-                        break
-
-            writer.writerow(result)
-
-    fout.close()
+    with open(args.output, "w", encoding="utf-8") as fout:
+        json.dump(all_results, fout)
 
 
 if __name__ == "__main__":
