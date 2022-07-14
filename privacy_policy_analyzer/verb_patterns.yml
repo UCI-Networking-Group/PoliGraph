@@ -63,6 +63,11 @@ patterns:
     match: ['!@DT:nsubjpass', 'from,@E2:pobj', 'by:agent,@E1:pobj']
     transform: ['COLLECT', 'E1', 'DT', 'E2']
 
+  # E1 collect ... regarding/about DT from E2
+  - root: ['VERB_COLLECT_FROM']
+    match: ['@E1:nsubj', '*:dobj,about,@DT:pobj', '*:dobj,regard,@DT:pobj', 'from,@E2:pobj']
+    transform: ['COLLECT', 'E1', 'DT', 'E2']
+
   # E1 provide E2 with DT
   - root: ['VERB_PROVIDE_WITH']
     match: ['@E1:nsubj', '@E2:dobj', '!with,@DT:pobj']
