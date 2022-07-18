@@ -4,50 +4,31 @@ The NLP-based privacy policy analyzer.
 
 ## Dependencies
 
-The conda's internal package manager takes forever to resolve dependencies. I recommend you use [mamba](https://github.com/mamba-org/mamba) instead to avoid that pain:
+TODO: There can be some residues of my development environment in this long dependency list. Clean it up before we publish.
+
+Create a new conda environment with most dependencies installed:
 
 ```
-$ conda install -n base conda-forge::mamba
+$ conda create --experimental-solver=libmamba -n nlp20220718 \
+    'anaconda::python>=3.10' anaconda::numpy anaconda::pandas pytorch::pytorch \
+    anaconda::pyyaml anaconda::lxml anaconda::bs4 anaconda::networkx \
+    huggingface::transformers 'conda-forge::spacy>=3.4.0' \
+    conda-forge::spacy-transformers  conda-forge::inflect conda-forge::anytree \
+    conda-forge::tldextract conda-forge::requests-cache \
+    conda-forge::unidecode microsoft::playwright conda-forge::langdetect \
+    anaconda::werkzeug anaconda::ipykernel anaconda::pylint \
+    anaconda::cudatoolkit=11.3 conda-forge::cudnn=8.2.1.32 conda-forge::cupy
 ```
 
-Create a new conda environment with most dependencies installed using mamba:
-
-```
-$ mamba create -n policy_analyzer -c anaconda -c conda-forge \
-    'spacy==2.3.7' 'cudatoolkit=10.0' cupy cudnn \
-    nccl 'requests==2.24.0' cython inflect boto3 pyyaml
-```
-Run the following instead if there is no GPU/CUDA:
-```
-$ mamba create -n policy_analyzer -c anaconda -c conda-forge \
-    'spacy==2.3.7' 'requests==2.24.0' cython inflect boto3 pyyaml
-```
-
-Install [neuralcoref](https://github.com/huggingface/neuralcoref) library from source:
-
-```
-$ git clone git@github.com:huggingface/neuralcoref.git
-```
-If the SSH key on the local machine has not been set up yet, this command might throw the following error:
-```
-git@github.com: Permission denied (publickey).
-fatal: Could not read from remote repository.
-```
-We simply have to run the following `git clone` command instead:
-```
-git clone https://github.com/huggingface/neuralcoref.git
-```
-Next, run the following two commands:
-```
-$ cd neuralcoref
-$ pip install -e .
-```
+If there is no GPU/CUDA, remove the last line from above command.
 
 Install spaCy's English NLP pipelines:
 
 ```
-$ python -m spacy download en
+$ python -m spacy download en_core_web_trf
 $ python -m spacy download en_core_web_lg
+$ python -m spacy download en_core_web_md
+$ python -m spacy download en_core_web_sm
 ```
 
 ## Usage
@@ -63,37 +44,43 @@ $ git clone https://github.uci.edu/NetworkingGroup/privacy_policy_analyzer.git
 All code related to NER training are inside `ner` folder:
 
 ```
-$ cd ner/
+$ cd data_type_recognizer/
 ```
 
-First step, use `gen_ner_data.py` to generate synthetic training data (10000 sentences for training and 2000 for validation):
+First step, use `get_actor_entity_list.py` to generate `actor_entities.list`, a list of entity names from Wikidata:
 
 ```
-$ python gen_ner_data.py train_dataset.json 10000
-$ python gen_ner_data.py dev_dataset.json 2000
+$ python get_actor_entity_list.py
+```
+
+Run `gen_ner_data.py` generate synthetic training data (`train_dataset.spacy` and `dev_dataset.spacy`):
+
+```
+$ python gen_ner_data.py
 ```
 
 Train the NLP model:
 
 ```
-$ python train.py
+$ python -m spacy init fill-config ./base_config.cfg ./config.cfg
+$ python -m spacy train config.cfg --output ./checkpoints --paths.train ./train_dataset.spacy --paths.dev ./dev_dataset.spacy --gpu-id 0
 ```
 
-The model checkpoints are saved to `checkpoints/` folder. By default, the script stops after 30 epochs. Typically I use the last checkpoint (`checkpoints/29`).
+The model checkpoints are saved to `checkpoints` folder.
+
+Now we go back to the root folder and run `privacy_policy_analyzer.scripts.repack_model` to embed our NER model into spaCy's transformer pipeline:
+
+```
+$ cd ..
+$ python -m privacy_policy_analyzer.scripts.repack_model ner/checkpoints/model-best nlp_model
+```
+
+The analyzer will use the packed NLP pipeline stored in the `nlp_model` folder.
+
 
 ### Analyzing Text
 
-Scripts under `pattern` folder are for analyzing privacy policy text. Run `test_single.py` to analyze one text segment:
-
-```
-$ cd pattern/
-$ python test_single.py ../ner/checkpoints/29
-Text: If you browse our Websites, we may collect certain information about your use of our Websites. This information may include your IP address and geographical location.
-'we' 'collect' 'certain information'
-> 'certain information' INCLUDES ['your IP address', 'geographical location']
-```
-
-Here it extracts the tuple `('we', 'collect', 'certain information')` and resolves `certain information` to `your IP address` and  `geographical location`.
+TODO
 
 ## Notes
 

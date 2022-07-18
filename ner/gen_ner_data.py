@@ -117,9 +117,9 @@ def main():
 
     generator = NERDataGenerator("template.txt", "data_types.yml", "actor_entities.list")
     nlp = spacy.blank("en")
-    doc_bin = spacy.tokens.DocBin(attrs=["ENT_IOB", "ENT_TYPE"])
 
     for dataset, size in [("train", TRAIN_SIZE), ("dev", DEV_SIZE)]:
+        doc_bin = spacy.tokens.DocBin(attrs=["ENT_IOB", "ENT_TYPE"])
         n_normal_samples = size - int(size * NOISE_RATIO)
 
         for (text, annotations), i in zip(generator, tqdm.tqdm(range(size))):

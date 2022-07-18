@@ -146,6 +146,7 @@ train_dataset.spacy
 
 *.bak
 # Trained model checkpoints
-data_type_recognizer/output*/
+model-best/
+model-last/
 # Local test data
 examples/
