@@ -326,7 +326,7 @@ class CollectionAnnotator:
                 else:
                     link_pairs(e1, dt, "COLLECT")
                     print(f"> {e1} COLLECT {dt} FROM {e2}")
-                
+
         def share_handler(neg_flag, e1, dt, e2):
             if ((dt and like_type(dt, "DATA")) and
                 (e2 and like_type(e2, "ACTOR"))):

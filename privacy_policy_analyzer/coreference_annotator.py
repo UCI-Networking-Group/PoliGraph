@@ -41,28 +41,30 @@ class CoreferenceAnnotator:
             current_sentence_ents = []
 
             for noun_phrase in sent.ents:
-                if (noun_phrase[0].orth_ in {"this", "that", "these", "those"}
+                referent = None
+
+                if (noun_phrase[0].lemma_ in {"this", "that", "these", "those"}
                     and noun_phrase[0].head == noun_phrase[-1]):
                     # Resolve this/that/these/those xxx
                     for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
                         if prev_noun_phrase[-1].lemma_ == noun_phrase[-1].lemma_:
-                            print("=" * 40)
-                            print(doc, end="\n\n")
-                            print(noun_phrase, "|", prev_noun_phrase)
-
-                            document.link(noun_phrase.root, prev_noun_phrase.root, "COREF")
+                            referent = prev_noun_phrase
                             break
-                elif noun_phrase.orth_ == "they":
-                    # Resolve "they" (referring an entity)
+
+                if referent is None and noun_phrase.lemma_ == "they":
+                    # Resolve "they" (referring to an entity)
                     for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
-                        if (prev_noun_phrase._.ent_type in ["ACTOR", "NN"] and
-                            prev_noun_phrase.root.tag_ in ["NNS", "NNPS"]):
-                            print("=" * 40)
-                            print(doc, end="\n\n")
-                            print(noun_phrase, "|", prev_noun_phrase)
-
-                            document.link(noun_phrase.root, prev_noun_phrase.root, "COREF")
+                        if (prev_noun_phrase._.ent_type == "ACTOR" and prev_noun_phrase.root.tag_ in ["NNS", "NNPS"]):
+                            referent = prev_noun_phrase
                             break
+
+
+                if referent is not None:
+                    print("=" * 40)
+                    print(doc, end="\n\n")
+                    print(noun_phrase, "|", referent)
+
+                    document.link(noun_phrase.root, referent.root, "COREF")
 
                 current_sentence_ents.append(noun_phrase)
 

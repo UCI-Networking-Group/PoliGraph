@@ -1,6 +1,8 @@
 DATA:
   personal information:
     - '^((your|user)\s+)?personal (data|info|information)$'
+    - '^personal (data|info|information) (that )?(about (you|user)|you (provide|enter|submit))'
+    - '!(cannot|no[nt]?)'
 
   personal identifier:
     - '(personal|user) id(entifier)?'
@@ -15,32 +17,52 @@ DATA:
     - '^(other\s+)?(unique|persistent) identifier$'
 
   # government IDs
+  government identifier:
+    - 'government(al)?\b.*\bid(entification)? number'
+    - 'government(al)?\b.*\bid(entifier)?'
+
   ssn:
     - 'social security\b.*\bnumber'
     - '=SSN'
+
   passport number:
     - 'passport\b.*\b(number|detail|no)'
+
+  "driver's license number":
+    - "driver('s)? license (number|information|copy)"
+
+  # bank account
+  "credit / debit card number":
+    - '(credit|debit|payment)\b.*\bcard (number|information|detail)'
 
   # personal characteristics
   personal characteristic:
     - '(personal|user|demographic) characteristic'
 
+  protected classification:
+    - 'protected classification'
+
   date of birth:
     - 'date of birth'
     - 'birth\s*(day|date)'
 
-  gender:
+  age:
+    - '^age$'
 
-  race:
+  gender:
+    - '^(gender|sex)$'
+
+  "race / ethnicity":
     - 'race'
     - 'ethnicity'
 
+  # biometric information
   biometric information:
     - 'biometrics'
     - 'biometric (data|information|identifier)'
 
-  # biometric
   voiceprint:
+    - 'voiceprint'
     - 'voice pattern'
 
   fingerprint:
@@ -68,8 +90,9 @@ DATA:
 
   # contact information
   contact information:
-    - 'contact\b.*\b(info(rmation)?|data|detail|list|method)'
+    - 'contact\b.*\b(info(rmation)?|data|detail|method)'
     - 'information\b.*\bused to contact\b.*\byou'
+    - '!(cannot|no[nt]?)'
 
   person name:
     - '(first|last|family|middle|given|real|legal|maiden|person|contact|passenger|personal|full|sur)\s*name'
@@ -90,6 +113,7 @@ DATA:
   device identifier:
     - '(device|mobile)\b.*\bid(entifier)?'
     - 'identifier (for|of|link|associate|assign|match|tie|specific)\b.*\bdevice'
+    - '!(cannot|no[nt]?)'
 
   software identifier:
     - 'software\b.*\bid(entifier)?'
@@ -116,6 +140,7 @@ DATA:
     - 'idfa'
 
   gsf id:
+    - 'gsf id'
 
   android id:
     - 'android[_\s]?(ud)?id(entifier)?'
@@ -140,8 +165,10 @@ DATA:
     - '=IP'
     - 'internet protocol address'
 
-  cookie:
+  'cookie / pixel tag':
     - 'cookie'
+    - 'pixel tag'
+    - 'web beacon'
 
   web beacon:
     - 'web (beacon|bug)'
@@ -152,6 +179,9 @@ DATA:
   internet activity:
     - '(internet|website|app(lication)) (activity|usage)'
 
+  'browsing / search history':
+    - '(browsing|search|browse|online) (history|behaviour)'
+
   package dump:
     - 'app(lication)? list'
     - 'package dump'
@@ -159,16 +189,15 @@ DATA:
     - '(package|app(lication)?|icon) instal'
     - 'list of\b.*\b(package|app(lication)?)'
 
-  user interest and behavior:
-    - '(online|browsing|user) behaviour'
-    - 'behaviour of\b.*\b(user|individual|visitor)'
-
   # others
-  non-pii:
+  non-personal information:
     - 'non[- ]*(personally|directly)\b.*\bidentif\w+\b.*\b(information|data)'
     - 'non[- ]*PII'
     - 'information\b.*\b(cannot|no[nt]?)\b.*\bidentify\b.*\b(you|individual|person|user)'
+    - 'non-personal\b.*\b(information|data)'
 
+  'aggregate / deidentified / pseudonymized information':
+    - '(aggregated?|anonymized|anonymised|anonymous|de-identified) (data|information)'
 
 ACTOR:
   first party:

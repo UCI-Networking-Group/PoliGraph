@@ -2,11 +2,16 @@
 """Download a web page and export the accessibility tree for parsing."""
 
 import argparse
+import base64
 import json
 import logging
 from pathlib import Path
+import re
+import sys
 import urllib.parse as urlparse
 
+import bs4
+import langdetect
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 import requests
 from requests_cache import CachedSession
@@ -22,6 +27,47 @@ def get_readability_js():
     return res.text
 
 
+def url_arg_handler(url):
+    parsed_url = urlparse.urlparse(url)
+
+    # Not HTTP(s): interpret as a file path
+    if parsed_url.scheme not in ["http", "https"]:
+        parsed_path = Path(url).absolute()
+
+        if not parsed_path.is_file():
+            logging.error("File %r not found", url)
+            return None
+
+        return parsed_path.as_uri()
+
+    # Handle Google Docs URLs
+    if (parsed_url.hostname == "docs.google.com"
+            and not parsed_url.path.endswith("/pub")
+            and (m := re.match(r"/document/d/(1[a-zA-Z0-9_-]{42}[AEIMQUYcgkosw048])", parsed_url.path))):
+        logging.info("Exporting HTML from Google Docs URL...")
+
+        export_url = f"https://docs.google.com/feeds/download/documents/export/Export?id={m[1]}&exportFormat=html"
+
+        req = requests.get(export_url)
+        req.raise_for_status()
+
+        base64_url = "data:text/html;base64," + base64.b64encode(req.content).decode()
+
+        return base64_url
+
+    # Handle other URLs: test with a HEAD request before starting browser
+    logging.info("Testing URL %r with HEAD request", url)
+
+    try:
+        requests.head(url, timeout=REQUESTS_TIMEOUT)
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+        logging.error("Failed to connect to %r", url)
+        logging.error("Error message: %s", e)
+        return None
+    else:
+        return url
+
+
 def main():
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 
@@ -30,27 +76,11 @@ def main():
     parser.add_argument("output", help="output dir")
     args = parser.parse_args()
 
-    parsed_url = urlparse.urlparse(args.url)
+    access_url = url_arg_handler(args.url)
 
-    if parsed_url.scheme in ["http", "https"]:
-        logging.info("Testing URL %r with HEAD request", args.url)
-
-        try:
-            requests.head(args.url, timeout=REQUESTS_TIMEOUT)
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            # Don't call the browser if we already know the URL doesn't work
-            logging.error("Failed to connect to %r", args.url)
-            logging.error("Error message: %s", e)
-            exit(1)
-    else:
-        # Interpret args.url as a file path
-        parsed_path = Path(args.url).absolute()
-
-        if parsed_path.is_file():
-            args.url = parsed_path.as_uri()
-        else:
-            logging.error("File %r not found", args.url)
-            exit(1)
+    if access_url is None:
+        logging.error("URL failed pre-tests. Exiting...")
+        sys.exit(-1)
 
     firefox_configs = {
         # Bypass CSP so we can always inject scripts
@@ -71,9 +101,14 @@ def main():
         # Tested on Debian's firefox-esr 91.5.0esr-1~deb11u1
         browser = p.firefox.launch(firefox_user_prefs=firefox_configs)
 
+        def error_cleanup(msg):
+            logging.error(msg)
+            browser.close()
+            sys.exit(-1)
+
         page = browser.new_page()
         page.set_viewport_size({"width": 1080, "height": 1920})
-        logging.info("Navigating to %r", args.url)
+        logging.info("Navigating to %r", access_url)
 
         # Record HTTP status and navigated URLs so we can check errors later
         url_status = dict()
@@ -81,20 +116,17 @@ def main():
         page.on("response", lambda r: url_status.update({r.url: r.status}))
         page.on("framenavigated", lambda f: f.parent_frame is None and navigated_urls.append(f.url))
 
-        page.goto(args.url)
+        page.goto(access_url)
 
         try:
             page.wait_for_load_state("networkidle")
         except PlaywrightTimeoutError:
             logging.warning("Cannot reach networkidle but will continue")
-            pass
 
         # Check HTTP errors
         for url in navigated_urls:
             if (status_code := url_status.get(url, 0)) >= 400:
-                logging.error("Got HTTP status %d", status_code)
-                browser.close()
-                exit(-1)
+                error_cleanup(f"Got HTTP error {status_code}")
 
         # Apply readability.js
         page.add_script_tag(content=get_readability_js())
@@ -106,6 +138,21 @@ def main():
             return article;
         }""", [])
         cleaned_html = page.content()
+
+        # Check language
+        soup = bs4.BeautifulSoup(cleaned_html, 'lxml')
+        soup_text = soup.body.text if soup.body else ""
+
+        try:
+            lang = langdetect.detect(soup_text)
+        except langdetect.lang_detect_exception.LangDetectException:
+            lang = "UNKNOWN"
+
+        if not lang.lower().startswith("en"):
+            error_cleanup(f"Content language {lang} isn't English")
+
+        if re.search(r"(data|privacy)\s*(?:policy|notice)", soup_text, re.I) is None:
+            error_cleanup("Not like a privacy policy")
 
         # obtain the accessibility tree
         snapshot = page.accessibility.snapshot(interesting_only=False)

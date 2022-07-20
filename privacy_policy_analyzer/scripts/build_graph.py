@@ -107,7 +107,7 @@ def simplify_phrase(phrase):
     ])
 
     def dfs(token, state):
-        if token.dep_ in trivial_words:
+        if token.lemma_ in trivial_words:
             return
 
         match state:
