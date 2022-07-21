@@ -132,6 +132,14 @@ def simplify_phrase(phrase):
     return sorted(dfs(phrase.root, "compound"))
 
 
+def dag_add_edge(G, n1, n2, *args, **kwargs):
+    if n1 == n2 or n2 in nx.ancestors(G, n1):
+        return False
+    else:
+        G.add_edge(n1, n2, *args, **kwargs)
+        return True
+
+
 class GraphBuilder:
     def __init__(self, phrase_map, entity_map):
         with open(phrase_map, "r", encoding="utf-8") as fin:
@@ -155,6 +163,7 @@ class GraphBuilder:
 
             match token._.ent_type:
                 case "NN":
+                    # unknown type, figure it out later
                     continue
                 case "DATA":
                     stage1_graph.add_node(src, token=token, type="DATA")
@@ -179,56 +188,67 @@ class GraphBuilder:
                     stage1_graph.add_node(src2, token=token2, type="DATA")
 
                 if [stage1_graph.nodes[s]["type"] for s in (src1, src2)] == ["ACTOR", "DATA"]:
+                    # This will never create a circle
                     stage1_graph.add_edge(src1, src2, relationship=relationship)
 
         # Step 3: Infer phrase type using SUBSUM / COREF relationship
+        # Run a BFS starting from nodes with known types.
         bfs_queue = deque(stage1_graph.nodes)
+        visited_nodes = set(stage1_graph.nodes)
 
         while len(bfs_queue) > 0:
             src1 = bfs_queue.popleft()
-            the_type = stage1_graph.nodes[src1]["type"]
+            phrase_type = stage1_graph.nodes[src1]["type"]
+
+            if phrase_type == "OTHER":
+                continue
 
             in_edge_view = document.token_relationship.in_edges(src1, data=True)
             out_edge_view = document.token_relationship.out_edges(src1, data=True)
 
             for edge_from, edge_to, data in itertools.chain(in_edge_view, out_edge_view):
-                if data["relationship"] in ["SUBSUM", "COREF"] and edge_from != edge_to:
+                if data["relationship"] in ["SUBSUM", "COREF"]:
                     src2 = edge_to if src1 == edge_from else edge_from
 
                     if src2 not in stage1_graph:
                         token2 = document.get_token_with_src(src2)
-                        stage1_graph.add_node(src2, token=token2, type=the_type)
-                        bfs_queue.append(src2)
+                        stage1_graph.add_node(src2, token=token2, type=phrase_type)
 
-                    if stage1_graph.has_edge(edge_to, edge_from):
-                        # example: third parties, such as those parties who...
-                        continue
+                        if src2 in visited_nodes:
+                            # Avoid loop
+                            visited_nodes.add(src2)
+                            bfs_queue.append(src2)
 
-                    if stage1_graph.nodes[src2]["type"] == the_type:
-                        stage1_graph.add_edge(edge_from, edge_to, relationship=data["relationship"])
+                    if stage1_graph.nodes[src2]["type"] == phrase_type:
+                        # Call dag_add_edge to safely add an edge without creating a circle
+                        dag_add_edge(stage1_graph, edge_from, edge_to, relationship=data["relationship"])
 
-        # Step 4: Remove phrases that are not ACTOR / DATA
-        to_remove = []
-        for src, data in stage1_graph.nodes(data=True):
-            if data["type"] == "OTHER":
-                to_remove.append(src)
-
+        # Step 4: Remove "OTHER" phrases
+        to_remove = [n for n, d in stage1_graph.nodes(data=True) if d['type'] == 'OTHER']
         stage1_graph.remove_nodes_from(to_remove)
 
         # Step 5: Infer meaning of each phrase using normalizers
-        for src, data in stage1_graph.nodes(data=True):
+        # Follow topological order to resolve coreferences
+        for src in reversed(list(nx.topological_sort(stage1_graph))):
+            data = stage1_graph.nodes[src]
+
             token = data["token"]
-            data["normalized_terms"] = set()
+            # Normalized terms
+            data["normalized_terms"] = normalized_terms = set()
+            # Main phrase of a coreference. Technically we allow a phrase to have more than one COREF edges
+            coref_main = set()
 
-            has_coref = False
-
-            for _, _, edge_data in stage1_graph.out_edges(src, data=True):
+            for _, ref_src, edge_data in stage1_graph.out_edges(src, data=True):
                 if edge_data["relationship"] == "COREF":
-                    has_coref = True
-                    break
+                    # for coreferences, copy normalized_terms from referred phrase
+                    coref_main.update(stage1_graph.nodes[ref_src]["coref_main"] or [ref_src])
+                    normalized_terms.update(data["normalized_terms"])
 
-            if has_coref:
+            if coref_main:
+                data["coref_main"] = coref_main
                 continue
+            else:
+                data["coref_main"] = {src}
 
             for phrase in expand_phrase(token):
                 match data["type"]:
@@ -261,54 +281,39 @@ class GraphBuilder:
 
     def __build_graph_stage2(self, document: PolicyDocument, stage1_graph: nx.DiGraph):
         stage2_graph = nx.MultiDiGraph()
-        s1s2_node_map = dict()  # (source, normalized)
 
-        for stage1_node in reversed(list(nx.topological_sort(stage1_graph))):
-            stage1_node_data = stage1_graph.nodes[stage1_node]
-            s1s2_node_map[stage1_node] = mapped_nodes = []
-            is_coref = False
+        for _, node_data in stage1_graph.nodes(data=True):
+            stage2_graph.add_nodes_from(node_data["normalized_terms"], type=node_data["type"])
 
-            for _, stage1_endpoint, edge_data in stage1_graph.out_edges(stage1_node, data=True):
-                if edge_data["relationship"] == "COREF":
-                    is_coref = True
+        for src1, src2, edge_data in stage1_graph.edges(data=True):
+            relationship = edge_data["relationship"]
 
-                    for ref_node, ref_node_sources in s1s2_node_map[stage1_endpoint]:
-                        mapped_nodes.append((ref_node, ref_node_sources + [stage1_node]))
+            if relationship == "COREF":
+                continue
 
-            if not is_coref:
-                for term in stage1_node_data["normalized_terms"]:
-                    mapped_nodes.append((term, [stage1_node]))
+            coref_src1 = stage1_graph.nodes[src1]["coref_main"]
+            coref_src2 = stage1_graph.nodes[src2]["coref_main"]
 
-                    if term not in stage2_graph:
-                        stage2_graph.add_node(term, type=stage1_node_data["type"])
+            normalized_terms1 = set.union(*(stage1_graph.nodes[i]["normalized_terms"] for i in coref_src1))
+            normalized_terms2 = set.union(*(stage1_graph.nodes[i]["normalized_terms"] for i in coref_src2))
 
-            for _, stage1_endpoint, edge_data in stage1_graph.out_edges(stage1_node, data=True):
-                relationship = edge_data["relationship"]
+            edge_sources = set.union(coref_src1, coref_src2)
+            edge_sentences = []
 
-                if relationship == "COREF":
-                    continue
+            for segment_id in sorted(set(s[0] for s in edge_sources)):
+                doc = document.get_doc_without_context(document.segments[segment_id])
 
-                for n1, n1_sources in mapped_nodes:
-                    for n2, n2_sources in s1s2_node_map[stage1_endpoint]:
-                        if n1 == n2:
-                            continue
+                for sent in doc.sents:
+                    if any(t._.src in edge_sources for t in sent):
+                        edge_sentences.append(sent.text)
 
-                        if not stage2_graph.has_edge(n1, n2, relationship):
-                            stage2_graph.add_edge(n1, n2, relationship, sources=[], text=[])
+            for n1, n2 in itertools.product(normalized_terms1, normalized_terms2):
+                if not stage2_graph.has_edge(n1, n2, key=relationship):
+                    if not dag_add_edge(stage2_graph, n1, n2, key=relationship, sources=[], text=[]):
+                        continue
 
-                        edge_sources = set(n1_sources) | set(n2_sources)
-                        edge_sentences = []
-
-                        for segment_id in sorted(set(s[0] for s in edge_sources)):
-                            doc = document.get_doc_without_context(document.segments[segment_id])
-
-                            for sent in doc.sents:
-                                if any(t._.src in edge_sources for t in sent):
-                                    edge_sentences.append(sent.text)
-                                    break
-
-                        stage2_graph[n1][n2][relationship]["sources"].append(sorted(edge_sources))
-                        stage2_graph[n1][n2][relationship]["text"].append(" | ".join(edge_sentences))
+                stage2_graph[n1][n2][relationship]["sources"].append(sorted(edge_sources))
+                stage2_graph[n1][n2][relationship]["text"].append(" | ".join(edge_sentences))
 
         # Some sentences lead to subsumption relationship between 1st/3rd parties.
         # Workaround: Simply ignore all subsumption edges to "first party" / "third party"
@@ -354,7 +359,7 @@ def colorize_graph(graph):
         new_graph.add_node(label, label=label, type=data["type"])
 
     for i, (u, v, rel, data) in enumerate(graph.edges(keys=True, data=True)):
-        new_graph.add_edge(u, v, key=f"e{i}", relationship=rel)
+        new_graph.add_edge(u, v, key=f"e{i}", relationship=rel, text="\n".join(data["text"]))
 
     return new_graph
 

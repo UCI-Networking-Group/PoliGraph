@@ -42,6 +42,13 @@ GENERAL_DATA:
 - social network INFO
 - OS INFO
 
+PERSONAL_CHARACTERISTICS:
+- protected classification
+- characteristics of protected classifications
+- personal characteristic
+- protected class
+- inference about users
+
 # (A) Identifiers such as a real name, alias, postal address, unique personal
 # identifier, online identifier Internet Protocol address, email address,
 # account name, social security number, driver’s license number, passport
@@ -272,7 +279,8 @@ BIOMETRIC:
 - exercise INFO
 
 DEMOGRAPHIC:
-- gender
+- gender (identity)
+- sexual orientation
 - age
 - birthdate
 - birth date
@@ -282,7 +290,10 @@ DEMOGRAPHIC:
 - marital status
 - immigration status
 - employment status
+- veteran status
 - status of employment
+- national origin
+- nationality
 
 AUTH_TOKEN:
 - password

@@ -350,7 +350,8 @@ class CollectionAnnotator:
 
         for doc in document.iter_docs():
             for sent in doc.sents:
-                if sent[-1].norm_ == "?":
+                if sent[-1].norm_ == "?" or sent[0].tag_ in ['WRB', 'WDT']:
+                    # Skip interrogative sentences
                     continue
 
                 results = self.match_sentence(sent)

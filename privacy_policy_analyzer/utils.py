@@ -73,4 +73,4 @@ def token_ent_type(token):
 
 
 def span_ent_type(span):
-    return __normalize_ent_label(span.label_)
+    return __normalize_ent_label(span.root.ent_type_)

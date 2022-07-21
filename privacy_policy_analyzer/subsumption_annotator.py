@@ -4,6 +4,19 @@ from spacy.matcher import DependencyMatcher
 from privacy_policy_analyzer.utils import get_conjuncts
 
 
+def ent_type_is_compatible(ent1, ent2):
+    t1 = ent1._.ent_type
+    t2 = ent2._.ent_type
+
+    if t1 == "OTHER" or t2 == "OTHER":
+        return False
+
+    if (t1 == "DATA" or t2 == "DATA") and (t1 == "ACTOR" or t2 == "ACTOR"):
+        return False
+
+    return True
+
+
 class SubsumptionAnnotator:
     def __init__(self, nlp):
         self.matcher = DependencyMatcher(nlp.vocab)
@@ -226,7 +239,7 @@ class SubsumptionAnnotator:
 
             for conj in get_conjuncts(lower_ent.root):
                 if all(t.dep_ != "neg" for t in conj.children):
-                    if ent := conj._.ent:
+                    if (ent := conj._.ent) and ent_type_is_compatible(upper_ent, ent):
                         all_lower_ents.append(ent)
 
             all_lower_ents.sort()
@@ -260,15 +273,13 @@ class SubsumptionAnnotator:
             for idx in nx.multi_source_dijkstra_path_length(appos_graph, first_party_references):
                 lower_ent = doc[idx]._.ent
 
-                if lower_ent is None or idx in first_party_references:
-                    continue
+                if lower_ent and idx not in first_party_references and ent_type_is_compatible(upper_ent, lower_ent):
+                    document.link(upper_ent.root, lower_ent.root, "SUBSUM")
 
-                document.link(upper_ent.root, lower_ent.root, "SUBSUM")
-
-                print("+" * 40)
-                print(sent, end="\n\n")
-                print(upper_ent, "->", lower_ent)
-                print("+" * 40)
+                    print("+" * 40)
+                    print(sent, end="\n\n")
+                    print(upper_ent, "->", lower_ent)
+                    print("+" * 40)
 
     def annotate(self, document):
         for doc in document.iter_docs():
