@@ -69,7 +69,7 @@ class PurposeAnnotator:
                 "LEFT_ID": "purpose_root",
                 "REL_OP": ">",
                 "RIGHT_ID": "r00",
-                "RIGHT_ATTRS": {"LEMMA": "purpose"}
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN"]}}
             },
         ]
         self.matcher.add("PURPOSE_FOR_PURPOSE", [pattern])
@@ -95,17 +95,21 @@ class PurposeAnnotator:
             right_end = max(t.i for t in purpose_root.subtree) + 1
             purpose_part = doc[purpose_root.i:right_end]
 
-            root_verb = match_info["anchor"]
-            for token in root_verb.subtree:
+            associate_dtypes = []
+            for token in match_info["anchor"].subtree:
                 if token in collected_dtypes and token not in purpose_part:
-                    break
-            else:
+                    associate_dtypes.append(token)
+
+            if len(associate_dtypes) == 0:
                 continue
 
             print("%" * 40)
             print(purpose_root.sent, end="\n\n")
             print(purpose_part)
             print("%" * 40)
+
+            for dtype in collected_dtypes:
+                document.link(dtype, purpose_root, "PURPOSE")
 
     def annotate(self, document):
         for doc in document.iter_docs():

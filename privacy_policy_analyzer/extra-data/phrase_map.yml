@@ -207,9 +207,10 @@ ACTOR:
   - '^this (website|site|app(lication)?)$'
 
   third party:
-  - 'third[\s-]?party\b\s*\b(service|provider|partner|vendor|website|site|company|platform|contractor)?$'
-  - 'third party (we use|service provider)$'
+  - '(third|external)[\s-]?party\b\s*\b(service|provider|partner|vendor|website|site|company|platform|contractor)?$'
+  - '(third|external) party (we use|service provider)$'
   - 'service provider$'
+  - '^other (service|provider|partner|vendor|website|site|company|platform|contractor|party)$'
 
   advertising provider:
   - 'ad(vertis\w+)?\b.*\b(provider|network|company|platform|vendor|partner|agency|service)'

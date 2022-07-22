@@ -2,9 +2,10 @@
 
 import argparse
 import itertools
+import json
 import os
 import re
-from collections import deque
+from collections import defaultdict, deque
 
 import networkx as nx
 import spacy
@@ -12,6 +13,7 @@ import yaml
 from privacy_policy_analyzer.document import PolicyDocument
 from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS
 from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
+from privacy_policy_analyzer.purpose_classification import PurposeClassifier
 
 
 def expand_phrase(root_token):
@@ -148,6 +150,7 @@ class GraphBuilder:
         self.entity_mapper = EntityMatcher(entity_map)
         self.data_phrase_normalizer = RuleBasedPhraseNormalizer(phrase_map_rules["DATA"])
         self.actor_phrase_normalizer = RuleBasedPhraseNormalizer(phrase_map_rules["ACTOR"])
+        self.purpose_classifier = PurposeClassifier()
 
     def build_graph(self, document: PolicyDocument):
         stage1_graph = self.__build_graph_stage1(document)
@@ -190,6 +193,36 @@ class GraphBuilder:
                 if [stage1_graph.nodes[s]["type"] for s in (src1, src2)] == ["ACTOR", "DATA"]:
                     # This will never create a circle
                     stage1_graph.add_edge(src1, src2, relationship=relationship)
+
+        # Step 2.5: Annotate purposes
+        data_type_to_purpose_text_list = defaultdict(list)
+        all_purpose_text = set()
+
+        for data_type, node_data in stage1_graph.nodes(data=True):
+            if node_data["type"] != "DATA":
+                continue
+
+            for _, purpose_src, edge_data in document.token_relationship.edges(data_type, data=True):
+                if edge_data["relationship"] == "PURPOSE":
+                    purpose_root = document.get_token_with_src(purpose_src)
+                    right_end = max(t.i for t in purpose_root.subtree) + 1
+                    purpose_part = purpose_root.doc[purpose_root.i:right_end]
+
+                    data_type_to_purpose_text_list[data_type].append(purpose_part.text)
+                    all_purpose_text.add(purpose_part.text)
+
+        all_purpose_text = list(all_purpose_text)
+        purpose_text_to_purpose = dict(zip(all_purpose_text, self.purpose_classifier.classify(all_purpose_text)))
+
+        for data_type, purpose_text_list in data_type_to_purpose_text_list.items():
+            edge_purposes = list()
+
+            for purpose_text in purpose_text_list:
+                edge_purposes.append((purpose_text_to_purpose[purpose_text], purpose_text))
+
+            for _, _, edge_data in stage1_graph.in_edges(data_type, data=True):
+                if edge_data["relationship"] == "COLLECT":
+                    edge_data["purposes"] = edge_purposes
 
         # Step 3: Infer phrase type using SUBSUM / COREF relationship
         # Run a BFS starting from nodes with known types.
@@ -257,9 +290,13 @@ class GraphBuilder:
 
                         if len(normalized_terms) == 0:
                             simplified = " ".join(t.lemma_ for t in simplify_phrase(phrase))
-                            if simplified and simplified not in DATATYPE_KEYWORDS:
-                                # if simplified in DATATYPE_KEYWORDS, the term is too "common" to be considered
-                                normalized_terms.append(simplified)
+
+                            if simplified:
+                                if simplified in ["data", "datum", "information"]:
+                                    normalized_terms.append('UNSPECIFIC_DATA')
+                                elif simplified and simplified not in DATATYPE_KEYWORDS:
+                                    # if simplified in DATATYPE_KEYWORDS, the term is too "common" to be considered
+                                    normalized_terms.append(simplified)
                     case "ACTOR":
                         normalized_terms = list(self.actor_phrase_normalizer.normalize(phrase))
 
@@ -269,12 +306,16 @@ class GraphBuilder:
 
                         if len(normalized_terms) == 0:
                             simplified = " ".join(t.lemma_ for t in simplify_phrase(phrase))
-                            if simplified and simplified != "you" and simplified not in ACTOR_KEYWORDS:
-                                normalized_terms.append(simplified)
+
+                            if simplified and simplified != "you":
+                                if simplified in ACTOR_KEYWORDS:
+                                    normalized_terms.append('UNSPECIFIC_ENTITY')
+                                else:
+                                    normalized_terms.append(simplified)
                     case _:
                         raise ValueError("Invalid type")
 
-                print(phrase, normalized_terms)
+                # print(phrase, normalized_terms)
                 data["normalized_terms"].update(normalized_terms)
 
         return stage1_graph
@@ -309,18 +350,30 @@ class GraphBuilder:
 
             for n1, n2 in itertools.product(normalized_terms1, normalized_terms2):
                 if not stage2_graph.has_edge(n1, n2, key=relationship):
-                    if not dag_add_edge(stage2_graph, n1, n2, key=relationship, sources=[], text=[]):
+                    if dag_add_edge(stage2_graph, n1, n2, key=relationship, sources=[], text=[]):
+                        if relationship == "COLLECT":
+                            stage2_graph[n1][n2][relationship]["purposes"] = []
+                    else:
                         continue
 
                 stage2_graph[n1][n2][relationship]["sources"].append(sorted(edge_sources))
                 stage2_graph[n1][n2][relationship]["text"].append(" | ".join(edge_sentences))
 
-        # Some sentences lead to subsumption relationship between 1st/3rd parties.
-        # Workaround: Simply ignore all subsumption edges to "first party" / "third party"
+                if relationship == "COLLECT":
+                    stage2_graph[n1][n2][relationship]["purposes"].extend(edge_data.get("purposes", []))
+
         edges_to_remove = []
+        # Some sentences lead to subsumption relationship between 1st/3rd parties.
+        # Workaround: Simply ignore all subsumption edges to "first party" / "third party"        
         for u, v, k in stage2_graph.in_edges(["first party", "third party"], keys=True):
             print(f"Potentially invalid edge: {u} -> {v}")
             edges_to_remove.append((u, v, k))
+
+        # Prevent UNSPECIFIC_* nodes from subsume anything
+        for u, v, k in stage2_graph.out_edges(["UNSPECIFIC_DATA", "UNSPECIFIC_ENTITY"], keys=True):
+            if k == "SUBSUM":
+                edges_to_remove.append((u, v, k))
+
         stage2_graph.remove_edges_from(edges_to_remove)
 
         for node in list(stage2_graph.nodes()):
@@ -375,6 +428,11 @@ def main():
     nlp = spacy.load(args.nlp)
     graph_builder = GraphBuilder(args.phrase_map, args.entity_info)
 
+    def gml_stringizer(obj):
+        if isinstance(obj, str):
+            return obj
+        else:
+            return json.dumps(obj)
 
     for d in args.workdirs:
         print(f"Processing {d} ...")
@@ -384,7 +442,8 @@ def main():
         #trimmed_graph = trim_graph(knowledge_graph)
         #colored_graph = colorize_graph(trimmed_graph)
 
-        nx.write_gml(knowledge_graph, os.path.join(d, "graph.gml"), stringizer=str)
+        nx.write_gml(knowledge_graph, os.path.join(d, "graph.gml"), stringizer=gml_stringizer)
+        #nx.write_gpickle(knowledge_graph, os.path.join(d, "graph.gpickle"))
         #nx.write_gml(trimmed_graph, os.path.join(d, "graph_trimmed.gml"), stringizer=str)
         #nx.write_graphml(colored_graph, os.path.join(d, "graph_trimmed.graphml"))
 

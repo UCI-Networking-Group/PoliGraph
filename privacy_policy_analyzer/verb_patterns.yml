@@ -112,6 +112,11 @@ patterns:
     match: ['@E1:nsubj', '@E2:dobj', 'VERB_PROVIDE_WITH:xcomp,@E3:dobj', '!VERB_PROVIDE_WITH:xcomp,with,@DT:pobj']
     transform: ['SHARE', 'E2', 'DT', ['E3', 'E1']]
 
+  # E1 use ... to collect DT
+  - root: ['VERB_GENERAL_USE']
+    match: ['@E1:nsubj', '!VERB_COLLECT_FROM:xcomp,@DT:dobj']
+    transform: ['COLLECT', 'E1', 'DT', []]
+
   # ... E1 collect from E2 includes DT
   - root: ['include']
     match: ['!*:nsubj,VERB_COLLECT_FROM:relcl,@E1:nsubj', '*:nsubj,VERB_COLLECT_FROM:relcl,from,@E2:pobj', '!@DT:dobj']
