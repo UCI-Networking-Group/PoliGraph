@@ -3,12 +3,14 @@
 import argparse
 
 import spacy
-from privacy_policy_analyzer.collection_annotator import CollectionAnnotator
-from privacy_policy_analyzer.coreference_annotator import CoreferenceAnnotator
+from privacy_policy_analyzer.annotators import (
+    CollectionAnnotator,
+    CoreferenceAnnotator,
+    ListAnnotator,
+    PurposeAnnotator,
+    SubsumptionAnnotator
+)
 from privacy_policy_analyzer.document import PolicyDocument
-from privacy_policy_analyzer.purpose_annotator import PurposeAnnotator
-from privacy_policy_analyzer.subsumption_annotator import SubsumptionAnnotator
-from privacy_policy_analyzer.list_annotator import ListAnnotator
 
 
 def main():
