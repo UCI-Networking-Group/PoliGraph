@@ -1,9 +1,10 @@
-from privacy_policy_analyzer.document import PolicyDocument, SegmentType
+from ..document import PolicyDocument, SegmentType
+from .base import BaseAnnotator
 
 
-class ListAnnotator:
+class ListAnnotator(BaseAnnotator):
     def __init__(self, nlp):
-        pass
+        super().__init__(nlp)
 
     def try_annotate_segment(self, document, root_segment):
         child_listitems = []
@@ -24,6 +25,7 @@ class ListAnnotator:
             if (token.lemma_, token.dep_) in [("follow", "amod"), ("following", "amod"), ("below", "advmod")]:
                 if ent := token.head._.ent:
                     link_to_apply[(ent.root, None)] = "SUBSUM"
+                    self.logger.info("SUBSUM edges from: %r", ent.sent.text)
                     break
 
         for c in child_listitems:
@@ -44,28 +46,27 @@ class ListAnnotator:
                 if token1._.src in context_tokens:
                     link_spec = (token1, None)
                     link_to_apply[link_spec] = relationship
+                    self.logger.info("%s edges from: %r", relationship, token1.sent.text)
 
             # Out links -- from list item to context
             for _, token2, relationship in document.get_all_links(linked_token, "out"):
                 if token2._.src in context_tokens:
                     link_spec = (None, token2)
                     link_to_apply[link_spec] = relationship
+                    self.logger.info("%s edges to: %r", relationship, token2.sent.text)
 
         for t in child_tokens:
             for link_spec, relationship in link_to_apply.items():
-                full_link_spec = (link_spec[0] or t, link_spec[1] or t)
-                previous_relationship = document.get_link(*full_link_spec)
+                endpoints = (link_spec[0] or t, link_spec[1] or t)
+                existing_relationship = document.get_link(*endpoints)
 
-                if previous_relationship:
-                    if previous_relationship != relationship:
-                        print("WARNING: Existing relationship is different")
+                self.logger.info("Edge %s: %r -> %r", relationship, endpoints[0]._.ent, endpoints[1]._.ent)
+
+                if existing_relationship:
+                    if existing_relationship != relationship:
+                        self.logger.warning("Refuse to overwrite existing relationship %s", existing_relationship)
                 else:
-                    print("_" * 40)
-                    print(full_link_spec[0].sent, end="\n\n")
-                    print(full_link_spec[1].sent, end="\n\n")
-                    print(relationship, full_link_spec[0]._.ent, full_link_spec[1]._.ent, sep=", ")
-                    document.link(*full_link_spec, relationship)
-                    print("_" * 40)
+                    document.link(*endpoints, relationship)
 
     def annotate(self, document: PolicyDocument):
         for s in document.segments:

@@ -1,8 +1,11 @@
 from spacy.matcher import DependencyMatcher
 
+from .base import BaseAnnotator
 
-class PurposeAnnotator:
+
+class PurposeAnnotator(BaseAnnotator):
     def __init__(self, nlp):
+        super().__init__(nlp)
         self.matcher = DependencyMatcher(nlp.vocab)
 
         # to do sth.
@@ -75,7 +78,6 @@ class PurposeAnnotator:
         self.matcher.add("PURPOSE_FOR_PURPOSE", [pattern])
 
     def annotate_one_doc(self, document, doc):
-        matches = self.matcher(doc)
         collected_dtypes = []
 
         for noun_phrase in doc.ents:
@@ -87,26 +89,30 @@ class PurposeAnnotator:
         if len(collected_dtypes) == 0:
             return
 
+        matches = self.matcher(doc)
+
         for match_id, matched_tokens in matches:
+            rule_name = self.vocab.strings[match_id]
             _, (match_spec, ) = self.matcher.get(match_id)
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
 
             purpose_root = match_info["purpose_root"]
+            sentence = purpose_root.sent
             right_end = max(t.i for t in purpose_root.subtree) + 1
             purpose_part = doc[purpose_root.i:right_end]
+
+            self.logger.info("Rule %s matches %r", rule_name, sentence.text)
+            self.logger.info("Purpose phrase: %r", purpose_part.text)
 
             associate_dtypes = []
             for token in match_info["anchor"].subtree:
                 if token in collected_dtypes and token not in purpose_part:
                     associate_dtypes.append(token)
 
+            self.logger.info("Linkable data types: %r", associate_dtypes)
+
             if len(associate_dtypes) == 0:
                 continue
-
-            print("%" * 40)
-            print(purpose_root.sent, end="\n\n")
-            print(purpose_part)
-            print("%" * 40)
 
             for dtype in collected_dtypes:
                 document.link(dtype, purpose_root, "PURPOSE")

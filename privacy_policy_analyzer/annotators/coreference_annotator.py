@@ -4,9 +4,12 @@ from itertools import chain
 
 from spacy.matcher import DependencyMatcher
 
+from .base import BaseAnnotator
 
-class CoreferenceAnnotator:
+
+class CoreferenceAnnotator(BaseAnnotator):
     def __init__(self, nlp):
+        super().__init__(nlp)
         self.matcher = DependencyMatcher(nlp.vocab)
 
         # some/all/any/types/variety/categories of information
@@ -60,9 +63,9 @@ class CoreferenceAnnotator:
 
 
                 if referent is not None:
-                    print("=" * 40)
-                    print(doc, end="\n\n")
-                    print(noun_phrase, "|", referent)
+                    self.logger.info("Sentence 1: %r", noun_phrase.sent)
+                    self.logger.info("Sentence 2: %r", referent.sent)
+                    self.logger.info("Edge COREF: %r -> %r", noun_phrase.text, referent.text)
 
                     document.link(noun_phrase.root, referent.root, "COREF")
 
@@ -72,6 +75,7 @@ class CoreferenceAnnotator:
 
         # Handle special patterns
         for match_id, matched_tokens in self.matcher(doc):
+            rule_name = self.vocab.strings[match_id]
             _, (match_spec, ) = self.matcher.get(match_id)
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
 
@@ -81,11 +85,8 @@ class CoreferenceAnnotator:
             if coref_noun_phrase is None or main_noun_phrase is None or coref_noun_phrase == main_noun_phrase:
                 continue
 
-            print("+" * 40)
-            print(coref_noun_phrase.sent, end="\n\n")
-            print(coref_noun_phrase, "|", main_noun_phrase)
-            print("+" * 40)
-
+            self.logger.info("Rule %s matches %r", rule_name, main_noun_phrase.sent.text)
+            self.logger.info("Edge COREF: %r -> %r", coref_noun_phrase.text, main_noun_phrase.text)
             document.link(coref_noun_phrase.root, main_noun_phrase.root, "COREF")
 
     def annotate(self, document):

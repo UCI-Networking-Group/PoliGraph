@@ -1,7 +1,8 @@
 import networkx as nx
 from spacy.matcher import DependencyMatcher
 
-from privacy_policy_analyzer.utils import get_conjuncts
+from ..utils import get_conjuncts
+from .base import BaseAnnotator
 
 
 def ent_type_is_compatible(ent1, ent2):
@@ -17,8 +18,9 @@ def ent_type_is_compatible(ent1, ent2):
     return True
 
 
-class SubsumptionAnnotator:
+class SubsumptionAnnotator(BaseAnnotator):
     def __init__(self, nlp):
+        super().__init__(nlp)
         self.matcher = DependencyMatcher(nlp.vocab)
 
         # such as
@@ -224,16 +226,22 @@ class SubsumptionAnnotator:
 
         for match_id, matched_tokens in matches:
             if any(c.dep_ == "neg" for t in matched_tokens for c in doc[t].children):
+                # Skip negations
                 continue
 
+            rule_name = self.vocab.strings[match_id]
             _, (match_spec, ) = self.matcher.get(match_id)
-            match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
 
+            match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
             upper_ent = match_info["upper_token"]._.ent
             lower_ent = match_info["lower_token"]._.ent
+            sentence = match_info["upper_token"].sent
 
             if upper_ent is None or lower_ent is None:
                 continue
+
+            self.logger.info("Rule %s matches %r", rule_name, sentence.text)
+            self.logger.info("Matched tokens: upper = %r, lower = %r", upper_ent.text, lower_ent.text)
 
             all_lower_ents = [lower_ent]
 
@@ -243,11 +251,7 @@ class SubsumptionAnnotator:
                         all_lower_ents.append(ent)
 
             all_lower_ents.sort()
-
-            print("+" * 40)
-            print(upper_ent.sent, end="\n\n")
-            print(upper_ent, "->", all_lower_ents)
-            print("+" * 40)
+            self.logger.info("Edge SUBSUM: %r -> %r", upper_ent.text, all_lower_ents)
 
             for lower_ent in all_lower_ents:
                 document.link(upper_ent.root, lower_ent.root, "SUBSUM")
@@ -255,7 +259,7 @@ class SubsumptionAnnotator:
     def annotate_first_party_appos(self, document, doc):
         for sent in doc.sents:
             appos_graph = nx.Graph()
-            first_party_references = list()
+            first_party_references = []
 
             for token in sent:
                 if token.dep_ == "appos":
@@ -267,19 +271,21 @@ class SubsumptionAnnotator:
 
             if first_party_references:
                 upper_ent = doc[first_party_references[0]]._.ent
+                length_to_us = nx.multi_source_dijkstra_path_length(appos_graph, first_party_references)
             else:
-                return
+                continue
 
-            for idx in nx.multi_source_dijkstra_path_length(appos_graph, first_party_references):
+            if max(length_to_us.values()) > 0:
+                self.logger.info("Possible 1st-party appos: %r", sent.text)
+            else:
+                continue
+
+            for idx in length_to_us:
                 lower_ent = doc[idx]._.ent
 
                 if lower_ent and idx not in first_party_references and ent_type_is_compatible(upper_ent, lower_ent):
+                    self.logger.info("Matched tokens: upper = %r, lower = %r", upper_ent.text, lower_ent.text)
                     document.link(upper_ent.root, lower_ent.root, "SUBSUM")
-
-                    print("+" * 40)
-                    print(sent, end="\n\n")
-                    print(upper_ent, "->", lower_ent)
-                    print("+" * 40)
 
     def annotate(self, document):
         for doc in document.iter_docs():

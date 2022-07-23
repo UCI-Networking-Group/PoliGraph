@@ -6,7 +6,8 @@ import yaml
 from spacy.tokens import Span, Token
 
 import privacy_policy_analyzer
-from privacy_policy_analyzer.utils import get_conjuncts
+from ..utils import get_conjuncts
+from .base import BaseAnnotator
 
 
 class TokenMatcher:
@@ -205,8 +206,10 @@ class SentenceMatcher:
         return self.root_token, action, real_args
 
 
-class CollectionAnnotator:
+class CollectionAnnotator(BaseAnnotator):
     def __init__(self, nlp):
+        super().__init__(nlp)
+
         with pkg_resources.open_text(privacy_policy_analyzer, "verb_patterns.yml") as fin:
             config = yaml.safe_load(fin)
 
@@ -312,9 +315,10 @@ class CollectionAnnotator:
             return False
 
         def link_pairs(ent_list, data_list, relationship):
-            for actor in ent_list:
+            for entity in ent_list:
                 for dtype in data_list:
-                    document.link(actor, dtype, relationship)
+                    self.logger.info("Edge %s: %r -> %r", relationship, entity, dtype)
+                    document.link(entity, dtype, relationship)
 
         def collect_handler(neg_flag, e1, dt, e2):
             if ((e1 and like_type(e1, "ACTOR")) and
@@ -322,10 +326,8 @@ class CollectionAnnotator:
 
                 if neg_flag:
                     link_pairs(e1, dt, "NOT_COLLECT")
-                    print(f"> {e1} NOT_COLLECT {dt} FROM {e2}")
                 else:
                     link_pairs(e1, dt, "COLLECT")
-                    print(f"> {e1} COLLECT {dt} FROM {e2}")
 
         def share_handler(neg_flag, e1, dt, e2):
             if ((dt and like_type(dt, "DATA")) and
@@ -333,20 +335,17 @@ class CollectionAnnotator:
 
                 if neg_flag:
                     link_pairs(e2, dt, "NOT_COLLECT")
-                    print(f"> {e1} NOT_SHARE {dt} WITH {e2}")
                 else:
                     link_pairs(e2, dt, "COLLECT")
-                    print(f"> {e1} SHARE {dt} WITH {e2}")
 
         def use_handler(neg_flag, e1, dt):
             if ((e1 and like_type(e1, "ACTOR")) and
                 (dt and like_type(dt, "DATA"))):
 
                 if neg_flag:
-                    print(f"> {e1} NOT_USE {dt}")
+                    pass
                 else:
                     link_pairs(e1, dt, "COLLECT")
-                    print(f"> {e1} USE {dt}")
 
         for doc in document.iter_docs():
             for sent in doc.sents:
@@ -357,10 +356,11 @@ class CollectionAnnotator:
                 results = self.match_sentence(sent)
 
                 if results:
-                    print("#" * 40)
-                    print(sent, end="\n\n")
+                    self.logger.info("Found collection statement: %r", sent.text)
 
                     for neg_flag, (verb, action, args) in results:
+                        self.logger.info("Match: verb = %s, action = %s, args = %r", verb.lemma_, action, args)
+
                         match action:
                             case "COLLECT":
                                 collect_handler(neg_flag, *args)
@@ -368,5 +368,3 @@ class CollectionAnnotator:
                                 share_handler(neg_flag, *args)
                             case "USE":
                                 use_handler(neg_flag, *args)
-
-                    print("=" * 40)
