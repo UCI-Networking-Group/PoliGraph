@@ -45,7 +45,7 @@ def main():
         'aaid': 'advertising id',
         'fingerprint': None,
         'androidid': 'android id',
-        'geolatlon': 'geolocation',
+        'geolatlon': 'precise geolocation',
         'hwid': 'serial number',
         'routerssid': 'router ssid',
         'routermac': 'mac address',

@@ -3,6 +3,7 @@
 import argparse
 import itertools
 import json
+import logging
 import os
 import re
 from collections import defaultdict, deque
@@ -30,6 +31,9 @@ def expand_phrase(root_token):
             case "dep" | "meta":
                 # NLP glitches
                 return current_token.ent_type_ != ""
+            case "prep":
+                if not in_left_modifier and current_token.lemma_ in ["as"]:
+                    return False
             case "punct":
                 # Keep punct only it's inside a word/entity (e.g. health-related info)
                 flag = (current_token.i > 0 and current_token.i + 1 < len(doc)
@@ -104,7 +108,7 @@ def simplify_phrase(phrase):
         "some", "all", "any", "type", "variety", "category", "example",
         "more", "such", "other", "following", "additional",
         "certain", "similar", "limited", "various", "detailed",
-        "further", "enough", "e.g.", "i.e.",
+        "further", "enough", "e.g.", "i.e.", "etc",
         "which", "that",
     ])
 
@@ -214,6 +218,9 @@ class GraphBuilder:
         all_purpose_text = list(all_purpose_text)
         purpose_text_to_purpose = dict(zip(all_purpose_text, self.purpose_classifier.classify(all_purpose_text)))
 
+        for k, v in purpose_text_to_purpose.items():
+            logging.info("Purpose %r -> %s", k, v)
+
         for data_type, purpose_text_list in data_type_to_purpose_text_list.items():
             edge_purposes = list()
 
@@ -255,6 +262,8 @@ class GraphBuilder:
                     if stage1_graph.nodes[src2]["type"] == phrase_type:
                         # Call dag_add_edge to safely add an edge without creating a circle
                         dag_add_edge(stage1_graph, edge_from, edge_to, relationship=data["relationship"])
+                        stage1_graph.nodes[edge_from]['has_subsum_or_coref'] = True
+                        stage1_graph.nodes[edge_to]['has_subsum_or_coref'] = True
 
         # Step 4: Remove "OTHER" phrases
         to_remove = [n for n, d in stage1_graph.nodes(data=True) if d['type'] == 'OTHER']
@@ -289,11 +298,12 @@ class GraphBuilder:
                         normalized_terms = list(self.data_phrase_normalizer.normalize(phrase))
 
                         if len(normalized_terms) == 0:
-                            simplified = " ".join(t.lemma_ for t in simplify_phrase(phrase))
-
-                            if simplified:
+                            if simplified := " ".join(t.lemma_ for t in simplify_phrase(phrase)):
                                 if simplified in ["data", "datum", "information"]:
-                                    normalized_terms.append('UNSPECIFIC_DATA')
+                                    if data.get("has_subsum_or_coref"):
+                                        normalized_terms.append(f'{simplified} {src}')
+                                    else:
+                                        normalized_terms.append('UNSPECIFIC_DATA')
                                 elif simplified and simplified not in DATATYPE_KEYWORDS:
                                     # if simplified in DATATYPE_KEYWORDS, the term is too "common" to be considered
                                     normalized_terms.append(simplified)
@@ -305,17 +315,18 @@ class GraphBuilder:
                                 normalized_terms.append(entity_name)
 
                         if len(normalized_terms) == 0:
-                            simplified = " ".join(t.lemma_ for t in simplify_phrase(phrase))
-
-                            if simplified and simplified != "you":
+                            if (simplified := " ".join(t.lemma_ for t in simplify_phrase(phrase))) not in ["", "you"]:
                                 if simplified in ACTOR_KEYWORDS:
-                                    normalized_terms.append('UNSPECIFIC_ENTITY')
+                                    if data.get("has_subsum_or_coref"):
+                                        normalized_terms.append(f'{simplified} {src}')
+                                    elif len(phrase) == 1:
+                                        normalized_terms.append('UNSPECIFIC_ENTITY')
                                 else:
                                     normalized_terms.append(simplified)
                     case _:
                         raise ValueError("Invalid type")
 
-                # print(phrase, normalized_terms)
+                logging.info("Phrase %r (%s) -> %r", phrase.text, data["type"], ", ".join(normalized_terms))
                 data["normalized_terms"].update(normalized_terms)
 
         return stage1_graph
@@ -366,11 +377,15 @@ class GraphBuilder:
         # Some sentences lead to subsumption relationship between 1st/3rd parties.
         # Workaround: Simply ignore all subsumption edges to "first party" / "third party"        
         for u, v, k in stage2_graph.in_edges(["first party", "third party"], keys=True):
-            print(f"Potentially invalid edge: {u} -> {v}")
+            logging.warning(f"Invalid edge: {u} -> {v}")
             edges_to_remove.append((u, v, k))
 
         # Prevent UNSPECIFIC_* nodes from subsume anything
         for u, v, k in stage2_graph.out_edges(["UNSPECIFIC_DATA", "UNSPECIFIC_ENTITY"], keys=True):
+            if k == "SUBSUM":
+                edges_to_remove.append((u, v, k))
+
+        for u, v, k in stage2_graph.in_edges(["UNSPECIFIC_DATA", "UNSPECIFIC_ENTITY"], keys=True):
             if k == "SUBSUM":
                 edges_to_remove.append((u, v, k))
 
@@ -418,6 +433,8 @@ def colorize_graph(graph):
 
 
 def main():
+    logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--nlp", required=True, help="NLP model directory")
     parser.add_argument("-p", "--phrase-map", required=True, help="Path to phrase_map.yml")
@@ -435,7 +452,7 @@ def main():
             return json.dumps(obj)
 
     for d in args.workdirs:
-        print(f"Processing {d} ...")
+        logging.info(f"Processing {d} ...")
 
         document = PolicyDocument.load(d, nlp)
         knowledge_graph = graph_builder.build_graph(document)

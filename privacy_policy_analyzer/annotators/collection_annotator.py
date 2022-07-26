@@ -82,8 +82,13 @@ class ChainMatcher:
 
 
 class SentencePattern:
+    counter = itertools.count()
+
     def __init__(self, pattern, token_map):
-        self.debug_info = pattern
+        # For logging / debugging
+        self.original_pattern = pattern
+        self.rule_id = next(SentencePattern.counter)
+
         self.root_lemmas = set()
 
         for k in pattern["root"]:
@@ -134,7 +139,7 @@ class SentencePattern:
         self.transform_rule = pattern["transform"]
 
     def __repr__(self):
-        return f"SentencePattern: {self.debug_info}"
+        return f"SentencePattern: {self.original_pattern}"
 
     def match_root(self, root_token):
         if root_token.lemma_ not in self.root_lemmas:
@@ -282,9 +287,7 @@ class CollectionAnnotator(BaseAnnotator):
 
                 for sentence_matcher in sentence_matcher_list:
                     if sentence_matcher.fully_matched:
-                        matched_results.append((neg_flag, sentence_matcher.get_result()))
-                        # print(sentence_matcher.get_result())
-                        # print(sentence_matcher.pattern)
+                        matched_results.append((sentence_matcher.pattern, neg_flag, sentence_matcher.get_result()))
 
             return to_return
 
@@ -349,22 +352,23 @@ class CollectionAnnotator(BaseAnnotator):
 
         for doc in document.iter_docs():
             for sent in doc.sents:
-                if sent[-1].norm_ == "?" or sent[0].tag_ in ['WRB', 'WDT']:
+                if sent[-1].norm_ == "?":
                     # Skip interrogative sentences
                     continue
 
-                results = self.match_sentence(sent)
+                if len(results := self.match_sentence(sent)) == 0:
+                    continue
 
-                if results:
-                    self.logger.info("Found collection statement: %r", sent.text)
+                self.logger.info("Found collection statement: %r", sent.text)
 
-                    for neg_flag, (verb, action, args) in results:
-                        self.logger.info("Match: verb = %s, action = %s, args = %r", verb.lemma_, action, args)
+                for pattern, neg_flag, (verb, action, args) in results:
+                    self.logger.info("Rule %d: verb = %s, action = %s, args = %r",
+                                     pattern.rule_id, verb.lemma_, action, args)
 
-                        match action:
-                            case "COLLECT":
-                                collect_handler(neg_flag, *args)
-                            case "SHARE":
-                                share_handler(neg_flag, *args)
-                            case "USE":
-                                use_handler(neg_flag, *args)
+                    match action:
+                        case "COLLECT":
+                            collect_handler(neg_flag, *args)
+                        case "SHARE":
+                            share_handler(neg_flag, *args)
+                        case "USE":
+                            use_handler(neg_flag, *args)

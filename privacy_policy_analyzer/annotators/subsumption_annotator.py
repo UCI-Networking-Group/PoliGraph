@@ -128,6 +128,12 @@ class SubsumptionAnnotator(BaseAnnotator):
             {
                 "LEFT_ID": "anchor_limited",
                 "REL_OP": ">",
+                "RIGHT_ID": "anchor_not",
+                "RIGHT_ATTRS": {"LEMMA": "not"}
+            },
+            {
+                "LEFT_ID": "anchor_limited",
+                "REL_OP": ">",
                 "RIGHT_ID": "anchor_to",
                 "RIGHT_ATTRS": {"LEMMA": "to"}
             },
@@ -145,6 +151,45 @@ class SubsumptionAnnotator(BaseAnnotator):
             }
         ]
         self.matcher.add("SUBSUM_INCLUDING_LIMITED_TO", [pattern])
+
+        # includes but not limits to
+        pattern = [
+            {
+                "RIGHT_ID": "anchor_include",
+                "RIGHT_ATTRS": {"LEMMA": "include"}
+            },
+            {
+                "LEFT_ID": "anchor_include",
+                "REL_OP": ">",
+                "RIGHT_ID": "anchor_limit",
+                "RIGHT_ATTRS": {"DEP": "conj", "LEMMA": "limit"}
+            },
+            {
+                "LEFT_ID": "anchor_limit",
+                "REL_OP": ">",
+                "RIGHT_ID": "anchor_not",
+                "RIGHT_ATTRS": {"LEMMA": "not"}
+            },
+            {
+                "LEFT_ID": "anchor_limit",
+                "REL_OP": ">",
+                "RIGHT_ID": "anchor_to",
+                "RIGHT_ATTRS": {"LEMMA": "to"}
+            },
+            {
+                "LEFT_ID": "anchor_include",
+                "REL_OP": ">",
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": {"DEP": "nsubj", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "anchor_to",
+                "REL_OP": ">",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            }
+        ]
+        self.matcher.add("SUBSUM_INCLUDES_LIMITS_TO", [pattern])
 
         # for example
         pattern = [
@@ -172,6 +217,27 @@ class SubsumptionAnnotator(BaseAnnotator):
             },
         ]
         self.matcher.add("SUBSUM_FOR_EXAMPLE", [pattern])
+
+        # especially
+        pattern = [
+            {
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "upper_token",
+                "REL_OP": ">",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {"DEP": "appos", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "lower_token",
+                "REL_OP": ">",
+                "RIGHT_ID": "token_especially",
+                "RIGHT_ATTRS": {"LEMMA": {"IN": ["NOUN", "especially", "particularly"]}, "POS": 'ADV'}
+            },
+        ]
+        self.matcher.add("SUBSUM_ESPECIALLY", [pattern])
 
         # e.g. / i.e.
         pattern = [
@@ -222,10 +288,19 @@ class SubsumptionAnnotator(BaseAnnotator):
         self.matcher.add("SUBSUM_SUCH_N_AS", [pattern])
 
     def annotate_subsum_patterns(self, document, doc):
+
+        def has_negation(matched_tokens):
+            for token_id in matched_tokens:
+                for child in doc[token_id].children:
+                    if child.dep_ == "neg" and child.i not in matched_tokens:
+                        return True
+
+            return False
+
         matches = self.matcher(doc)
 
         for match_id, matched_tokens in matches:
-            if any(c.dep_ == "neg" for t in matched_tokens for c in doc[t].children):
+            if has_negation(matched_tokens):
                 # Skip negations
                 continue
 

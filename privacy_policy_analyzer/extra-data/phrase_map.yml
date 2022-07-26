@@ -14,7 +14,7 @@ DATA:
 
   identifier:
     - '^identifier$'
-    - '^(other\s+)?(unique|persistent) identifier$'
+    - '^((other|universally)\s+)?(unique|persistent|other) identifier$'
 
   # government IDs
   government identifier:
@@ -37,7 +37,7 @@ DATA:
 
   # personal characteristics
   personal characteristic:
-    - '(personal|user|demographic) characteristic'
+    - '(personal|user|demographic|population|physical) characteristic'
 
   protected classification:
     - 'protected classification'
@@ -48,9 +48,12 @@ DATA:
 
   age:
     - '^age$'
+    - 'age (range|level|information)'
+    - '(exact|user) age'
 
   gender:
     - '^(gender|sex)$'
+    - 'gender information'
 
   "race / ethnicity":
     - 'race'
@@ -63,7 +66,7 @@ DATA:
 
   voiceprint:
     - 'voiceprint'
-    - 'voice pattern'
+    - 'voice (record(ing)?|pattern)'
 
   fingerprint:
     - 'fingerprint'
@@ -76,10 +79,11 @@ DATA:
     - 'geographic (information|data|history|detail)'
     - 'location (base|relate|specific)'
     - 'location (mapping|tracking) data'
+    - 'physical location'
     - '!(precise|A?GPS|coarse|non-precise|approximate)'
 
   precise geolocation:
-    - 'precise\b.*\b(geo-?(graphic)?\s*)?location'
+    - '(precise|gps)\b.*\b(geo-?(graphic)?\s*)?location'
     - 'location coordinate'
     - '=A?GPS'
     - '(latitude|longitude)'
@@ -93,6 +97,7 @@ DATA:
     - 'contact\b.*\b(info(rmation)?|data|detail|method)'
     - 'information\b.*\bused to contact\b.*\byou'
     - '!(cannot|no[nt]?)'
+    - '(customer|emergency) contact$'
 
   person name:
     - '(first|last|family|middle|given|real|legal|maiden|person|contact|passenger|personal|full|sur)\s*name'
@@ -103,11 +108,12 @@ DATA:
     - '(mobile|fax|contact) number'
 
   email address:
-    - '(e[\s-]?mail)\b.*\b(address|account|address information)'
+    - '(e[\s-]?mail|electronic mail)\b.*\b(address|account|address information)'
 
   postal address:
     - '(home|work|postal|physical|residential|street|billing|accurate|shipping|delivery|your|mail|mailing|primary) address'
     - '^address$'
+    - '!(e-?mail|electronic mail)'
 
   # device identifiers
   device identifier:
@@ -136,8 +142,7 @@ DATA:
     - 'ad(vertis(ing|er))?\b.*\bid(entifier)?'
     - 'advertising id(entification)? number'
     - 'id(entifier?)?\b.*\badvertising'
-    - 'a[ad]id'
-    - 'idfa'
+    - '(a[ad]id|idfa|gaid)'
 
   gsf id:
     - 'gsf id'
@@ -145,6 +150,7 @@ DATA:
   android id:
     - 'android[_\s]?(ud)?id(entifier)?'
     - 'android device id(entifier)?'
+    - 'SSAID'
 
   serial number:
     - "(device|android)('s)? serial (number|no)"
@@ -199,37 +205,44 @@ DATA:
   'aggregate / deidentified / pseudonymized information':
     - '(aggregated?|anonymized|anonymised|anonymous|de-identified) (data|information)'
 
+  anonymous identifier:
+  - '(anonymous|pseudonymous)\b.*\bidentifier'
+
 ACTOR:
   first party:
   - '^(we|us|i)$'
-  - '^our (service|(web)?site|product|server|app(lication)?|system|software|company)$'
+  - '^our (service|(web)?site|product|server|app(lication)?|system|software|company|business|platform)$'
   - '^our .*\b(affiliated?|subsidiary)'
-  - '^this (website|site|app(lication)?)$'
+  - '^(this|the) (website|site|app(lication)?|software|service)$'
 
   third party:
-  - '(third|external)[\s-]?party\b\s*\b(service|provider|partner|vendor|website|site|company|platform|contractor)?$'
-  - '(third|external) party (we use|service provider)$'
-  - 'service provider$'
-  - '^other (service|provider|partner|vendor|website|site|company|platform|contractor|party)$'
+  - '(third|external)[\s-]?party\b\s*\b(service|service provider|provider|partner|vendor|website|site|company|platform|contractor)?$'
+  - '(third|external) party (we use|we engage|service provider)$'
+  - '^service provider$'
+  - '(other|another) (service|provider|partner|vendor|website|site|company|platform|contractor|party|business)$'
+  - '^our (partner|vendor)'
 
   advertising provider:
-  - 'ad(vertis\w+)?\b.*\b(provider|network|company|platform|vendor|partner|agency|service)'
+  - 'ad(vertis\w+)?\b.*\b(provider|network|company|platform|vendor|partner|agency|service|technology|server)'
   - 'advertiser'
 
   social network:
-  - 'social (network\w*|medium)'
+  - 'social (network\w*|medium|media|platform|platform)'
 
   analytic provider:
   - 'analytics?\b.*\b(provider|company|platform|vendor|partner|service|tool|software)'
-  - 'measurement service'
-  - 'business analytics'
+  - '^analytics$'
+  - 'measurement (service|analytics|company|provider)'
+  - '(business|trend|third[- ]party|site|web|marketing|data) analytics'
+  - 'market research'
 
   email service provider:
-  - 'email\b.*\b(provider|service)'
+  - '(e-?mail|electronic mail)\b.*\b(provider|service|vendor)'
   - 'provider of\b.*\bemail'
+  - 'service provider\b.*\bsend e-?mail'
 
   content provider:
-  - 'content provider'
+  - 'content (provider|publisher|distributor|partner)'
 
   search engine:
   - 'search (engine|information|result)\b.*\b(provider)?'

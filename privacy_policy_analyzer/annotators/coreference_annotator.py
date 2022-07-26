@@ -37,6 +37,27 @@ class CoreferenceAnnotator(BaseAnnotator):
         self.matcher.add("COREF_SOME_OF", [pattern])
 
     def annotate_one_doc(self, document, doc):
+        def infer_type(token):
+            """Infer noun phrase type through SUBSUM edges"""
+            # Use BFS here to avoid a loop.
+            bfs_queue = [token]
+            seen = {token}
+            i = 0
+
+            while i < len(bfs_queue):
+                tok = bfs_queue[i]
+                i += 1
+
+                if tok._.ent_type in ["DATA", "ACTOR"]:
+                    return tok._.ent_type
+                elif tok._.ent_type == "NN":
+                    for _, linked_token, relationship in document.get_all_links(tok):
+                        if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
+                            bfs_queue.append(linked_token)
+                            seen.add(linked_token)
+
+            return None
+
         last_sentence_ents = []
 
         # Handle pronouns
@@ -52,6 +73,16 @@ class CoreferenceAnnotator(BaseAnnotator):
                     for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
                         if prev_noun_phrase[-1].lemma_ == noun_phrase[-1].lemma_:
                             referent = prev_noun_phrase
+                            reason = "SAME_ROOT"
+                            break
+
+                if referent is None and noun_phrase.lemma_ in ["they", "this", "these", "it"]:
+                    inferred_type = infer_type(noun_phrase.root)
+
+                    for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
+                        if prev_noun_phrase._.ent_type == inferred_type:
+                            referent = prev_noun_phrase
+                            reason = "SAME_TYPE"
                             break
 
                 if referent is None and noun_phrase.lemma_ == "they":
@@ -59,13 +90,13 @@ class CoreferenceAnnotator(BaseAnnotator):
                     for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
                         if (prev_noun_phrase._.ent_type == "ACTOR" and prev_noun_phrase.root.tag_ in ["NNS", "NNPS"]):
                             referent = prev_noun_phrase
+                            reason = "THEY_ACTOR"
                             break
 
-
                 if referent is not None:
-                    self.logger.info("Sentence 1: %r", noun_phrase.sent)
-                    self.logger.info("Sentence 2: %r", referent.sent)
-                    self.logger.info("Edge COREF: %r -> %r", noun_phrase.text, referent.text)
+                    self.logger.info("Sentence 1: %r", referent.sent.text)
+                    self.logger.info("Sentence 2: %r", noun_phrase.sent.text)
+                    self.logger.info("Edge COREF (%s): %r -> %r", reason, noun_phrase.text, referent.text)
 
                     document.link(noun_phrase.root, referent.root, "COREF")
 
