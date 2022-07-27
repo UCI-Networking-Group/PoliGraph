@@ -131,9 +131,9 @@ def main():
             vague_endpoints = list()
 
             if recipient_entity in first_party_entities:
-                if "first party" in kgraph:
-                    clear_endpoints.append("first party")
-                    hypernym_paths["first party"] = ("first party",)
+                if "we" in kgraph:
+                    clear_endpoints.append("we")
+                    hypernym_paths["we"] = ("we",)
 
                 result["party"] = "first party"
             else:

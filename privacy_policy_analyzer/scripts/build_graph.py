@@ -109,7 +109,7 @@ def simplify_phrase(phrase):
         "more", "such", "other", "following", "additional",
         "certain", "similar", "limited", "various", "detailed",
         "further", "enough", "e.g.", "i.e.", "etc",
-        "which", "that",
+        "which", "that", "collectively",
     ])
 
     def dfs(token, state):
@@ -375,8 +375,8 @@ class GraphBuilder:
 
         edges_to_remove = []
         # Some sentences lead to subsumption relationship between 1st/3rd parties.
-        # Workaround: Simply ignore all subsumption edges to "first party" / "third party"        
-        for u, v, k in stage2_graph.in_edges(["first party", "third party"], keys=True):
+        # Workaround: Simply ignore all subsumption edges to "first party" / "third party"
+        for u, v, k in stage2_graph.in_edges(["we", "third party"], keys=True):
             logging.warning(f"Invalid edge: {u} -> {v}")
             edges_to_remove.append((u, v, k))
 
