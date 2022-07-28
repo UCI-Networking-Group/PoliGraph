@@ -5,13 +5,22 @@ import spacy
 from spacy.language import Language
 from spacy.tokens import Span
 
-DATATYPE_KEYWORDS = frozenset({"information", "data", "datum", "address", "number", "identifier",
-                               "preference", "setting"})
-ACTOR_KEYWORDS = frozenset(['advertiser', 'affiliate', 'analytic', 'analytics', 'app', 'application',
-                            'broker', 'business', 'carrier', 'company', 'corporation',
-                            'distributor', 'network', 'operator', 'organization',
-                            'partner', 'party', 'platform', 'processor', 'product', 'provider', 'publisher',
-                            'service', 'site', 'software', 'subsidiary', 'vendor', 'website'])
+DATATYPE_KEYWORDS = frozenset([
+    "information", "data", "datum", "address", "number", "identifier", "preference", "setting"
+])
+ACTOR_KEYWORDS = frozenset([
+    'advertiser', 'affiliate', 'analytic', 'analytics', 'app', 'application',
+    'broker', 'business', 'carrier', 'company', 'corporation', 'distributor',
+    'network', 'operator', 'organization', 'partner', 'party', 'platform',
+    'processor', 'product', 'provider', 'publisher', 'service', 'site',
+    'software', 'subsidiary', 'vendor', 'website'])
+TRIVIAL_WORDS = frozenset([
+    "some", "all", "any", "type", "variety", "category", "example", "more",
+    "such", "other", "following", "below", "additional", "certain", "similar",
+    "limited", "various", "further", "enough", "e.g.", "i.e.", "etc",
+    "which", "that", "collectively", "detailed",
+])
+
 
 @Language.component(
     "label_all_phrases",

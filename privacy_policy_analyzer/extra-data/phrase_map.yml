@@ -1,6 +1,9 @@
 DATA:
+  UNSPECIFIC:
+    - '^(information|data|datum)(we collect| about (you|user|our user))?$'
+
   personal information:
-    - '^((your|user)\s+)?personal (data|info|information)$'
+    - '^((your|user|the)\s+)?personal (data|info|information|datum)$'
     - '^personal (data|info|information) (that )?(about (you|user)|you (provide|enter|submit))'
     - '!(cannot|no[nt]?)'
 
@@ -40,7 +43,7 @@ DATA:
     - '(personal|user|demographic|population|physical) characteristic'
 
   protected classification:
-    - 'protected classification'
+    - 'protect(ed)? classification'
 
   date of birth:
     - 'date of birth'
@@ -62,7 +65,7 @@ DATA:
   # biometric information
   biometric information:
     - 'biometrics'
-    - 'biometric (data|information|identifier)'
+    - 'biometric\b.*\b(data|information|identifier|detail|technology)'
 
   voiceprint:
     - 'voiceprint'
@@ -174,19 +177,16 @@ DATA:
   'cookie / pixel tag':
     - 'cookie'
     - 'pixel tag'
-    - 'web beacon'
-
-  web beacon:
     - 'web (beacon|bug)'
     - '(clear|transparent|invisible) (gif|graphic|image)s?'
     - '(pixel|gif) tag'
 
   # usage / activity data
   internet activity:
-    - '(internet|website|app(lication)) (activity|usage)'
+    - '(internet|website|app(lication)?|in-game|on-?line|player|user|system) (activity|usage)'
 
   'browsing / search history':
-    - '(browsing|search|browse|online) (history|behaviour)'
+    - '(browsing|search|browse|online) (history|behaviour|behavior|activity)'
 
   package dump:
     - 'app(lication)? list'
@@ -209,40 +209,47 @@ DATA:
   - '(anonymous|pseudonymous)\b.*\bidentifier'
 
 ACTOR:
-  first party:
+  we:
   - '^(we|us|i)$'
-  - '^our (service|(web)?site|product|server|app(lication)?|system|software|company|business|platform)$'
-  - '^our .*\b(affiliated?|subsidiary)'
-  - '^(this|the) (website|site|app(lication)?|software|service)$'
+  - '^our (service|(web)?site|product|server|app(lication|s)?|mobile application|system|software|company|business|platform)$'
+  - '^our\b.*\b(affiliated?|subsidiary|(group )?company)'
+  - '^(this|the) (website|site|app(s|lication)?|software|service?|company|owner)$'
+  - '(services?|software|app(s|lication)?)\b.*\b(we (offer|provide))'
 
-  third party:
-  - '(third|external)[\s-]?party\b\s*\b(service|service provider|provider|partner|vendor|website|site|company|platform|contractor)?$'
-  - '(third|external) party (we use|we engage|service provider)$'
-  - '^service provider$'
-  - '(other|another) (service|provider|partner|vendor|website|site|company|platform|contractor|party|business)$'
-  - '^our (partner|vendor)'
+  UNSPECIFIC:
+  - '((third|external|outside|other)[\s-]?party|data (controller|processor))'
+  - '(other|another|external|outside) (service|provider|partner|vendor|website|site|company|platform|contractor|party|business|organi[sz]ation)$'
+  - '(our|other|another|external|outside) (partner|vendor)'
+  - '^(our|other|another|external|outside)?\b.*\bservice provider$'
+  - '!(ad(vertis\w+)?|social|(e-?)?mail|analytics?|measurement|market(ing)?|track(ing)?|content|search|payment|government|auth(entication)?)'
 
-  advertising provider:
-  - 'ad(vertis\w+)?\b.*\b(provider|network|company|platform|vendor|partner|agency|service|technology|server)'
+  advertiser:
+  - 'ad(vertis\w+)?\b.*\b(provider|network|company|platform|vendor|partner|agency|service|technology|server|sdk)'
   - 'advertiser'
 
-  social network:
-  - 'social (network\w*|medium|media|platform|platform)'
+  auth provider:
+  - '(auth(entication)?|identity)\b.*\b(provider|service)'
+  - 'single sign-?(on|in)'
+
+  social media:
+  - 'social (network\w*|medium|media|platform)'
 
   analytic provider:
-  - 'analytics?\b.*\b(provider|company|platform|vendor|partner|service|tool|software)'
+  - 'analytics?\b.*\b(provider|company|platform|vendor|partner|service|tool|software|technology)'
   - '^analytics$'
   - 'measurement (service|analytics|company|provider)'
   - '(business|trend|third[- ]party|site|web|marketing|data) analytics'
   - 'market research'
+  - 'tracking (tool|utility|service)'
 
+  content provider:
+  - 'content (provider|publisher|distributor|partner)'
+
+  # Below are not really in use
   email service provider:
   - '(e-?mail|electronic mail)\b.*\b(provider|service|vendor)'
   - 'provider of\b.*\bemail'
   - 'service provider\b.*\bsend e-?mail'
-
-  content provider:
-  - 'content (provider|publisher|distributor|partner)'
 
   search engine:
   - 'search (engine|information|result)\b.*\b(provider)?'

@@ -94,6 +94,8 @@ def main():
         "media.autoplay.default": 5,
         "media.peerconnection.enabled": False,
         "privacy.trackingprotection.enabled": True,
+        "privacy.trackingprotection.lower_network_priority": True,
+        "privacy.trackingprotection.socialtracking.enabled": True,
     }
 
     with sync_playwright() as p:
@@ -129,8 +131,10 @@ def main():
                 error_cleanup(f"Got HTTP error {status_code}")
 
         # Apply readability.js
+        page.evaluate("window.stop()")
         page.add_script_tag(content=get_readability_js())
         readability_info = page.evaluate("""() => {
+            window.stop();
             const documentClone = document.cloneNode(true);
             const article = new Readability(documentClone).parse();
             document.body.innerHTML = article.content;

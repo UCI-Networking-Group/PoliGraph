@@ -135,7 +135,7 @@ patterns:
   # ... E1 collect from E2 includes DT
   - root: ['include']
     match: ['!@D1:nsubj,VERB_COLLECT_FROM:relcl,@E1:nsubj', '*:nsubj,VERB_COLLECT_FROM:relcl,from,@E2:pobj', '!@D2:dobj']
-    transform: ['COLLECT', 'E1', ['D1', 'D2'], 'E2']
+    transform: ['COLLECT', 'E1', ['D2', 'D1'], 'E2']
 
   # ... E1 use includes DT
   - root: ['include']

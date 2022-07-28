@@ -1,3 +1,5 @@
+from collections import deque
+
 import networkx as nx
 from spacy.matcher import DependencyMatcher
 
@@ -287,6 +289,27 @@ class SubsumptionAnnotator(BaseAnnotator):
         ]
         self.matcher.add("SUBSUM_SUCH_N_AS", [pattern])
 
+        # ..., ... (collectively "XXX")
+        pattern = [
+            {
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": {"DEP": "appos", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+            {
+                "LEFT_ID": "upper_token",
+                "REL_OP": ">",
+                "RIGHT_ID": "advmod_collectively",
+                "RIGHT_ATTRS": {"DEP": "advmod", "LEMMA": "collectively"}
+            },
+            {
+                "LEFT_ID": "upper_token",
+                "REL_OP": "<",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {"DEP": "conj", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+            },
+        ]
+        self.matcher.add("SUBSUM_COLLECTIVELY", [pattern])
+
     def annotate_subsum_patterns(self, document, doc):
 
         def has_negation(matched_tokens):
@@ -296,6 +319,27 @@ class SubsumptionAnnotator(BaseAnnotator):
                         return True
 
             return False
+
+        def search_child_ent(root_token):
+            bfs_queue = deque()
+            bfs_queue.append(root_token)
+            visited_tokens = set()
+
+            while len(bfs_queue):
+                token = bfs_queue.popleft()
+
+                if has_negation([token.i]):
+                    continue
+
+                if token.i not in visited_tokens:
+                    if ent := token._.ent:
+                        visited_tokens.update(t.i for t in ent)
+                        yield ent
+
+                for child in token.children:
+                    if (child.dep_ in ["pobj", "dobj", "conj", "appos"] or
+                        child.dep_ == "prep" and child.lemma_ in ["about", "regard"]):
+                        bfs_queue.extend(token.children)
 
         matches = self.matcher(doc)
 
@@ -308,28 +352,22 @@ class SubsumptionAnnotator(BaseAnnotator):
             _, (match_spec, ) = self.matcher.get(match_id)
 
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
+            if rule_name == "SUBSUM_COLLECTIVELY":
+                match_info["lower_token"] = sorted(match_info["lower_token"].conjuncts)[0]
+
             upper_ent = match_info["upper_token"]._.ent
-            lower_ent = match_info["lower_token"]._.ent
             sentence = match_info["upper_token"].sent
 
-            if upper_ent is None or lower_ent is None:
+            if upper_ent is None:
                 continue
 
             self.logger.info("Rule %s matches %r", rule_name, sentence.text)
-            self.logger.info("Matched tokens: upper = %r, lower = %r", upper_ent.text, lower_ent.text)
+            self.logger.info("Matched upper token: %r", upper_ent.text)
 
-            all_lower_ents = [lower_ent]
-
-            for conj in get_conjuncts(lower_ent.root):
-                if all(t.dep_ != "neg" for t in conj.children):
-                    if (ent := conj._.ent) and ent_type_is_compatible(upper_ent, ent):
-                        all_lower_ents.append(ent)
-
-            all_lower_ents.sort()
-            self.logger.info("Edge SUBSUM: %r -> %r", upper_ent.text, all_lower_ents)
-
-            for lower_ent in all_lower_ents:
-                document.link(upper_ent.root, lower_ent.root, "SUBSUM")
+            for child_ent in search_child_ent(match_info["lower_token"]):
+                if ent_type_is_compatible(upper_ent, child_ent):
+                    document.link(upper_ent.root, child_ent.root, "SUBSUM")
+                    self.logger.info("Edge SUBSUM: %r -> %r", upper_ent.text, child_ent.text)
 
     def annotate_first_party_appos(self, document, doc):
         for sent in doc.sents:

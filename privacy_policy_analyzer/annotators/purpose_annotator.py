@@ -1,12 +1,78 @@
 from spacy.matcher import DependencyMatcher
 
 from .base import BaseAnnotator
+from ..named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS, TRIVIAL_WORDS
+
+
+class PurposeValidator:
+    def __init__(self, vocab):
+        self.deny_matcher = DependencyMatcher(vocab)
+
+        patterns = []
+        patterns.append([
+            {
+                "RIGHT_ID": "anchor",
+                "RIGHT_ATTRS": {"LEMMA": "for"}
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": ">",
+                "RIGHT_ID": "r00",
+                "RIGHT_ATTRS": {"LEMMA": {"IN": [
+                    "day", "week", "month", "year", "period", "time", "instance"]
+                }}
+            },
+        ])
+        patterns.append([
+            {
+                "RIGHT_ID": "anchor",
+                "RIGHT_ATTRS": {"LEMMA": {"IN": ["purpose", "reason", "use"]}}
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": ">",
+                "RIGHT_ID": "r00",
+                "RIGHT_ATTRS": {"LEMMA": {"IN": [
+                    "this", "that", "these", "those", "any", "such", "various", "certain"
+                ]}}
+            },
+        ])
+        patterns.append([
+            {
+                "RIGHT_ID": "anchor",
+                "RIGHT_ATTRS": {"LEMMA": {"IN": ["purpose", "reason", "use"]}}
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": ">",
+                "RIGHT_ID": "r00",
+                "RIGHT_ATTRS": {"DEP": "nummod"}
+            },
+        ])
+        self.deny_matcher.add("DENY", patterns)
+
+        self.additional_stop_words = {"purpose", "reason", "use"}
+        self.additional_stop_words.update(ACTOR_KEYWORDS)
+        self.additional_stop_words.update(DATATYPE_KEYWORDS)
+        self.additional_stop_words.update(TRIVIAL_WORDS)
+
+    def __call__(self, span):
+        if self.deny_matcher(span):
+            return False
+
+        if span.root.lemma_ == "collect":
+            return False
+
+        for token in span:
+            if not(token.is_stop or token.lemma_ in self.additional_stop_words):
+                return True
 
 
 class PurposeAnnotator(BaseAnnotator):
     def __init__(self, nlp):
         super().__init__(nlp)
         self.matcher = DependencyMatcher(nlp.vocab)
+        self.validator = PurposeValidator(nlp.vocab)
 
         # to do sth.
         pattern = [
@@ -100,6 +166,9 @@ class PurposeAnnotator(BaseAnnotator):
             sentence = purpose_root.sent
             right_end = max(t.i for t in purpose_root.subtree) + 1
             purpose_part = doc[purpose_root.i:right_end]
+
+            if not self.validator(purpose_part):
+                continue
 
             self.logger.info("Rule %s matches %r", rule_name, sentence.text)
             self.logger.info("Purpose phrase: %r", purpose_part.text)

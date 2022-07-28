@@ -79,17 +79,18 @@ class EntityMatcher:
 
     def match_name(self, name):
         if name.lower() in self.domain_mapping:
-            return self.domain_mapping[name.lower()]
+            yield self.domain_mapping[name.lower()]
+            return
 
         for m in self.keyword_matching_regex.finditer(name):
             entity, oov_flag = self.ngram_mapping[m[0].lower()]
 
             if oov_flag:
-                return entity
+                yield entity
+                continue
 
             r = regex.compile(r"\b(?:\L<keywords>)\b", keywords=[m[0]])
             for full_name in self.entity_names[entity]:
                 if r.search(full_name):
-                    return entity
-
-        return None
+                    yield entity
+                    break

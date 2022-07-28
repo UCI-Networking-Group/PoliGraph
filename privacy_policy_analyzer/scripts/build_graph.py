@@ -12,7 +12,7 @@ import networkx as nx
 import spacy
 import yaml
 from privacy_policy_analyzer.document import PolicyDocument
-from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS
+from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS, TRIVIAL_WORDS
 from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
 from privacy_policy_analyzer.purpose_classification import PurposeClassifier
 
@@ -55,65 +55,51 @@ def expand_phrase(root_token):
         return True
 
     # Noun phrase, try to include simple children
-    bfs_queue = [root_token]
+    left_idx = root_token.i
+    for child in sorted(root_token.lefts, reverse=True):
+        if should_include(child):
+            child_indices = sorted(t.i for t in child.subtree)
 
-    while len(bfs_queue) > 0:
-        token = bfs_queue.pop(0)
-
-        left_idx = token.i
-        for child in sorted(token.lefts, reverse=True):
-            if should_include(child):
-                child_indices = sorted(t.i for t in child.subtree)
-
-                if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
-                    and left_idx - 1 == child_indices[-1]):
-                    left_idx = child_indices[0]
-                else:
-                    break
+            if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
+                and left_idx - 1 == child_indices[-1]):
+                left_idx = child_indices[0]
             else:
                 break
+        else:
+            break
 
-        right_idx = token.i + 1
-        for child in sorted(token.rights):
-            if child.dep_ in ["conj", "appos"]:
-                bfs_queue.append(child)
-                break
-            elif should_include(child):
-                child_indices = sorted(t.i for t in child.subtree)
+    right_idx = root_token.i + 1
+    for child in sorted(root_token.rights):
+        if child.dep_ in ["conj", "appos"]:
+            break
+        elif should_include(child):
+            child_indices = sorted(t.i for t in child.subtree)
 
-                if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
-                    and right_idx == child_indices[0]):
-                    right_idx = child_indices[-1] + 1
-                else:
-                    break
+            if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
+                and right_idx == child_indices[0]):
+                right_idx = child_indices[-1] + 1
             else:
                 break
+        else:
+            break
 
-        # strip suffix "cc" words (e.g. and/or)
-        if doc[right_idx - 1].dep_ == "cc":
-            right_idx -= 1
+    # strip suffix "cc" words (e.g. and/or)
+    if doc[right_idx - 1].dep_ == "cc":
+        right_idx -= 1
 
-        # strip surrounding puncts
-        while doc[left_idx].lemma_ in '"\'([':
-            left_idx += 1
+    # strip surrounding puncts
+    while doc[left_idx].lemma_ in '"\'([':
+        left_idx += 1
 
-        while doc[right_idx - 1].lemma_ in '"\')]':
-            right_idx -= 1
+    while doc[right_idx - 1].lemma_ in '"\')]':
+        right_idx -= 1
 
-        yield doc[left_idx:right_idx]
+    return doc[left_idx:right_idx]
 
 
 def simplify_phrase(phrase):
-    trivial_words = frozenset([
-        "some", "all", "any", "type", "variety", "category", "example",
-        "more", "such", "other", "following", "additional",
-        "certain", "similar", "limited", "various", "detailed",
-        "further", "enough", "e.g.", "i.e.", "etc",
-        "which", "that", "collectively",
-    ])
-
     def dfs(token, state):
-        if token.lemma_ in trivial_words:
+        if token.lemma_ in TRIVIAL_WORDS:
             return
 
         match state:
@@ -176,9 +162,6 @@ class GraphBuilder:
                     stage1_graph.add_node(src, token=token, type="DATA")
                 case "ACTOR":
                     stage1_graph.add_node(src, token=token, type="ACTOR")
-                case "OTHER":
-                    # Will eventually remove these nodes
-                    stage1_graph.add_node(src, token=token, type="OTHER")
 
         # Step 2: Infer phrase type using COLLECT / NOT_COLLECT relationship
         for src1, src2, data in document.token_relationship.edges(data=True):
@@ -198,7 +181,7 @@ class GraphBuilder:
                     # This will never create a circle
                     stage1_graph.add_edge(src1, src2, relationship=relationship)
 
-        # Step 2.5: Annotate purposes
+        # Step 3: Annotate purposes
         data_type_to_purpose_text_list = defaultdict(list)
         all_purpose_text = set()
 
@@ -216,13 +199,13 @@ class GraphBuilder:
                     all_purpose_text.add(purpose_part.text)
 
         all_purpose_text = list(all_purpose_text)
-        purpose_text_to_purpose = dict(zip(all_purpose_text, self.purpose_classifier.classify(all_purpose_text)))
+        purpose_text_to_purpose = dict(zip(all_purpose_text, self.purpose_classifier(all_purpose_text)))
 
         for k, v in purpose_text_to_purpose.items():
             logging.info("Purpose %r -> %s", k, v)
 
         for data_type, purpose_text_list in data_type_to_purpose_text_list.items():
-            edge_purposes = list()
+            edge_purposes = []
 
             for purpose_text in purpose_text_list:
                 edge_purposes.append((purpose_text_to_purpose[purpose_text], purpose_text))
@@ -231,7 +214,7 @@ class GraphBuilder:
                 if edge_data["relationship"] == "COLLECT":
                     edge_data["purposes"] = edge_purposes
 
-        # Step 3: Infer phrase type using SUBSUM / COREF relationship
+        # Step 4: Infer phrase type using SUBSUM / COREF relationship
         # Run a BFS starting from nodes with known types.
         bfs_queue = deque(stage1_graph.nodes)
         visited_nodes = set(stage1_graph.nodes)
@@ -239,9 +222,6 @@ class GraphBuilder:
         while len(bfs_queue) > 0:
             src1 = bfs_queue.popleft()
             phrase_type = stage1_graph.nodes[src1]["type"]
-
-            if phrase_type == "OTHER":
-                continue
 
             in_edge_view = document.token_relationship.in_edges(src1, data=True)
             out_edge_view = document.token_relationship.out_edges(src1, data=True)
@@ -265,18 +245,15 @@ class GraphBuilder:
                         stage1_graph.nodes[edge_from]['has_subsum_or_coref'] = True
                         stage1_graph.nodes[edge_to]['has_subsum_or_coref'] = True
 
-        # Step 4: Remove "OTHER" phrases
-        to_remove = [n for n, d in stage1_graph.nodes(data=True) if d['type'] == 'OTHER']
-        stage1_graph.remove_nodes_from(to_remove)
-
         # Step 5: Infer meaning of each phrase using normalizers
         # Follow topological order to resolve coreferences
         for src in reversed(list(nx.topological_sort(stage1_graph))):
             data = stage1_graph.nodes[src]
-
             token = data["token"]
             # Normalized terms
             data["normalized_terms"] = normalized_terms = set()
+
+            # 5.1. COREF: inherit normalized_terms from coref main
             # Main phrase of a coreference. Technically we allow a phrase to have more than one COREF edges
             coref_main = set()
 
@@ -292,42 +269,47 @@ class GraphBuilder:
             else:
                 data["coref_main"] = {src}
 
-            for phrase in expand_phrase(token):
-                match data["type"]:
-                    case "DATA":
-                        normalized_terms = list(self.data_phrase_normalizer.normalize(phrase))
+            # 5.2. Not COREF: normalize the phrase
+            phrase = expand_phrase(token)
+            lemma = " ".join(t.lemma_ for t in simplify_phrase(phrase))
 
-                        if len(normalized_terms) == 0:
-                            if simplified := " ".join(t.lemma_ for t in simplify_phrase(phrase)):
-                                if simplified in ["data", "datum", "information"]:
-                                    if data.get("has_subsum_or_coref"):
-                                        normalized_terms.append(f'{simplified} {src}')
-                                    else:
-                                        normalized_terms.append('UNSPECIFIC_DATA')
-                                elif simplified and simplified not in DATATYPE_KEYWORDS:
-                                    # if simplified in DATATYPE_KEYWORDS, the term is too "common" to be considered
-                                    normalized_terms.append(simplified)
-                    case "ACTOR":
-                        normalized_terms = list(self.actor_phrase_normalizer.normalize(phrase))
+            # Skip empty string (NLP error) and "you" (entity but meaningless)
+            if lemma in ["", "you"]:
+                continue
 
-                        if any(t.pos_ == "PROPN" for t in phrase):
-                            if entity_name := self.entity_mapper.match_name(phrase.text):
-                                normalized_terms.append(entity_name)
+            match data["type"]:
+                case "DATA":
+                    normalized_terms.update(self.data_phrase_normalizer.normalize(phrase))
 
-                        if len(normalized_terms) == 0:
-                            if (simplified := " ".join(t.lemma_ for t in simplify_phrase(phrase))) not in ["", "you"]:
-                                if simplified in ACTOR_KEYWORDS:
-                                    if data.get("has_subsum_or_coref"):
-                                        normalized_terms.append(f'{simplified} {src}')
-                                    elif len(phrase) == 1:
-                                        normalized_terms.append('UNSPECIFIC_ENTITY')
-                                else:
-                                    normalized_terms.append(simplified)
-                    case _:
-                        raise ValueError("Invalid type")
+                    if len(normalized_terms) == 0:
+                        if lemma in DATATYPE_KEYWORDS:
+                            normalized_terms.add('UNSPECIFIC')
+                        else:
+                            normalized_terms.add(lemma)
+                case "ACTOR":
+                    # if there is any proper noun, run entity_mapper to find company names
+                    if any(t.pos_ == "PROPN" for t in phrase):
+                        normalized_terms.update(self.entity_mapper.match_name(phrase.text))
 
-                logging.info("Phrase %r (%s) -> %r", phrase.text, data["type"], ", ".join(normalized_terms))
-                data["normalized_terms"].update(normalized_terms)
+                    # try rule-based normalizer
+                    normalized_terms.update(self.actor_phrase_normalizer.normalize(phrase))
+
+                    # try lemmatizer
+                    if len(normalized_terms) == 0:
+                        if lemma in ACTOR_KEYWORDS:
+                            normalized_terms.add("UNSPECIFIC")
+                        else:
+                            normalized_terms.add(lemma)
+
+            if "UNSPECIFIC" in normalized_terms:
+                normalized_terms.remove("UNSPECIFIC")
+                if data.get("has_subsum_or_coref"):
+                    normalized_terms.add(f"{lemma} {src}")
+                else:
+                    normalized_terms.add("UNSPECIFIC_" + data["type"])
+
+            logging.info("Phrase %r (%s) -> %r", phrase.text, data["type"], ", ".join(normalized_terms))
+            data["normalized_terms"].update(normalized_terms)
 
         return stage1_graph
 
@@ -362,7 +344,7 @@ class GraphBuilder:
             for n1, n2 in itertools.product(normalized_terms1, normalized_terms2):
                 if not stage2_graph.has_edge(n1, n2, key=relationship):
                     if dag_add_edge(stage2_graph, n1, n2, key=relationship, sources=[], text=[]):
-                        if relationship == "COLLECT":
+                        if relationship in ["COLLECT", "NOT_COLLECT"]:
                             stage2_graph[n1][n2][relationship]["purposes"] = []
                     else:
                         continue
@@ -370,27 +352,28 @@ class GraphBuilder:
                 stage2_graph[n1][n2][relationship]["sources"].append(sorted(edge_sources))
                 stage2_graph[n1][n2][relationship]["text"].append(" | ".join(edge_sentences))
 
-                if relationship == "COLLECT":
+                if relationship in ["COLLECT", "NOT_COLLECT"]:
                     stage2_graph[n1][n2][relationship]["purposes"].extend(edge_data.get("purposes", []))
 
         edges_to_remove = []
         # Some sentences lead to subsumption relationship between 1st/3rd parties.
-        # Workaround: Simply ignore all subsumption edges to "first party" / "third party"
+        # Workaround: Simply ignore all subsumption edges to "we" / "third party"
         for u, v, k in stage2_graph.in_edges(["we", "third party"], keys=True):
             logging.warning(f"Invalid edge: {u} -> {v}")
             edges_to_remove.append((u, v, k))
 
         # Prevent UNSPECIFIC_* nodes from subsume anything
-        for u, v, k in stage2_graph.out_edges(["UNSPECIFIC_DATA", "UNSPECIFIC_ENTITY"], keys=True):
+        for u, v, k in stage2_graph.out_edges(["UNSPECIFIC_DATA", "UNSPECIFIC_ACTOR"], keys=True):
             if k == "SUBSUM":
                 edges_to_remove.append((u, v, k))
 
-        for u, v, k in stage2_graph.in_edges(["UNSPECIFIC_DATA", "UNSPECIFIC_ENTITY"], keys=True):
+        for u, v, k in stage2_graph.in_edges(["UNSPECIFIC_DATA", "UNSPECIFIC_ACTOR"], keys=True):
             if k == "SUBSUM":
                 edges_to_remove.append((u, v, k))
 
         stage2_graph.remove_edges_from(edges_to_remove)
 
+        # Remove isolated nodes
         for node in list(stage2_graph.nodes()):
             if stage2_graph.in_degree(node) == stage2_graph.out_degree(node) == 0:
                 stage2_graph.remove_node(node)
