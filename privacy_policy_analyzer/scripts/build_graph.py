@@ -2,7 +2,6 @@
 
 import argparse
 import itertools
-import json
 import logging
 import os
 import re
@@ -12,6 +11,7 @@ import networkx as nx
 import spacy
 import yaml
 from privacy_policy_analyzer.document import PolicyDocument
+from privacy_policy_analyzer.graph_utils import gml_stringizer
 from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS, TRIVIAL_WORDS
 from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
 from privacy_policy_analyzer.purpose_classification import PurposeClassifier
@@ -425,12 +425,6 @@ def main():
 
     nlp = spacy.load(args.nlp)
     graph_builder = GraphBuilder(args.phrase_map, args.entity_info)
-
-    def gml_stringizer(obj):
-        if isinstance(obj, str):
-            return obj
-        else:
-            return json.dumps(obj)
 
     for d in args.workdirs:
         logging.info(f"Processing {d} ...")
