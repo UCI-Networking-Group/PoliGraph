@@ -352,8 +352,14 @@ class SubsumptionAnnotator(BaseAnnotator):
             _, (match_spec, ) = self.matcher.get(match_id)
 
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
+
             if rule_name == "SUBSUM_COLLECTIVELY":
                 match_info["lower_token"] = sorted(match_info["lower_token"].conjuncts)[0]
+
+            if rule_name == "SUBSUM_INCLUDE":
+                # prevent false positives like "Our website include social media features..."
+                if match_info["upper_token"]._.ent_type == "ACTOR":
+                    continue
 
             upper_ent = match_info["upper_token"]._.ent
             sentence = match_info["upper_token"].sent
