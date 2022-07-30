@@ -241,8 +241,9 @@ class CollectionAnnotator(BaseAnnotator):
             sentence_matcher_list: list[SentenceMatcher] = []
             new_matchers = []
 
-            if (inherited_dep or token.dep_) == "ROOT":
-                # Limit new matchings to top-level verbs now
+            if (inherited_dep or token.dep_) in ["ROOT", "ccomp"]:
+                # Limit new matchings to ROOT verbs + ccomp
+                # ccomp e.g. We inform you that we collect ...
                 for p in self.patterns:
                     if sentence_matcher := p.match_root(token):
                         new_matchers.extend(sentence_matcher.chain_matchers)
