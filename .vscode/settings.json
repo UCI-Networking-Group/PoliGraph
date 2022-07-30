@@ -1,0 +1,7 @@
+{
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.sortImports.args": ["-l", "120"],
+    "files.eol": "\n",
+    "files.insertFinalNewline": true
+}
