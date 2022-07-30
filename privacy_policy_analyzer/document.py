@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 
 import enum
+import itertools
 import json
 import logging
 import pickle
 from itertools import chain
 from pathlib import Path
+import re
+import string
 
 import networkx as nx
-import spacy
 from anytree import NodeMixin
-from spacy import displacy
 from spacy.tokens import Doc, DocBin
 from spacy.language import Language
 from unidecode import unidecode
@@ -178,9 +179,6 @@ class PolicyDocument:
     def iter_docs(self):
         yield from self.all_docs.values()
 
-    def render_ner(self):
-        displacy.serve(self.get_full_doc(), style="ent")
-
     def get_doc_with_context(self, segment):
         for i in range(len(segment.context) - 1, 0, -1):
             if (segment.segment_id, i) in self.all_docs:
@@ -282,6 +280,7 @@ def extract_segments_from_accessibility_tree(tree, tokenizer):
 
     def new_segment(segment_type, text, parent):
         seg = DocumentSegment(len(segments), segment_type, tokenizer(text), parent)
+        logging.info("New segment: %r, Parent: %r", seg, parent)
         segments.append(seg)
         return seg
 
@@ -340,5 +339,75 @@ def extract_segments_from_accessibility_tree(tree, tokenizer):
         else:
             raise ValueError(f"Invalid role: {node['role']}")
 
+    def fix_non_html_lists():
+        def list_bullet_generator(start):
+            if start in "*->#":
+                return itertools.cycle(start)
+
+            if re.match(r"\b1\b", start):
+                tpl = start.replace("1", "{0}")
+                return map(tpl.format, itertools.count(1))
+
+            if re.match(r"\ba\b", start):
+                tpl = start.replace("a", "{0}")
+                return map(tpl.format, itertools.cycle(string.ascii_lowercase))
+
+            if re.match(r"\bA\b", start):
+                tpl = start.replace("A", "{0}")
+                return map(tpl.format, itertools.cycle(string.ascii_uppercase))
+
+            return None
+
+        need_renumber = False
+        i = 1  # Intentionally skip the first one
+
+        while i < len(segments):
+            before_seg = segments[i - 1]
+
+            if (segments[i].segment_type == SegmentType.TEXT and
+                (bullet_iter := list_bullet_generator(segments[i].tokens[0])) is not None and
+                before_seg.segment_type in [SegmentType.TEXT, SegmentType.HEADING] and
+                len(before_seg.tokens) > 0 and before_seg.tokens[-1] == ":"):
+
+                parent_seg = segments[i].parent
+                j = i
+
+                while (j < len(segments) and
+                       segments[j].segment_type == SegmentType.TEXT and
+                       segments[j].tokens[0] == next(bullet_iter) and
+                       segments[j].parent == parent_seg):
+                    j += 1
+
+                num_segments = j - i
+
+                if num_segments > 1:
+                    logging.info("Convert text segments [%d, %d] to list items", i, j - 1)
+
+                    for k in range(num_segments):
+                        current_seg = segments[i + k * 2]
+
+                        listitem_seg = DocumentSegment(0, SegmentType.LISTITEM, tokenizer(""), before_seg)
+                        current_seg.parent = listitem_seg
+
+                        if len(current_seg.tokens) > 1:
+                            current_seg.tokens.pop(0)
+                            current_seg.spaces.pop(0)
+
+                        segments.insert(i + k * 2, listitem_seg)
+
+                    need_renumber = True
+                    i += k * 2 + 2
+                else:
+                    i += 1
+            else:
+                i += 1
+
+        if need_renumber:
+            logging.info("Re-number segment IDs")
+
+            for idx, seg in enumerate(segments):
+                seg.segment_id = idx
+
     iterate(tree)
+    fix_non_html_lists()
     return segments

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 
 import spacy
 from privacy_policy_analyzer.document import PolicyDocument
 
 
 def main():
+    logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     parser.add_argument("--nlp", required=True, help="NLP model directory")
@@ -17,7 +20,8 @@ def main():
     nlp = spacy.load(args.nlp)
 
     for d in args.workdirs:
-        print(f"Processing {d} ...")
+        logging.info(f"Processing {d} ...")
+
         document = PolicyDocument.initialize(d, nlp=nlp)
         document.save()
 
