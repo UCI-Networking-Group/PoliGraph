@@ -99,9 +99,6 @@ def expand_phrase(root_token):
 
 def simplify_phrase(phrase):
     def dfs(token, state):
-        if token.lemma_ in TRIVIAL_WORDS:
-            return
-
         match state:
             case "compound" | "nmod" | "pobj" | "nsubj" | "dobj":
                 next_states = {"compound", "amod", "nmod", "prep", "relcl", "acl"}
@@ -116,7 +113,7 @@ def simplify_phrase(phrase):
                 return
 
         for t in token.children:
-            if t in phrase and t.dep_ in next_states:
+            if t in phrase and t.dep_ in next_states and t.lemma_ not in TRIVIAL_WORDS:
                 yield from dfs(t, t.dep_)
 
         yield token
@@ -282,7 +279,7 @@ class GraphBuilder:
                     normalized_terms.update(self.data_phrase_normalizer.normalize(phrase))
 
                     if len(normalized_terms) == 0:
-                        if lemma in DATATYPE_KEYWORDS:
+                        if lemma in DATATYPE_KEYWORDS or lemma in TRIVIAL_WORDS:
                             normalized_terms.add('UNSPECIFIC')
                         else:
                             normalized_terms.add(lemma)
@@ -296,7 +293,7 @@ class GraphBuilder:
 
                     # try lemmatizer
                     if len(normalized_terms) == 0:
-                        if lemma in ACTOR_KEYWORDS:
+                        if lemma in ACTOR_KEYWORDS or lemma in TRIVIAL_WORDS:
                             normalized_terms.add("UNSPECIFIC")
                         else:
                             normalized_terms.add(lemma)
@@ -397,6 +394,7 @@ def trim_graph(graph):
     important_nodes.update(dijkstra_results.keys())
 
     useless_nodes = set(graph.nodes) - important_nodes
+    logging.info("Nodes to remove: %s", ", ".join(sorted(useless_nodes)))
     returned_graph = graph.copy()
     returned_graph.remove_nodes_from(useless_nodes)
 
@@ -439,12 +437,12 @@ def main():
 
         document = PolicyDocument.load(d, nlp)
         knowledge_graph = graph_builder.build_graph(document)
-        #trimmed_graph = trim_graph(knowledge_graph)
+        trimmed_graph = trim_graph(knowledge_graph)
         #colored_graph = colorize_graph(trimmed_graph)
 
         nx.write_gml(knowledge_graph, os.path.join(d, "graph.gml"), stringizer=gml_stringizer)
+        nx.write_gml(trimmed_graph, os.path.join(d, "graph_trimmed.gml"), stringizer=gml_stringizer)
         #nx.write_gpickle(knowledge_graph, os.path.join(d, "graph.gpickle"))
-        #nx.write_gml(trimmed_graph, os.path.join(d, "graph_trimmed.gml"), stringizer=str)
         #nx.write_graphml(colored_graph, os.path.join(d, "graph_trimmed.graphml"))
 
 

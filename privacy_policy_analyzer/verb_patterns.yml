@@ -88,7 +88,7 @@ patterns:
     transform: ['SHARE', 'E1', 'DT', 'E2']
   # DT is provided to E2 by E1
   - root: ['VERB_PROVIDE_TO']
-    match: ['!@DT:nsubjpass', 'to,@E2:pobj', 'by:agent,@E1:pobj']
+    match: ['!@DT:nsubjpass', '!to,@E2:pobj', 'by:agent,@E1:pobj']
     transform: ['SHARE', 'E1', 'DT', 'E2']
 
   # E1 use DT
@@ -110,11 +110,24 @@ patterns:
     match: ['!@E1:nsubj', '!access:dobj,to,@DT:pobj']
     transform: ['USE', 'E1', 'DT']
 
+  # E1 use ... to collect DT
+  - root: ['VERB_GENERAL_USE']
+    match: ['!@E1:nsubj', '!VERB_COLLECT_FROM:xcomp,@DT:dobj']
+    transform: ['COLLECT', 'E1', 'DT', []]
+
+  # ... E1 collect from E2 includes DT
+  - root: ['include']
+    match: ['!@D1:nsubj,VERB_COLLECT_FROM:relcl,@E1:nsubj', '*:nsubj,VERB_COLLECT_FROM:relcl,from,@E2:pobj', '!@D2:dobj']
+    transform: ['COLLECT', 'E1', ['D2', 'D1'], 'E2']
+  # ... E1 use includes DT
+  - root: ['include']
+    match: ['!*:nsubj,VERB_GENERAL_USE:relcl,@E1:nsubj', '!@DT:dobj']
+    transform: ['USE', 'E1', 'DT']
+
   # E1 ask/require E2 to provide E3 with DT
   - root: ['VERB_ASK_TODO']
     match: ['@E1:nsubj', '@E2:dobj', 'VERB_PROVIDE_WITH:xcomp,@E3:dobj', '!VERB_PROVIDE_WITH:xcomp,with,@DT:pobj']
     transform: ['SHARE', 'E2', 'DT', ['E3', 'E1']]
-
   # ... enable/allow E1 to collect/share/use D
   - root: ['VERB_ENABLE_TODO']
     match: ['!@E1:dobj', '!VERB_COLLECT_FROM:xcomp,@DT:dobj']
@@ -126,18 +139,3 @@ patterns:
   - root: ['VERB_ENABLE_TODO']
     match: ['@E1:dobj', '!VERB_SHARE_WITH:xcomp,@DT:dobj', '!VERB_SHARE_WITH:xcomp,with,@E2:pobj']
     transform: ['SHARE', 'E1', 'DT', 'E2']
-
-  # E1 use ... to collect DT
-  - root: ['VERB_GENERAL_USE']
-    match: ['!@E1:nsubj', '!VERB_COLLECT_FROM:xcomp,@DT:dobj']
-    transform: ['COLLECT', 'E1', 'DT', []]
-
-  # ... E1 collect from E2 includes DT
-  - root: ['include']
-    match: ['!@D1:nsubj,VERB_COLLECT_FROM:relcl,@E1:nsubj', '*:nsubj,VERB_COLLECT_FROM:relcl,from,@E2:pobj', '!@D2:dobj']
-    transform: ['COLLECT', 'E1', ['D2', 'D1'], 'E2']
-
-  # ... E1 use includes DT
-  - root: ['include']
-    match: ['!*:nsubj,VERB_GENERAL_USE:relcl,@E1:nsubj', '!@DT:dobj']
-    transform: ['USE', 'E1', 'DT']

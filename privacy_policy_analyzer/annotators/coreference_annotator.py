@@ -37,8 +37,9 @@ class CoreferenceAnnotator(BaseAnnotator):
         self.matcher.add("COREF_SOME_OF", [pattern])
 
     def annotate_one_doc(self, document, doc):
+
         def infer_type(token):
-            """Infer noun phrase type through SUBSUM edges"""
+            """Infer noun phrase type through SUBSUM/COREF edges"""
             # Use BFS here to avoid a loop.
             bfs_queue = [token]
             seen = {token}
@@ -58,6 +59,12 @@ class CoreferenceAnnotator(BaseAnnotator):
 
             return None
 
+        def link_coref(coref, coref_main, reason):
+            self.logger.info("Sentence 1: %r", coref_main.sent.text)
+            self.logger.info("Sentence 2: %r", coref.sent.text)
+            self.logger.info("Edge COREF (%s): %r -> %r", reason, coref.text, coref_main.text)
+            document.link(coref.root, coref_main.root, "COREF")
+
         last_sentence_ents = []
 
         # Handle pronouns
@@ -65,40 +72,50 @@ class CoreferenceAnnotator(BaseAnnotator):
             current_sentence_ents = []
 
             for noun_phrase in sent.ents:
-                referent = None
+                found = False
+                startswith_det = noun_phrase[0].lemma_ in {"this", "that", "these", "those"}
 
-                if (noun_phrase[0].lemma_ in {"this", "that", "these", "those"}
-                    and noun_phrase[0].head == noun_phrase[-1]):
+                if startswith_det and noun_phrase[0].head == noun_phrase[-1]:
                     # Resolve this/that/these/those xxx
-                    for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
+                    for prev_noun_phrase in chain(current_sentence_ents, last_sentence_ents):
                         if prev_noun_phrase[-1].lemma_ == noun_phrase[-1].lemma_:
-                            referent = prev_noun_phrase
-                            reason = "SAME_ROOT"
+                            link_coref(noun_phrase, prev_noun_phrase, "SAME_ROOT")
+
+                            found = True
                             break
 
-                if referent is None and noun_phrase.lemma_ in ["they", "this", "these", "it"]:
+                if not found and startswith_det and noun_phrase.root.lemma_ in {"data", "datum", "information"}:
+                    # Resolve this information
+                    for prev_noun_phrase in chain(current_sentence_ents, last_sentence_ents):
+                        if prev_noun_phrase._.ent_type  == "DATA":
+                            link_coref(noun_phrase, prev_noun_phrase, "THIS_INFO")
+
+                            for conj in prev_noun_phrase.root.conjuncts:
+                                if (conj_ent := conj._.ent) is not None:
+                                    link_coref(noun_phrase, conj_ent, "THIS_INFO")
+
+                            found = True
+                            break
+
+                if not found and noun_phrase.lemma_ in ["it", "this", "they", "these"]:
                     inferred_type = infer_type(noun_phrase.root)
 
-                    for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
-                        if prev_noun_phrase._.ent_type == inferred_type:
-                            referent = prev_noun_phrase
-                            reason = "SAME_TYPE"
+                    if noun_phrase.lemma_ in ["it", "this"]:
+                        target_tags = ["NN", "NNP"]
+                    else:
+                        target_tags = ["NNS", "NNPS"]
+
+                        if inferred_type is None and noun_phrase.lemma_ == "they":
+                            inferred_type = "ACTOR"
+
+                    for prev_noun_phrase in chain(current_sentence_ents, last_sentence_ents):
+                        if (prev_noun_phrase._.ent_type == inferred_type and
+                            prev_noun_phrase.root.tag_ in target_tags and
+                            prev_noun_phrase.root.pos_ != "PRON"):
+                            link_coref(noun_phrase, prev_noun_phrase, "PRON_SAME_TYPE")
+
+                            found = True
                             break
-
-                if referent is None and noun_phrase.lemma_ == "they":
-                    # Resolve "they" (referring to an entity)
-                    for prev_noun_phrase in chain(reversed(current_sentence_ents), reversed(last_sentence_ents)):
-                        if (prev_noun_phrase._.ent_type == "ACTOR" and prev_noun_phrase.root.tag_ in ["NNS", "NNPS"]):
-                            referent = prev_noun_phrase
-                            reason = "THEY_ACTOR"
-                            break
-
-                if referent is not None:
-                    self.logger.info("Sentence 1: %r", referent.sent.text)
-                    self.logger.info("Sentence 2: %r", noun_phrase.sent.text)
-                    self.logger.info("Edge COREF (%s): %r -> %r", reason, noun_phrase.text, referent.text)
-
-                    document.link(noun_phrase.root, referent.root, "COREF")
 
                 current_sentence_ents.append(noun_phrase)
 

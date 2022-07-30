@@ -15,7 +15,7 @@ ACTOR_KEYWORDS = frozenset([
     'processor', 'product', 'provider', 'publisher', 'service', 'site',
     'software', 'subsidiary', 'vendor', 'website'])
 TRIVIAL_WORDS = frozenset([
-    "some", "all", "any", "type", "variety", "category", "example", "more",
+    "some", "all", "any", "variety", "category", "example", "more",
     "such", "other", "following", "below", "additional", "certain", "similar",
     "limited", "various", "further", "enough", "e.g.", "i.e.", "etc",
     "which", "that", "collectively", "detailed",
