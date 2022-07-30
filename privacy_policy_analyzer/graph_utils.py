@@ -1,32 +1,60 @@
 import json
-from pathlib import Path
+from contextlib import contextmanager
 
 import networkx as nx
 
 
-def load_ontologies(ontology_root, entity_info_json_path):
-    ontology_root = Path(ontology_root)
+# Hardcode the barebone of the entity ontology
+ENTITY_ONTOLOGY = [
+    "analytic provider",
+    "content provider",
+    "auth provider",
+    "social media",
+    "advertiser",
+    "UNKNOWN",
+]
 
-    data_ontology = nx.read_gml(ontology_root / "data.gml")
-    entity_ontology = nx.read_gml(ontology_root / "entity.gml")
+
+def load_ontology_from_graphml(path):
+    yed_graph = nx.read_graphml(path)
+    ontology = nx.DiGraph()
+
+    for _, data in yed_graph.nodes(data=True):
+        name = data["label"]
+        is_precise = data.get("is_precise", False)
+        ontology.add_node(name, is_precise=is_precise)
+
+    for node1, node2 in yed_graph.edges():
+        name1 = yed_graph.nodes[node1]["label"]
+        name2 = yed_graph.nodes[node2]["label"]
+        ontology.add_edge(name1, name2)
+
+    return ontology
+
+
+def load_ontologies(data_ontology_path, entity_info_json_path):
+    data_ontology = load_ontology_from_graphml(data_ontology_path)
+    entity_ontology = nx.DiGraph()
+
+    for entity_category in ENTITY_ONTOLOGY:
+        entity_ontology.add_node(entity_category, is_precise=0)
+
+    entity_ontology.add_node("we", is_precise=1)
 
     with open(entity_info_json_path, "r", encoding="utf-8") as fin:
-        domain_map = dict()
+        # domain_map = dict()
 
         for entity, info in json.load(fin).items():
-            if entity in entity_ontology:
-                raise ValueError(f"Duplicated entity: {entity}")
+            assert entity not in entity_ontology
 
-            for domain in info["domains"]:
-                domain_map[domain] = entity
+            # for domain in info["domains"]:
+            #     domain_map[domain] = entity
 
             entity_ontology.add_node(entity, is_precise=1)
 
-            for cat in info["categories"] or ["third party"]:
-                if entity_ontology.nodes[cat]["is_precise"]:
-                    raise ValueError(f"Invalid entity category: {cat}")
-
-                entity_ontology.add_edge(cat, entity)
+            for entity_category in info["categories"] or ["UNKNOWN"]:
+                assert entity_ontology.nodes[entity_category]["is_precise"] == 0
+                entity_ontology.add_edge(entity_category, entity)
 
     return data_ontology, entity_ontology
 
@@ -75,7 +103,7 @@ class KGraph:
                 yield node
 
     def who_collect(self, datatype, strict_datatype=False):
-        if datatype not in self.kgraph.nodes:
+        if datatype not in self.kgraph.nodes or self.kgraph.nodes[datatype]["type"] != "DATA":
             return
 
         for node in nx.ancestors(self.kgraph, datatype):
@@ -136,3 +164,62 @@ class KGraph:
                 break
 
         return sorted(purposes)
+
+
+class ExtKGraph(KGraph):
+    def __init__(self, path, data_ontology, entity_ontology):
+        super().__init__(path)
+
+        # Clone ontology edges to the KGraph
+        # For performance reason, precise nodes are not added unless it's already in the KGraph
+        self.data_ontology = data_ontology
+        self.entity_ontology = entity_ontology
+
+        def try_add_node(node, node_type):
+            if node in self.kgraph:
+                return node_type == self.kgraph.nodes[node]["type"]
+            else:
+                self.kgraph.add_node(node, type=node_type)
+                return True
+
+        for u, v in data_ontology.edges():
+            if data_ontology.nodes[v]["is_precise"] == 0 or v in self.kgraph.nodes:
+                if try_add_node(u, "DATA") and try_add_node(v, "DATA"):
+                    self.kgraph.add_edge(u, v, key="SUBSUM", text=["ONTOLOGY"])
+
+        for u, v in entity_ontology.edges():
+            if entity_ontology.nodes[v]["is_precise"] == 0 or v in self.kgraph.nodes:
+                if try_add_node(u, "ACTOR") and try_add_node(v, "ACTOR"):
+                    self.kgraph.add_edge(v, u, key="SUBSUM_BY", text=["ONTOLOGY"])
+
+    @contextmanager
+    def attach_node(self, node, node_type):
+        if node_type == "DATA":
+            ontology = self.data_ontology
+        else:
+            ontology = self.entity_ontology
+
+        if node in self.kgraph.nodes or node not in ontology.nodes:
+            yield
+            return
+
+        try:
+            self.kgraph.add_node(node, type=node_type)
+            for u, _ in ontology.in_edges(node):
+                if self.kgraph.nodes[u]["type"] == node_type:
+                    self.kgraph.add_edge(u, node, text=["ONTOLOGY"])
+
+            yield
+        finally:
+            self.kgraph.remove_node(node)
+
+    def who_collect(self, datatype):
+        # Limitation: Precise company names are not returned unless already in the KGraph
+
+        with self.attach_node(datatype, "DATA"):
+            yield from super().who_collect(datatype)
+
+    def purposes(self, entity, datatype):
+        with self.attach_node(datatype, "DATA"):
+            with self.attach_node(entity, "ENTITY"):
+                return super().purposes(entity, datatype)
