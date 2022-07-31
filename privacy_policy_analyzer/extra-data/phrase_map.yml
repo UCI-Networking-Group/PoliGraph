@@ -139,7 +139,6 @@ DATA:
     - '=MAC'
     - 'media access control'
     - 'network card address(es)?'
-    - 'bssids?'
 
   advertising id:
     - 'ad(vertis(ing|er))?\b.*\bid(entifier)?'
@@ -166,7 +165,7 @@ DATA:
     - 'iccid'
 
   router ssid:
-    - 'ssids?'
+    - 'b?ssids?'
     - 'id(entifier?)?\b.*\brouter'
     - 'wi[ -]?fi (end|access)[-\s]?point'
 
