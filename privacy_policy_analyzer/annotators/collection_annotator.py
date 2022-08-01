@@ -241,9 +241,11 @@ class CollectionAnnotator(BaseAnnotator):
             sentence_matcher_list: list[SentenceMatcher] = []
             new_matchers = []
 
-            if (inherited_dep or token.dep_) in ["ROOT", "ccomp"]:
+            if ((inherited_dep or token.dep_) in ["ROOT", "ccomp"] and
+                all(c.tag_ != "WRB" for c in token.children)):
                 # Limit new matchings to ROOT verbs + ccomp
                 # ccomp e.g. We inform you that we collect ...
+                # Plus: no when/how/whether... adverb
                 for p in self.patterns:
                     if sentence_matcher := p.match_root(token):
                         new_matchers.extend(sentence_matcher.chain_matchers)

@@ -182,14 +182,21 @@ class ExtKGraph(KGraph):
                 self.kgraph.add_node(node, type=node_type)
                 return True
 
+        try_add_node("UNSPECIFIC_DATA", "DATA")
+        try_add_node("UNSPECIFIC_ACTOR", "ENTITY")
+
         for u, v in data_ontology.edges():
+            try_add_node(u, "DATA")
+
             if data_ontology.nodes[v]["is_precise"] == 0 or v in self.kgraph.nodes:
-                if try_add_node(u, "DATA") and try_add_node(v, "DATA"):
+                if try_add_node(v, "DATA"):
                     self.kgraph.add_edge(u, v, key="SUBSUM", text=["ONTOLOGY"])
 
         for u, v in entity_ontology.edges():
+            try_add_node(u, "ACTOR")
+
             if entity_ontology.nodes[v]["is_precise"] == 0 or v in self.kgraph.nodes:
-                if try_add_node(u, "ACTOR") and try_add_node(v, "ACTOR"):
+                if try_add_node(v, "ACTOR"):
                     self.kgraph.add_edge(v, u, key="SUBSUM_BY", text=["ONTOLOGY"])
 
     @contextmanager

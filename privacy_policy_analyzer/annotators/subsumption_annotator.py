@@ -352,17 +352,29 @@ class SubsumptionAnnotator(BaseAnnotator):
             _, (match_spec, ) = self.matcher.get(match_id)
 
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
+            upper_token = match_info["upper_token"]
+            lower_token = match_info["lower_token"]
 
             if rule_name == "SUBSUM_COLLECTIVELY":
-                match_info["lower_token"] = sorted(match_info["lower_token"].conjuncts)[0]
+                lower_token = sorted(lower_token.conjuncts)[0]
+            else:
+                # Make sure the upper token is always the nearest conj to the lower token
+                # Fix: "We and our partners like Google" -- sometimes "We" is linked to "Google"
+                for alt in upper_token.conjuncts:
+                    if alt.i < lower_token.i:
+                        upper_token = alt
+
+            if upper_token.pos_ == "PRON":
+                # Fix: "we/they, such as..." sounds most likely a false positive
+                continue
 
             if rule_name == "SUBSUM_INCLUDE":
                 # prevent false positives like "Our website include social media features..."
-                if match_info["upper_token"]._.ent_type == "ACTOR":
+                if upper_token._.ent_type == "ACTOR":
                     continue
 
-            upper_ent = match_info["upper_token"]._.ent
-            sentence = match_info["upper_token"].sent
+            upper_ent = upper_token._.ent
+            sentence = upper_token.sent
 
             if upper_ent is None:
                 continue
@@ -370,7 +382,7 @@ class SubsumptionAnnotator(BaseAnnotator):
             self.logger.info("Rule %s matches %r", rule_name, sentence.text)
             self.logger.info("Matched upper token: %r", upper_ent.text)
 
-            for child_ent in search_child_ent(match_info["lower_token"]):
+            for child_ent in search_child_ent(lower_token):
                 if ent_type_is_compatible(upper_ent, child_ent):
                     document.link(upper_ent.root, child_ent.root, "SUBSUM")
                     self.logger.info("Edge SUBSUM: %r -> %r", upper_ent.text, child_ent.text)

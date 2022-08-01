@@ -339,6 +339,18 @@ class GraphBuilder:
                         edge_sentences.append(sent.text)
 
             for n1, n2 in itertools.product(normalized_terms1, normalized_terms2):
+                if relationship == "SUBSUM":
+                    # Some sentences lead to subsumption relationship between 1st/3rd parties.
+                    # Workaround: Simply ignore all subsumption edges to "we" / "third party"
+                    if n2 in ["we", "third party", "UNSPECIFIC_DATA", "UNSPECIFIC_ACTOR"]:
+                        logging.warning("Invalid edge: %r -> %r", n1, n2)
+                        continue
+
+                    # Also prevent UNSPECIFIC_* nodes from subsume anything
+                    if n1 in ["UNSPECIFIC_DATA", "UNSPECIFIC_ACTOR"]:
+                        logging.warning("Invalid edge: %r -> %r", n1, n2)
+                        continue
+
                 if not stage2_graph.has_edge(n1, n2, key=relationship):
                     if dag_add_edge(stage2_graph, n1, n2, key=relationship, sources=[], text=[]):
                         if relationship in ["COLLECT", "NOT_COLLECT"]:
@@ -351,24 +363,6 @@ class GraphBuilder:
 
                 if relationship in ["COLLECT", "NOT_COLLECT"]:
                     stage2_graph[n1][n2][relationship]["purposes"].extend(edge_data.get("purposes", []))
-
-        edges_to_remove = []
-        # Some sentences lead to subsumption relationship between 1st/3rd parties.
-        # Workaround: Simply ignore all subsumption edges to "we" / "third party"
-        for u, v, k in stage2_graph.in_edges(["we", "third party"], keys=True):
-            logging.warning(f"Invalid edge: {u} -> {v}")
-            edges_to_remove.append((u, v, k))
-
-        # Prevent UNSPECIFIC_* nodes from subsume anything
-        for u, v, k in stage2_graph.out_edges(["UNSPECIFIC_DATA", "UNSPECIFIC_ACTOR"], keys=True):
-            if k == "SUBSUM":
-                edges_to_remove.append((u, v, k))
-
-        for u, v, k in stage2_graph.in_edges(["UNSPECIFIC_DATA", "UNSPECIFIC_ACTOR"], keys=True):
-            if k == "SUBSUM":
-                edges_to_remove.append((u, v, k))
-
-        stage2_graph.remove_edges_from(edges_to_remove)
 
         # Remove isolated nodes
         for node in list(stage2_graph.nodes()):
