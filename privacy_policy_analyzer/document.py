@@ -253,7 +253,7 @@ def extract_segments_from_accessibility_tree(tree, tokenizer):
                         "list item marker", "insertion", "diagram", "dialog", "tab",
                         "menu", "menubar", "internal frame", "listbox", "progressbar",
                         "alert", "button", "buttonmenu", "slider", "textbox",
-                        "application", "details"}
+                        "application", "details", "canvas", "caption", "toggle button"}
     SECTION_ELEMENTS = {"document", "article", "landmark", "section", "blockquote", "group",
                         "tablist", "tabpanel", "region"}
     TEXT_CONTAINER_ELEMENTS = {"paragraph", "text", "link", "statictext", "label", "text container", "text leaf"}

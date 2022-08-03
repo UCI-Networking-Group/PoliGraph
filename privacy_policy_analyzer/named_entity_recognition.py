@@ -18,7 +18,7 @@ TRIVIAL_WORDS = frozenset([
     "some", "all", "any", "variety", "category", "example", "more",
     "such", "other", "following", "below", "additional", "certain", "similar",
     "limited", "various", "further", "enough", "e.g.", "i.e.", "etc",
-    "which", "that", "collectively", "detailed",
+    "which", "that", "collectively", "hereinafter", "detailed",
 ])
 
 

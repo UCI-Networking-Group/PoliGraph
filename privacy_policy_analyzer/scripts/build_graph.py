@@ -271,7 +271,7 @@ class GraphBuilder:
             lemma = " ".join(t.lemma_ for t in simplify_phrase(phrase))
 
             # Skip empty string (NLP error) and "you" (entity but meaningless)
-            if lemma in ["", "you"]:
+            if lemma in ["", "you", "user"]:
                 continue
 
             match data["type"]:

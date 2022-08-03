@@ -77,12 +77,13 @@ DATA:
 
   # geolocation
   geolocation:
+    - '^location$'
     - '(geo-?(graphic)?\s*)?location'
-    - '(geo-?)?locational (information|data|history|detail)'
+    - '(geo-?)?location(al)? (information|data|history|detail)'
     - 'geographic (information|data|history|detail)'
     - 'location (base|relate|specific)'
     - 'location (mapping|tracking) data'
-    - 'physical location'
+    - '(physical|your) location'
     - '!(precise|A?GPS|coarse|non-precise|approximate)'
 
   precise geolocation:
@@ -182,7 +183,7 @@ DATA:
 
   # usage / activity data
   internet activity:
-    - '(internet|website|app(lication)?|in-game|on-?line|player|user|system) (activity|usage)'
+    - '(internet|website|app(lication)?|in-game|on-?line|player|user|system|network) (activity|usage)'
 
   'browsing / search history':
     - '(browsing|search|browse|online) (history|behaviour|behavior|activity)'
@@ -214,16 +215,17 @@ ACTOR:
   - '^our\b.*\b(affiliated?|subsidiary|(group )?company)'
   - '^(this|the) (website|site|app(s|lication)?|software|service?|company|owner)$'
   - '(services?|software|app(s|lication)?)\b.*\b(we (offer|provide))'
+  - '=^(Company|Softwares?|App(lications?)?|Products?|Services?|Websites?)$'
 
   UNSPECIFIC:
   - '((third|external|outside|other)[\s-]?party|data (controller|processor))'
-  - '(other|another|external|outside) (service|provider|partner|vendor|website|site|company|platform|contractor|party|business|organi[sz]ation)$'
+  - '(other|another|external|outside) (service|provider|partner|vendor|website|site|company|platform|contractor|party|business|organi[sz]ation|entities)$'
   - '(our|other|another|external|outside) (partner|vendor)'
   - '^(our|other|another|external|outside)?\b.*\bservice provider$'
   - '!(ad(vertis\w+)?|social|(e-?)?mail|analytics?|measurement|market(ing)?|track(ing)?|content|search|payment|government|auth(entication)?)'
 
   advertiser:
-  - 'ad(vertis\w+)?\b.*\b(provider|network|company|platform|vendor|partner|agency|service|technology|server|sdk)'
+  - 'ad(vertis\w+)?\b.*\b(provider|network|company|platform|vendor|partner|agency|service|technology|server|sdk|entities)'
   - 'advertiser'
 
   auth provider:
