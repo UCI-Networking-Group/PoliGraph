@@ -299,13 +299,13 @@ class SubsumptionAnnotator(BaseAnnotator):
                 "LEFT_ID": "upper_token",
                 "REL_OP": ">",
                 "RIGHT_ID": "advmod_collectively",
-                "RIGHT_ATTRS": {"DEP": "advmod", "LEMMA": "collectively"}
+                "RIGHT_ATTRS": {"DEP": "advmod", "LEMMA": {"IN": ["collectively", "hereinafter"]}}
             },
             {
                 "LEFT_ID": "upper_token",
                 "REL_OP": "<",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"DEP": "conj", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
             },
         ]
         self.matcher.add("SUBSUM_COLLECTIVELY", [pattern])
@@ -356,12 +356,12 @@ class SubsumptionAnnotator(BaseAnnotator):
             lower_token = match_info["lower_token"]
 
             if rule_name == "SUBSUM_COLLECTIVELY":
-                lower_token = sorted(lower_token.conjuncts)[0]
+                lower_token = sorted(lower_token.conjuncts + (lower_token,))[0]
             else:
                 # Make sure the upper token is always the nearest conj to the lower token
                 # Fix: "We and our partners like Google" -- sometimes "We" is linked to "Google"
                 for alt in upper_token.conjuncts:
-                    if alt.i < lower_token.i:
+                    if alt.i < lower_token.i and alt.i > upper_token.i:
                         upper_token = alt
 
             if upper_token.pos_ == "PRON":
