@@ -291,6 +291,17 @@ def main():
 
     cache_ngrams(entity_info)
 
+    # Remove entities that causes a lot false detections
+    entity_to_delete = ["Online", "Platform", "Answers", "Rokt"]
+
+    # Remove entities with prevalence=0 and we don't know the category (to avoid false detections)
+    for entity, info in entity_info.items():
+        if info["prevalence"] == 0 and len(info["categories"]) == 0:
+            entity_to_delete.append(entity)
+
+    for entity in entity_to_delete:
+        del entity_info[entity]
+
     with open(args.output, "w", encoding="utf-8") as fout:
         json.dump(entity_info, fout, default=lambda o: sorted(o) if isinstance(o, set) else o)
 
