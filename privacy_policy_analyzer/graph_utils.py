@@ -1,3 +1,5 @@
+import contextlib
+import functools
 import json
 from contextlib import contextmanager
 
@@ -75,7 +77,8 @@ def gml_stringizer(obj):
 
 class KGraph:
     def __init__(self, path):
-        self.kgraph = kgraph = nx.read_gml(path, destringizer=gml_destringizer)
+        kgraph = nx.read_gml(path, destringizer=gml_destringizer)
+        self.kgraph :nx.MultiDiGraph = kgraph
 
         # NOT_COLLECT is not used
         edges_to_remove = []
@@ -102,29 +105,25 @@ class KGraph:
             if data["type"] == "ACTOR":
                 yield node
 
-    def who_collect(self, datatype, strict_datatype=False):
+    def who_collect(self, datatype):
         if datatype not in self.kgraph.nodes or self.kgraph.nodes[datatype]["type"] != "DATA":
             return
 
         for node in nx.ancestors(self.kgraph, datatype):
             if self.kgraph.nodes[node]["type"] == "ACTOR":
-                if strict_datatype:
-                    try:
-                        self.kgraph.edges[node, datatype, "COLLECT"]
-                    except KeyError:
-                        continue
-
                 yield node
 
     def ancestors(self, node):
         if node not in self.kgraph:
             return
 
-        node_type = self.kgraph.nodes[node]["type"]
-        if node_type == "ACTOR":
-            li = nx.descendants(self.kgraph, node)
-        else:
-            li = nx.ancestors(self.kgraph, node)
+        match node_type := self.kgraph.nodes[node]["type"]:
+            case "DATA":
+                li = nx.ancestors(self.kgraph, node)
+            case "ACTOR":
+                li = nx.descendants(self.kgraph, node)
+            case _:
+                assert False
 
         for node in li:
             if self.kgraph.nodes[node]["type"] == node_type:
@@ -139,12 +138,15 @@ class KGraph:
         if node_type != self.kgraph.nodes[node2]["type"]:
             return False
 
-        if node_type == "ACTOR":
-            return nx.has_path(self.kgraph, node2, node1)
-        else:
-            return nx.has_path(self.kgraph, node1, node2)
+        match node_type:
+            case "DATA":
+                return nx.has_path(self.kgraph, node1, node2)
+            case "ACTOR":
+                return nx.has_path(self.kgraph, node2, node1)
+            case _:
+                assert False
 
-    def purposes(self, entity, datatype, strict_data=False):
+    def purposes(self, entity, datatype):
         purposes = set()
 
         for path in nx.all_simple_paths(self.kgraph, entity, datatype):
@@ -154,16 +156,12 @@ class KGraph:
                 except KeyError:
                     continue
 
-                if strict_data and v != datatype:
-                    break
-
                 for p, _ in edge_view["purposes"]:
-                    if p is not None:
+                    if p is not None and p not in purposes:
                         purposes.add(p)
+                        yield p
 
                 break
-
-        return sorted(purposes)
 
 
 class ExtKGraph(KGraph):
@@ -201,10 +199,9 @@ class ExtKGraph(KGraph):
 
     @contextmanager
     def attach_node(self, node, node_type):
-        if node_type == "DATA":
-            ontology = self.data_ontology
-        else:
-            ontology = self.entity_ontology
+        # Temperarily attach a node (usually a precise term)
+
+        ontology = self.data_ontology if node_type == "DATA" else self.entity_ontology
 
         if node in self.kgraph.nodes or node not in ontology.nodes:
             yield
@@ -214,11 +211,38 @@ class ExtKGraph(KGraph):
             self.kgraph.add_node(node, type=node_type)
             for u, _ in ontology.in_edges(node):
                 if self.kgraph.nodes[u]["type"] == node_type:
-                    self.kgraph.add_edge(u, node, text=["ONTOLOGY"])
+                    if node_type == "DATA":
+                        self.kgraph.add_edge(u, node, key="SUBSUM", text=["ONTOLOGY"])
+                    else:
+                        self.kgraph.add_edge(node, u, key="SUBSUM_BY", text=["ONTOLOGY"])
 
             yield
         finally:
             self.kgraph.remove_node(node)
+
+    @contextmanager
+    def accept_unspecific_data(self):
+        tmp_edges = []
+
+        for data_type in self.datatypes:
+            if data_type != "UNSPECIFIC_DATA":
+                tmp_edges.append(("UNSPECIFIC_DATA", data_type, "SUBSUM"))
+
+        self.kgraph.add_edges_from(tmp_edges)
+        yield
+        self.kgraph.remove_edges_from(tmp_edges)
+
+    @contextmanager
+    def accept_unspecific_actor(self):
+        tmp_edges = []
+
+        for entity in self.entities:
+            if entity != "UNSPECIFIC_ACTOR":
+                tmp_edges.append((entity, "UNSPECIFIC_ACTOR", "SUBSUM_BY"))
+
+        self.kgraph.add_edges_from(tmp_edges)
+        yield
+        self.kgraph.remove_edges_from(tmp_edges)
 
     def who_collect(self, datatype):
         # Limitation: Precise company names are not returned unless already in the KGraph
@@ -228,5 +252,37 @@ class ExtKGraph(KGraph):
 
     def purposes(self, entity, datatype):
         with self.attach_node(datatype, "DATA"):
-            with self.attach_node(entity, "ENTITY"):
-                return super().purposes(entity, datatype)
+            with self.attach_node(entity, "ACTOR"):
+                yield from super().purposes(entity, datatype)
+
+    @functools.lru_cache
+    def validate_collection(self, datatype):
+        for _ in self.who_collect(datatype):
+            return True
+
+        return False
+
+    @functools.lru_cache
+    def validate_sharing(self, entity, datatype, accept_unspecific_data=True):
+        context = self.accept_unspecific_data if accept_unspecific_data else contextlib.nullcontext
+
+        with context(), self.attach_node(entity, "ACTOR"):
+            for collection_entity in self.who_collect(datatype):
+                if collection_entity == entity:
+                    return True
+
+        return False
+
+    @functools.lru_cache
+    def validate_purpose(self, entity, datatype, purpose, accept_unspecific=True):
+        if accept_unspecific:
+            contexts = [self.accept_unspecific_data, self.accept_unspecific_actor]
+        else:
+            contexts = [contextlib.nullcontext, contextlib.nullcontext]
+
+        with contexts[0](), contexts[1]():
+            for disclosed_purpose in self.purposes(entity, datatype):
+                if disclosed_purpose == purpose:
+                    return True
+
+        return False

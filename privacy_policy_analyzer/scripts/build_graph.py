@@ -238,9 +238,8 @@ class GraphBuilder:
 
                     if stage1_graph.nodes[src2]["type"] == phrase_type:
                         # Call dag_add_edge to safely add an edge without creating a circle
-                        dag_add_edge(stage1_graph, edge_from, edge_to, relationship=data["relationship"])
-                        stage1_graph.nodes[edge_from]['has_subsum_or_coref'] = True
-                        stage1_graph.nodes[edge_to]['has_subsum_or_coref'] = True
+                        if dag_add_edge(stage1_graph, edge_from, edge_to, relationship=data["relationship"]):
+                            stage1_graph.nodes[edge_from]['has_subsum_or_coref'] = True
 
         # Step 5: Infer meaning of each phrase using normalizers
         # Follow topological order to resolve coreferences

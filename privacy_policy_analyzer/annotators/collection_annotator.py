@@ -327,31 +327,33 @@ class CollectionAnnotator(BaseAnnotator):
                     document.link(entity, dtype, relationship)
 
         def collect_handler(neg_flag, e1, dt, e2):
-            if ((e1 and like_type(e1, "ACTOR")) and
-                (dt and like_type(dt, "DATA"))):
+            # e1 collect dt from e2
 
-                if neg_flag:
-                    link_pairs(e1, dt, "NOT_COLLECT")
-                else:
-                    link_pairs(e1, dt, "COLLECT")
+            if not(dt and like_type(dt, "DATA")):
+                return
+
+            if e1 and like_type(e1, "ACTOR"):
+                link_pairs(e1, dt, "NOT_COLLECT" if neg_flag else "COLLECT")
 
         def share_handler(neg_flag, e1, dt, e2):
-            if ((dt and like_type(dt, "DATA")) and
-                (e2 and like_type(e2, "ACTOR"))):
+            # e1 share dt with e2
 
-                if neg_flag:
-                    link_pairs(e2, dt, "NOT_COLLECT")
-                else:
-                    link_pairs(e2, dt, "COLLECT")
+            if not(dt and like_type(dt, "DATA")):
+                return
+
+            if e2 and like_type(e2, "ACTOR"):
+                link_pairs(e2, dt, "NOT_COLLECT" if neg_flag else "COLLECT")
+
+            if not neg_flag and (e1 and like_type(e1, "ACTOR")):
+                # Consistent with PolicyLint, "we share" implies "we collect"
+                link_pairs(e1, dt, "COLLECT")
 
         def use_handler(neg_flag, e1, dt):
-            if ((e1 and like_type(e1, "ACTOR")) and
-                (dt and like_type(dt, "DATA"))):
+            # e1 use dt
 
-                if neg_flag:
-                    pass
-                else:
-                    link_pairs(e1, dt, "COLLECT")
+            if (not neg_flag and (e1 and like_type(e1, "ACTOR")) and (dt and like_type(dt, "DATA"))):
+                # Consistent with PolicyLint, ignore "not use"
+                link_pairs(e1, dt, "COLLECT")
 
         for doc in document.iter_docs():
             for sent in doc.sents:
