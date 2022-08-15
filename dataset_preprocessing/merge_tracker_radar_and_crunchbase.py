@@ -23,24 +23,32 @@ CRUNCHBASE_CATEGORY_MAPPING = {
     "Predictive Analytics": ["analytic provider"],
 
     "SMS": ["social media"],
+
+    "Email Marketing": ["email service provider"],
+    "Email": ["email service provider"],
+    "Email Newsletters": ["email service provider"],
 }
 
 TRACKER_RADAR_CATEGORY_MAPPING = {
     "SSO": ["auth provider"],
     "Federated Login": ["auth provider"],
 
+    "Social Network": ["social media"],
     "Social - Comment": ["social media"],
     "Social - Share": ["social media"],
 
-    "Analytics": ["analytic provider"],
-    "Session Replay": ["analytic provider"],
-    "Audience Measurement": ["analytic provider"],
-    "Third-Party Analytics Marketing": ["analytic provider"],
-
     "Embedded Content": ["content provider"],
 
+    "Third-Party Analytics Marketing": ["analytic provider"],
+    "Audience Measurement": ["analytic provider"],
+    # These categories are analytics but it often include first-party domains
+    # "Analytics": ["analytic provider"],
+    # "Session Replay": ["analytic provider"],
+
     "Advertising": ["advertiser"],
-    "Ad Motivated Tracking": ["advertiser"],
+    "Ad Fraud": ["advertiser"],
+    # This category is a bit broader
+    # "Ad Motivated Tracking": ["advertiser"],
 }
 
 
@@ -118,7 +126,7 @@ def cache_ngrams(entity_info):
             entity = ngram_info[0]
             oov_flag = ngram_info[1]
 
-            entity_info[entity]["ngrams"][ngram] = ngram_info[1]
+            entity_info[entity]["ngrams"][ngram] = oov_flag
 
     # For well-known online trackers, main entity name should always be in the ngram_mapping
     for entity, info in entity_info.items():
@@ -193,7 +201,8 @@ def load_crunchbase_data(crunchbase_dir, tracker_radar_domain_mapping):
 
         acquirer_info["aliases"].update(company_info["aliases"])
         acquirer_info["domains"].update(company_info["domains"])
-        acquirer_info["categories"].update(company_info["categories"])
+        # This often cause acquirer to have too many categories
+        # acquirer_info["categories"].update(company_info["categories"])
 
         crunchbase_records.pop(company_permalink)
 
@@ -301,6 +310,75 @@ def main():
 
     for entity in entity_to_delete:
         del entity_info[entity]
+
+    # Custom entries for MobiPurpose / PoliCheck traffic
+    # Third parties
+    entity_info["ironSource"]["domains"].add("ironbeast.io")
+    entity_info["InMobi"]["domains"].add("aerserv.com")
+    entity_info["Start.io"] = {
+        "aliases": [],
+        "domains": ["startappexchange.com", "startappservice.com"],
+        "prevalence": 0.0,
+        "categories": ["advertiser", "analytic provider"],
+        "ngrams": {"start.io": True, "startapp": True}
+    }
+    entity_info["SessionM"] = {
+        "aliases": [],
+        "domains": ["sessionm.com"],
+        "prevalence": 0.0,
+        "categories": ["analytic provider"],
+        "ngrams": {"sessionm": True}
+    }
+    entity_info["Kidoz"] = {
+        "aliases": [],
+        "domains": ["kidoz.net"],
+        "prevalence": 0.0,
+        "categories": ["advertiser"],
+        "ngrams": {"kidoz": True}
+    }
+    entity_info["GreedyGame"] = {
+        "aliases": [],
+        "domains": ["greedygame.com"],
+        "prevalence": 0.0,
+        "categories": ["advertiser"],
+        "ngrams": {"greedygame": True}
+    }
+    entity_info["SponsorPay"] = {
+        "aliases": [],
+        "domains": ["sponsorpay.com"],
+        "prevalence": 0.0,
+        "categories": ["advertiser"],
+        "ngrams": {"sponsorpay": True}
+    }
+    entity_info["Cloudmobi"] = {
+        "aliases": [],
+        "domains": ["cloudmobi.net"],
+        "prevalence": 0.0,
+        "categories": ["advertiser"],
+        "ngrams": {"Cloudmobi": True}
+    }
+    entity_info["AppTornado"] = {
+        "aliases": ["AppBrain"],
+        "domains": ["appbrain.com", "apptornado.com"],
+        "prevalence": 0.0,
+        "categories": ["advertiser"],
+        "ngrams": {"appbrain": True, "apptornado": True}
+    }
+    # Developers
+    entity_info["Kaufcom"] = {
+        "aliases": [],
+        "domains": ["maxpedia.com", "kauf.com"],
+        "prevalence": 0.0,
+        "categories": [],
+        "ngrams": {"kaufcom": True}
+    }
+    entity_info["GOMO"] = {
+        "aliases": [],
+        "domains": ["jiubang.com", "goforandroid.com", "gomo.com"],
+        "prevalence": 0.0,
+        "categories": [],
+        "ngrams": {"gomo": True, "jiubang": True}
+    }
 
     with open(args.output, "w", encoding="utf-8") as fout:
         json.dump(entity_info, fout, default=lambda o: sorted(o) if isinstance(o, set) else o)

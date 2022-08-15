@@ -1,4 +1,5 @@
 import csv
+import functools
 import shelve
 import hashlib
 import ipaddress
@@ -9,35 +10,74 @@ import sys
 
 import tldextract
 
+CLOUD_PROVIDERS = {
+    "amazonaws.com", "amazonaws.com.cn", "cloudfront.net", "akamaitechnologies.com", "linode.com",
+    "herokuapp.com", "googleusercontent.com", "fastly.net", "cloudflare.com"
+}
 
-def policheck_is_first_party(package_name, dest_domain, privacy_policy):
-    # Get start of packagename com.benandow.policylint --> com.benandow
-    splitPackageName = package_name.split(u'.')
-    rPackageName = u'{}.{}'.format(splitPackageName[0], splitPackageName[1])
 
-    # Get root destination domain (reversed) (e.g., policylint.benandow.com --> com.benandow)
-    splitDestDom = dest_domain.split(u'.')
-    if len(splitDestDom) < 2:
-        return False
-    rDestDomRev = u'{}.{}'.format(splitDestDom[-1], splitDestDom[-2])
+class DomainMapper:
+    def __init__(self, entity_info_json):
+        self.domain_map = {}
 
-    # Check if root dest_domain (reversed) matches start of package_name
-    if rPackageName == rDestDomRev:
-        return True
+        with open(entity_info_json, encoding="utf-8") as fin:
+            for entity, entity_info in json.load(fin).items():
+                self.domain_map.update({dom: entity for dom in entity_info["domains"]})
 
-    # Check if root privacy_policy url (reversed) matches start of package name
-    if privacy_policy != u'NULL' and len(privacy_policy) > 0:
-        #Reverse root policy URL: https://www.benandow.com/privacy --> com.benandow
-        splitDom = re.sub(r'/.*$', '', re.sub(r'http(s)?://', u'', privacy_policy, flags=re.I)).split(u'.')
-        rPolUrlRev = u'{}.{}'.format(splitDom[-1], splitDom[-2])
-        # Check if the root privacy policy url matches the destination domain..
-        if rPolUrlRev == rDestDomRev:
+    @functools.lru_cache
+    def is_first_party(self, package_name, dest_domain, privacy_policy_url):
+        dest_tld = tldextract.extract(dest_domain)
+
+        if dest_tld.suffix != "":
+            # Major cloud service: Assume the developer controls the data
+            if dest_tld.registered_domain in CLOUD_PROVIDERS:
+                return True
+
+            # Main domain name exists in the package name
+            # eg: com.promobitech.mobilock.pro -> mobilock.in
+            if dest_tld.domain in package_name:
+                return True
+
+            dest_domain_owner = self.domain_map.get(dest_tld.registered_domain)
+        else:
+            return False
+
+        rev_package_name = ".".join(reversed(package_name.split(".")))
+        first_party_keywords = set()
+
+        package_name_tld = tldextract.extract(rev_package_name)
+        package_name_owner = self.domain_map.get(package_name_tld.registered_domain)
+
+        # Package name and dest domain have the same owner entity
+        # eg: com.twitter.android -> twimg.com
+        if package_name_owner and package_name_owner == dest_domain_owner:
             return True
-    return False
 
+        # Reversed package_name is a domain. Add the domain part to keyword list
+        if package_name_tld.suffix != "":
+            first_party_keywords.add(package_name_tld.domain.lower())
+
+        policy_url_tld = tldextract.extract(privacy_policy_url)
+
+        # Add captalized word in the package name to keyword list
+        if m := re.search(r"\w+\.([A-Z]\w+)", package_name):
+            first_party_keywords.add(m[1].lower())
+
+
+        # Add the domain part of policy url to keyword list
+        if policy_url_tld.suffix != "":
+            # There are many policies host on third-party domain
+            # I don't think this is reliable but just to align with PoliCheck
+            first_party_keywords.add(policy_url_tld.domain.lower())
+
+        for keyword in first_party_keywords:
+            if re.search(rf"\b{keyword}", dest_domain, re.I):
+                return True
+
+        return False
 
 def main():
-    input_csv, dns_cache, output_json = sys.argv[1:]
+    input_csv, entity_info, dns_cache, output_json = sys.argv[1:]
 
     FLOW_CSV_COLUMNS = ['package_name', 'app_name', 'version_name', 'version_code',
                         'data_type', 'dest_domain', 'dest_ip', 'arb_number', 'privacy_policy']
@@ -45,7 +85,7 @@ def main():
         'aaid': 'advertising id',
         'fingerprint': None,
         'androidid': 'android id',
-        'geolatlon': 'precise geolocation',
+        'geolatlon': 'geolocation',
         'hwid': 'serial number',
         'routerssid': 'router ssid',
         'routermac': 'mac address',
@@ -60,6 +100,7 @@ def main():
         'gsfid': 'gsf id'
     }
 
+    domain_mapper = DomainMapper(entity_info)
     data = {}
 
     with open(input_csv, encoding="utf-8") as fin:
@@ -134,7 +175,7 @@ def main():
         privacy_policy_url = info["privacy_policy_url"]
 
         for flow in info["flows"]:
-            if policheck_is_first_party(package_name, flow["dest_domain"], privacy_policy_url):
+            if domain_mapper.is_first_party(package_name, flow["dest_domain"], privacy_policy_url):
                 flow["party"] = "first party"
             else:
                 flow["party"] = "third party"
