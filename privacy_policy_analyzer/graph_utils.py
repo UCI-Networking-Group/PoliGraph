@@ -13,6 +13,7 @@ ENTITY_ONTOLOGY = [
     "auth provider",
     "social media",
     "advertiser",
+    "email service provider",
     "UNKNOWN",
 ]
 
@@ -76,7 +77,7 @@ def gml_stringizer(obj):
 
 
 class KGraph:
-    def __init__(self, path):
+    def __init__(self, path, merge_geolocation=False):
         kgraph = nx.read_gml(path, destringizer=gml_destringizer)
         self.kgraph :nx.MultiDiGraph = kgraph
 
@@ -86,6 +87,23 @@ class KGraph:
             if k == "NOT_COLLECT":
                 edges_to_remove.append((u, v, k))
         kgraph.remove_edges_from(edges_to_remove)
+
+        if merge_geolocation:
+            # Merge geolocation / precise geolocation / coarse geolocation to align with PoliCheck
+            if "geolocation" not in kgraph:
+                kgraph.add_node("geolocation", type="DATA")
+
+            for node in "precise geolocation", "coarse geolocation":
+                if node in kgraph:
+                    for parent, _, rel, data in kgraph.in_edges(node, keys=True, data=True):
+                        if parent != "geolocation":
+                            kgraph.add_edge(parent, "geolocation", key=rel, **data)
+
+                    for _, child, rel, data in kgraph.out_edges(node, keys=True, data=True):
+                        if child != "geolocation":
+                            kgraph.add_edge("geolocation", child, key=rel, **data)
+
+                    kgraph.remove_node(node)
 
         # For convenience, reverse all entity subsumption
         for u, v, rel, edge_data in list(kgraph.edges(keys=True, data=True)):
@@ -147,9 +165,18 @@ class KGraph:
                 assert False
 
     def purposes(self, entity, datatype):
+
+        def all_shortest_paths_wrap(*args, **kwargs):
+            try:
+                yield from nx.all_shortest_paths(*args, **kwargs)
+            except nx.NetworkXNoPath:
+                return
+
         purposes = set()
 
-        for path in nx.all_simple_paths(self.kgraph, entity, datatype):
+        # nx.all_simple_paths or nx.all_shortest_paths?
+        # I feel shortest_paths would be less affected by vague language
+        for path in all_shortest_paths_wrap(self.kgraph, entity, datatype):
             for u, v in zip(path[:-1], path[1:]):
                 try:
                     edge_view = self.kgraph.edges[u, v, "COLLECT"]
@@ -163,10 +190,25 @@ class KGraph:
 
                 break
 
+    @functools.lru_cache
+    def validate_collection(self, datatype):
+        for _ in self.who_collect(datatype):
+            return True
+
+        return False
+
+    @functools.lru_cache
+    def validate_sharing(self, entity, datatype):
+        for collection_entity in self.who_collect(datatype):
+            if collection_entity == entity:
+                return True
+
+        return False
+
 
 class ExtKGraph(KGraph):
-    def __init__(self, path, data_ontology, entity_ontology):
-        super().__init__(path)
+    def __init__(self, path, data_ontology, entity_ontology, **kwargs):
+        super().__init__(path, **kwargs)
 
         # Clone ontology edges to the KGraph
         # For performance reason, precise nodes are not added unless it's already in the KGraph
@@ -257,21 +299,14 @@ class ExtKGraph(KGraph):
 
     @functools.lru_cache
     def validate_collection(self, datatype):
-        for _ in self.who_collect(datatype):
-            return True
-
-        return False
+        return super().validate_collection(datatype)
 
     @functools.lru_cache
     def validate_sharing(self, entity, datatype, accept_unspecific_data=True):
         context = self.accept_unspecific_data if accept_unspecific_data else contextlib.nullcontext
 
         with context(), self.attach_node(entity, "ACTOR"):
-            for collection_entity in self.who_collect(datatype):
-                if collection_entity == entity:
-                    return True
-
-        return False
+            return super().validate_sharing(entity, datatype)
 
     @functools.lru_cache
     def validate_purpose(self, entity, datatype, purpose, accept_unspecific=True):
