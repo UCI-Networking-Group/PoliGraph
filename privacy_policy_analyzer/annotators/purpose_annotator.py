@@ -33,7 +33,7 @@ class PurposeValidator:
                 "REL_OP": ">",
                 "RIGHT_ID": "r00",
                 "RIGHT_ATTRS": {"LEMMA": {"IN": [
-                    "this", "that", "these", "those", "any", "such", "various", "certain"
+                    "this", "that", "these", "those", "any", "such", "various", "certain",
                 ]}}
             },
         ])
@@ -164,8 +164,26 @@ class PurposeAnnotator(BaseAnnotator):
 
             purpose_root = match_info["purpose_root"]
             sentence = purpose_root.sent
+
+            if sentence[-1].lemma_ == ":":
+                continue
+
+            # right_end is the end of purpose_root's subtree
             right_end = max(t.i for t in purpose_root.subtree) + 1
-            purpose_part = doc[purpose_root.i:right_end]
+
+            # left_end is a bit tricky. If the purpose phrase span two segments (listitem), then build_graph will have
+            # difficulty finding the full doc. So we make sure the phrase never spans segments by moving the left_end
+            # to the start of the last segment.
+            # A better solution would require improving the link mechanism
+            left_end = purpose_root.i
+            last_segment_id = -1
+
+            for i in range(purpose_root.i, right_end):
+                if doc[i]._.src[0] > last_segment_id:
+                    last_segment_id = doc[i]._.src[0]
+                    left_end = i
+
+            purpose_part = doc[left_end:right_end]
 
             if not self.validator(purpose_part):
                 continue
@@ -173,18 +191,17 @@ class PurposeAnnotator(BaseAnnotator):
             self.logger.info("Rule %s matches %r", rule_name, sentence.text)
             self.logger.info("Purpose phrase: %r", purpose_part.text)
 
+            # Select data types under the verb's subtree
             associate_dtypes = []
             for token in match_info["anchor"].subtree:
                 if token in collected_dtypes and token not in purpose_part:
                     associate_dtypes.append(token)
 
-            self.logger.info("Linkable data types: %r", associate_dtypes)
+            if len(associate_dtypes) > 0:
+                self.logger.info("Linkable data types: %r", associate_dtypes)
 
-            if len(associate_dtypes) == 0:
-                continue
-
-            for dtype in collected_dtypes:
-                document.link(dtype, purpose_root, "PURPOSE")
+                for dtype in associate_dtypes:
+                    document.link(dtype, purpose_part.root, "PURPOSE")
 
     def annotate(self, document):
         for doc in document.iter_docs():
