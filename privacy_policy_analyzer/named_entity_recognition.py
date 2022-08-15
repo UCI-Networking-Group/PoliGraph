@@ -6,7 +6,8 @@ from spacy.language import Language
 from spacy.tokens import Span
 
 DATATYPE_KEYWORDS = frozenset([
-    "information", "data", "datum", "address", "number", "identifier", "preference", "setting"
+    "information", "data", "datum", "address", "number", "location",
+    "identifier", "ID", "preference", "setting"
 ])
 ACTOR_KEYWORDS = frozenset([
     'advertiser', 'affiliate', 'analytic', 'analytics', 'app', 'application',

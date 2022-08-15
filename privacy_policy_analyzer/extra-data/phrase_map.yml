@@ -1,10 +1,11 @@
 DATA:
   UNSPECIFIC:
     - '^(information|data|datum)(we collect| about (you|user|our user))?$'
+    - '^(technology|data|datum|information)$'
 
   personal information:
     - '^((your|user|the)\s+)?personal (data|info|information|datum)$'
-    - '^personal (data|info|information) (that )?(about (you|user)|you (provide|enter|submit))'
+    - '^personal (data|info|information|datum) (that )?(about (you|user)|you (provide|enter|submit))'
     - '!(cannot|no[nt]?)'
 
   personal identifier:
@@ -18,6 +19,7 @@ DATA:
   identifier:
     - '^identifier$'
     - '^((other|universally)\s+)?(unique|persistent|other) identifier$'
+    - '=^ID$'
 
   # government IDs
   government identifier:
@@ -32,7 +34,7 @@ DATA:
     - 'passport\b.*\b(number|detail|no)'
 
   "driver's license number":
-    - "driver('s)? license (number|information|copy)"
+    - "(driving|driver('s)?) license (number|information|copy)"
 
   # bank account
   "credit / debit card number":
@@ -84,7 +86,7 @@ DATA:
     - 'location (base|relate|specific)'
     - 'location (mapping|tracking) data'
     - '(physical|your) location'
-    - '!(precise|A?GPS|coarse|non-precise|approximate)'
+    - '!(precise|A?GPS|coarse|non-precise|approximate|broad)'
 
   precise geolocation:
     - '(precise|gps)\b.*\b(geo-?(graphic)?\s*)?location'
@@ -94,7 +96,7 @@ DATA:
     - '!(non-precise)'
 
   coarse geolocation:
-    - '(coarse|imprecise|non-precise|approximate)\b.*\b(geo-?(graphic)?\s*)?location'
+    - '(coarse|imprecise|broad|non-precise|approximate)\b.*\b(geo-?(graphic)?\s*)?location'
 
   # contact information
   contact information:
@@ -123,6 +125,7 @@ DATA:
   device identifier:
     - '(device|mobile)\b.*\bid(entifier)?'
     - 'identifier (for|of|link|associate|assign|match|tie|specific)\b.*\bdevice'
+    - 'UDID$'
     - '!(cannot|no[nt]?)'
 
   software identifier:
@@ -145,7 +148,7 @@ DATA:
     - 'ad(vertis(ing|er))?\b.*\bid(entifier)?'
     - 'advertising id(entification)? number'
     - 'id(entifier?)?\b.*\badvertising'
-    - '(a[ad]id|idfa|gaid)'
+    - '(a[ad]id|idfa|gaid|advertisingid)'
 
   gsf id:
     - 'gsf id'
@@ -168,7 +171,7 @@ DATA:
   router ssid:
     - 'b?ssids?'
     - 'id(entifier?)?\b.*\brouter'
-    - 'wi[ -]?fi (end|access)[-\s]?point'
+    - 'wi[ -]?fi ((end|access)[-\s]?point|name)'
 
   ip address:
     - '=IP'
@@ -184,9 +187,10 @@ DATA:
   # usage / activity data
   internet activity:
     - '(internet|website|app(lication)?|in-game|on-?line|player|user|system|network) (activity|usage)'
+    - '(activity|usage|access) history'
 
   'browsing / search history':
-    - '(browsing|search|browse|online) (history|behaviour|behavior|activity)'
+    - '(browsing|search|browser?|online) (history|behaviour|behavior|activity)'
 
   package dump:
     - 'app(lication)? list'
@@ -218,7 +222,7 @@ ACTOR:
   - '=^(Company|Softwares?|App(lications?)?|Products?|Services?|Websites?)$'
 
   UNSPECIFIC:
-  - '((third|external|outside|other)[\s-]?party|data (controller|processor))'
+  - '(third|external|outside|other)[\s-]?(party|data processor)'
   - '(other|another|external|outside) (service|provider|partner|vendor|website|site|company|platform|contractor|party|business|organi[sz]ation|entities)$'
   - '(our|other|another|external|outside) (partner|vendor)'
   - '^(our|other|another|external|outside)?\b.*\bservice provider$'
@@ -229,7 +233,7 @@ ACTOR:
   - 'advertiser'
 
   auth provider:
-  - '(auth(entication)?|identity)\b.*\b(provider|service)'
+  - '(auth(entication)?|identity|sign-?(on|in))\b.*\b(provider|service)'
   - 'single sign-?(on|in)'
 
   social media:
@@ -246,11 +250,11 @@ ACTOR:
   content provider:
   - 'content (provider|publisher|distributor|partner)'
 
-  # Below are not really in use
   email service provider:
-  - '(e-?mail|electronic mail)\b.*\b(provider|service|vendor)'
+  - '(e-?mail|electronic mail)(ing)?\b.*\b(provider|service|vendor)'
   - 'provider of\b.*\bemail'
   - 'service provider\b.*\bsend e-?mail'
 
+  # Not in use
   search engine:
   - 'search (engine|information|result)\b.*\b(provider)?'

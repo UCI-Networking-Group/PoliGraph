@@ -278,8 +278,15 @@ def extract_segments_from_accessibility_tree(tree, tokenizer):
         else:
             yield unidecode(node["name"].strip())
 
+    def fix_text(text):
+        # Tokenizer just doesn't work...
+        text = re.sub(r"\be-mail\b", "email", text, flags=re.I)
+        text = re.sub(r"\bwi-fi\b", "WiFi", text, flags=re.I)
+        text = re.sub(r"\bid\b", "ID", text)
+        return text
+
     def new_segment(segment_type, text, parent):
-        seg = DocumentSegment(len(segments), segment_type, tokenizer(text), parent)
+        seg = DocumentSegment(len(segments), segment_type, tokenizer(fix_text(text)), parent)
         logging.info("New segment: %r, Parent: %r", seg, parent)
         segments.append(seg)
         return seg
