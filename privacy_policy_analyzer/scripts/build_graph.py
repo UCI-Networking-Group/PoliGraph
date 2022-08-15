@@ -196,20 +196,21 @@ class GraphBuilder:
                     all_purpose_text.add(purpose_part.text)
 
         all_purpose_text = list(all_purpose_text)
-        purpose_text_to_purpose = dict(zip(all_purpose_text, self.purpose_classifier(all_purpose_text)))
+        purpose_text_to_purposes = dict(zip(all_purpose_text, self.purpose_classifier(all_purpose_text)))
 
-        for k, v in purpose_text_to_purpose.items():
+        for k, v in purpose_text_to_purposes.items():
             logging.info("Purpose %r -> %s", k, v)
 
         for data_type, purpose_text_list in data_type_to_purpose_text_list.items():
-            edge_purposes = []
+            edge_purposes = set()
 
             for purpose_text in purpose_text_list:
-                edge_purposes.append((purpose_text_to_purpose[purpose_text], purpose_text))
+                for purpose in purpose_text_to_purposes[purpose_text]:
+                    edge_purposes.add((purpose, purpose_text))
 
             for _, _, edge_data in stage1_graph.in_edges(data_type, data=True):
                 if edge_data["relationship"] == "COLLECT":
-                    edge_data["purposes"] = edge_purposes
+                    edge_data["purposes"] = sorted(edge_purposes)
 
         # Step 4: Infer phrase type using SUBSUM / COREF relationship
         # Run a BFS starting from nodes with known types.
