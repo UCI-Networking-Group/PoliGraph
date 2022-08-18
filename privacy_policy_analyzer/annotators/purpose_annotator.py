@@ -179,7 +179,9 @@ class PurposeAnnotator(BaseAnnotator):
             last_segment_id = -1
 
             for i in range(purpose_root.i, right_end):
-                if doc[i]._.src[0] > last_segment_id:
+                src = doc[i]._.src
+
+                if src and src[0] > last_segment_id:
                     last_segment_id = doc[i]._.src[0]
                     left_end = i
 
