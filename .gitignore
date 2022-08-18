@@ -150,3 +150,7 @@ model-best/
 model-last/
 # Local test data
 examples/
+# Output
+nlp_model/
+logs/
+stats/
