@@ -373,6 +373,14 @@ class SubsumptionAnnotator(BaseAnnotator):
                 if upper_token._.ent_type == "ACTOR":
                     continue
 
+            if upper_token.dep_ == "attr" and upper_token.head.lemma_ == "be":
+                # e.g.: "Personal data" is information ..., including ...
+                # Move upper_token to the word before "be"
+                for child in upper_token.head.children:
+                    if child.dep_ == "nsubj":
+                        upper_token = child
+                        break
+
             upper_ent = upper_token._.ent
             sentence = upper_token.sent
 
