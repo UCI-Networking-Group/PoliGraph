@@ -39,18 +39,14 @@ ENTITY_CATEGORIES = [
 PURPOSE_LABELS = [
     'services',
     'security',
-    'personalization',
     'legal',
-    'acquisition',
     'advertising',
     'analytics',
-    'marketing',
 ]
 
 NON_CORE_PURPOSES = [
-    'analytics',
     'advertising',
-    'marketing',
+    'analytics',
 ]
 
 class ParallelHelper:
@@ -116,9 +112,8 @@ class ParallelHelper:
         kgraph_path = os.path.join(privacy_policy_path, 'graph_trimmed.gml')
 
         kgraph = KGraph(kgraph_path)
-        ext_kgraph = ExtKGraph(kgraph_path, self.data_ontology, self.entity_ontology)
 
-        return self.run_on_graph(kgraph), self.run_on_graph(ext_kgraph)
+        return self.run_on_graph(kgraph)
 
 
 def worker(args, input, output):
@@ -126,8 +121,8 @@ def worker(args, input, output):
     helper = ParallelHelper(data_ontology, entity_ontology)
 
     for path in iter(input.get, None):
-        kgraph_result, ext_kgraph_result = helper.run(path)
-        output.put((path, kgraph_result, ext_kgraph_result))
+        kgraph_result = helper.run(path)
+        output.put((path, kgraph_result))
 
 
 def main():
@@ -151,25 +146,27 @@ def main():
     entity_stats = pd.DataFrame(0, DATATYPE_CATEGORIES,
                                 ["total"] + ENTITY_CATEGORIES)
     purpose_stats = pd.DataFrame(0, DATATYPE_CATEGORIES, PURPOSE_LABELS)
-    ext_entity_stats = entity_stats.copy()
-    ext_purpose_stats = purpose_stats.copy()
 
-    apps_sharing_with_ad_or_analytics = {d: set() for d in DATATYPE_CATEGORIES}
-    ext_apps_sharing_with_ad_or_analytics = {d: set() for d in DATATYPE_CATEGORIES}
+    apps_sharing = {d: set() for d in DATATYPE_CATEGORIES}
     non_core_purpose_apps = {d: set() for d in DATATYPE_CATEGORIES}
-    ext_non_core_purpose_apps = {d: set() for d in DATATYPE_CATEGORIES}
+    set_policy_collect_known_category = set()
+    set_policy_non_core_purpose = set()
+    set_policy_ad_purpose = set()
 
     for _ in range(len(args.workdirs)):
-        path, kgraph_result, ext_kgraph_result = output_queue.get()
+        path, kgraph_result = output_queue.get()
 
         for data_cat in kgraph_result:
+            if data_cat != "UNSPECIFIC_DATA":
+                set_policy_collect_known_category.add(path)
+
             entity_stats.loc[data_cat, "total"] += 1
 
             for ent_cat in kgraph_result[data_cat]["entities"]:
                 entity_stats.loc[data_cat, ent_cat] += 1
 
-                if ent_cat in ["advertiser", "analytic provider"]:
-                    apps_sharing_with_ad_or_analytics[data_cat].add(path)
+                if ent_cat not in ["we", "UNSPECIFIC_ACTOR"]:
+                    apps_sharing[data_cat].add(path)
 
             for purpose in kgraph_result[data_cat]["purposes"]:
                 purpose_stats.loc[data_cat, purpose] += 1
@@ -177,17 +174,9 @@ def main():
                 if purpose in NON_CORE_PURPOSES:
                     non_core_purpose_apps[data_cat].add(path)
 
-            for ent_cat in ext_kgraph_result[data_cat]["entities"]:
-                ext_entity_stats.loc[data_cat, ent_cat] += 1
-
-                if ent_cat in ["advertiser", "analytic provider"]:
-                    ext_apps_sharing_with_ad_or_analytics[data_cat].add(path)
-
-            for purpose in ext_kgraph_result[data_cat]["purposes"]:
-                ext_purpose_stats.loc[data_cat, purpose] += 1
-
-                if purpose in NON_CORE_PURPOSES:
-                    ext_non_core_purpose_apps[data_cat].add(path)
+                    set_policy_non_core_purpose.add(path)
+                    if purpose == "advertising":
+                        set_policy_ad_purpose.add(path)
 
     for _ in range(nproc):
         input_queue.put(None)
@@ -195,23 +184,22 @@ def main():
     output_dir = Path(args.output_dir)
 
     entity_stats.to_csv(output_dir / "entity_stats.csv")
-    ext_entity_stats.to_csv(output_dir / "ext_entity_stats.csv")
     purpose_stats.to_csv(output_dir / "purpose_stats.csv")
-    ext_purpose_stats.to_csv(output_dir / "ext_purpose_stats.csv")
 
     with open(output_dir / "app_num_stats.csv", "w", newline="") as fout:
-        writer = csv.DictWriter(fout, fieldnames=["data_category", "bad_sharing", "ext_bad_sharing",
-                                                  "non_core_purpose", "ext_non_core_purpose"])
+        writer = csv.DictWriter(fout, fieldnames=["data_category", "sharing", "non_core_purpose"])
         writer.writeheader()
 
         for data_cat in DATATYPE_CATEGORIES:
             writer.writerow({
                 "data_category": data_cat,
-                "bad_sharing": len(apps_sharing_with_ad_or_analytics[data_cat]),
-                "ext_bad_sharing": len(ext_apps_sharing_with_ad_or_analytics[data_cat]),
+                "sharing": len(apps_sharing[data_cat]),
                 "non_core_purpose": len(non_core_purpose_apps[data_cat]),
-                "ext_non_core_purpose": len(ext_non_core_purpose_apps[data_cat]),
             })
+
+    print("# of policies that disclose the collection of known categories:", len(set_policy_collect_known_category))
+    print("# of policies that disclose non-core usage purposes:", len(set_policy_non_core_purpose))
+    print("# of policies that disclose advertising purpose:", len(set_policy_ad_purpose))
 
 
 if __name__ == "__main__":

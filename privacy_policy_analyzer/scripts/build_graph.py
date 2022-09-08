@@ -251,24 +251,31 @@ class GraphBuilder:
             data["normalized_terms"] = normalized_terms = set()
 
             # 5.1. COREF: inherit normalized_terms from coref main
-            # Main phrase of a coreference. Technically we allow a phrase to have more than one COREF edges
-            coref_main = set()
+            coref_src_list = []
 
             for _, ref_src, edge_data in stage1_graph.out_edges(src, data=True):
                 if edge_data["relationship"] == "COREF":
-                    # for coreferences, copy normalized_terms from referred phrase
-                    coref_main.update(stage1_graph.nodes[ref_src]["coref_main"] or [ref_src])
-                    normalized_terms.update(data["normalized_terms"])
+                    coref_src_list.append(ref_src)
 
-            if coref_main:
-                data["coref_main"] = coref_main
+            if len(coref_src_list) == 1:
+                data["coref_main"] = stage1_graph.nodes[coref_src_list[0]]["coref_main"]
                 continue
             else:
-                data["coref_main"] = {src}
+                data["coref_main"] = src
 
             # 5.2. Not COREF: normalize the phrase
             phrase = expand_phrase(token)
             lemma = " ".join(t.lemma_ for t in simplify_phrase(phrase))
+
+            if len(coref_src_list) > 1:
+                # Technically phrase graph allows a phrase to have more than one COREF edges
+                # Turn these edges into SUBSUM edges for the ease of processing
+
+                for ref_src in coref_src_list:
+                    stage1_graph.edges[src, ref_src]["relationship"] = "SUBSUM"
+
+                normalized_terms.add(f"{lemma} {src}")
+                continue
 
             # Skip empty string (NLP error) and "you" (entity but meaningless)
             if lemma in ["", "you", "user"]:
@@ -322,20 +329,19 @@ class GraphBuilder:
             if relationship == "COREF":
                 continue
 
-            coref_src1 = stage1_graph.nodes[src1]["coref_main"]
-            coref_src2 = stage1_graph.nodes[src2]["coref_main"]
+            coref_main1 = stage1_graph.nodes[src1]["coref_main"]
+            coref_main2 = stage1_graph.nodes[src2]["coref_main"]
 
-            normalized_terms1 = set.union(*(stage1_graph.nodes[i]["normalized_terms"] for i in coref_src1))
-            normalized_terms2 = set.union(*(stage1_graph.nodes[i]["normalized_terms"] for i in coref_src2))
+            normalized_terms1 = stage1_graph.nodes[coref_main1]["normalized_terms"]
+            normalized_terms2 = stage1_graph.nodes[coref_main2]["normalized_terms"]
 
-            edge_sources = set.union(coref_src1, coref_src2)
             edge_sentences = []
 
-            for segment_id in sorted(set(s[0] for s in edge_sources)):
+            for segment_id in sorted({coref_main1[0], coref_main2[0]}):
                 doc = document.get_doc_without_context(document.segments[segment_id])
 
                 for sent in doc.sents:
-                    if any(t._.src in edge_sources for t in sent):
+                    if any(t._.src in {coref_main1, coref_main2} for t in sent):
                         edge_sentences.append(sent.text)
 
             for n1, n2 in itertools.product(normalized_terms1, normalized_terms2):
@@ -358,7 +364,7 @@ class GraphBuilder:
                     else:
                         continue
 
-                stage2_graph[n1][n2][relationship]["sources"].append(sorted(edge_sources))
+                stage2_graph[n1][n2][relationship]["sources"].append([coref_main1, coref_main2])
                 stage2_graph[n1][n2][relationship]["text"].append(" | ".join(edge_sentences))
 
                 if relationship in ["COLLECT", "NOT_COLLECT"]:

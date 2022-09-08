@@ -42,6 +42,8 @@ token_map:
   VERB_ASK_TODO:
   - ask
   - require
+  - need
+  - choose
   VERB_ENABLE_TODO:
   - enable
   - allow
@@ -105,8 +107,8 @@ patterns:
     match: ['!@E1:nsubj', '!use:dobj', '!of,@DT:pobj']
     transform: ['USE', 'E1', 'DT']
 
-  # E1 have access to DT
-  - root: ['have']
+  # E1 have/get access to DT
+  - root: ['have', 'get']
     match: ['!@E1:nsubj', '!access:dobj,to,@DT:pobj']
     transform: ['USE', 'E1', 'DT']
 
@@ -128,6 +130,11 @@ patterns:
   - root: ['VERB_ASK_TODO']
     match: ['@E1:nsubj', '@E2:dobj', 'VERB_PROVIDE_WITH:xcomp,@E3:dobj', '!VERB_PROVIDE_WITH:xcomp,with,@DT:pobj']
     transform: ['SHARE', 'E2', 'DT', ['E3', 'E1']]
+  # E1 ask/require E2 to share DT with E3
+  - root: ['VERB_ASK_TODO']
+    match: ['@E1:nsubj', '@E2:dobj', '!VERB_SHARE_WITH:xcomp,@DT:dobj', '!VERB_SHARE_WITH:xcomp,with,@E3:pobj']
+    transform: ['SHARE', 'E2', 'DT', ['E3', 'E1']]
+
   # ... enable/allow E1 to collect/share/use D
   - root: ['VERB_ENABLE_TODO']
     match: ['!@E1:dobj', '!VERB_COLLECT_FROM:xcomp,@DT:dobj']

@@ -1,19 +1,29 @@
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
 
 # This is where the candidate labels are defined.
-PURPOSE_LABELS = [
-    'acquisition',
-    'advertising',
-    'analytics',
-    'services',
-    'marketing',
-    'legal',
-    'personalization',
-    'security'
-]
+PURPOSE_LABEL_MAPPING = {
+    "service": "services",
+    "functionality": "services",
+    "transaction": "services",
+    "maintenance": "services",
+    "operation": "services",
+    "security": "security",
+    "authorization": "security",
+    "authentication": "security",
+    "legal": "legal",
+    "liability": "legal",
+    "acquisition": "legal",
+    "analytics": "analytics",
+    "research": "analytics",
+    "advertising": "advertising",
+    "marketing": "advertising",
+}
+CLASSIFICATION_LABELS = list(PURPOSE_LABEL_MAPPING.keys())
+THRESHOLD_1 = 0.95
+THRESHOLD_2 = 0.60
 
 class PurposeClassifier:
-    def __init__(self, is_multi_label=True, threshold=0.5, multilabel_threshold=0.9):
+    def __init__(self, is_multi_label=True):
         # Initialize the NLP model and classifier.
         tokenizer = AutoTokenizer.from_pretrained('facebook/bart-large-mnli')
         model = AutoModelForSequenceClassification.from_pretrained('facebook/bart-large-mnli')
@@ -22,25 +32,26 @@ class PurposeClassifier:
         self.classifier = pipeline(task='zero-shot-classification', tokenizer=tokenizer, model=model, device=0)
 
         self.is_multi_label = is_multi_label
-        self.threshold = threshold
-        self.multilabel_threshold = multilabel_threshold
 
     def __call__(self, text):
         def get_main_label(result_dict):
-            labels = []
+            labels = set()
 
-            if result_dict['scores'][0] > self.threshold:
-                labels.append(result_dict['labels'][0])
+            for label, score in zip(result_dict["labels"], result_dict["scores"]):
+                relabel = PURPOSE_LABEL_MAPPING[label]
 
-            for score, label in zip(result_dict['scores'][1:], result_dict['labels'][1:]):
-                if score > self.multilabel_threshold:
-                    labels.append(label)
+                if score > THRESHOLD_1:
+                    labels.add(relabel)
+                elif len(labels) == 0 and score > THRESHOLD_2:
+                    labels.add(relabel)
+                    break
                 else:
                     break
 
             return labels
 
-        results = self.classifier(sequences=text, candidate_labels=PURPOSE_LABELS, multi_label=self.is_multi_label,
+        results = self.classifier(sequences=text, candidate_labels=CLASSIFICATION_LABELS,
+                                  multi_label=self.is_multi_label,
                                   num_workers=0)  # to prevent HuggingFace from spawning a lot of processes
 
         if isinstance(results, dict):
