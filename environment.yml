@@ -214,9 +214,3 @@ dependencies:
   - zipp=3.8.0=py310h06a4308_0
   - zlib=1.2.12=h7f8727e_2
   - zstd=1.5.2=ha4553b6_0
-  - pip:
-    - en-core-web-md==3.4.0
-    - en-core-web-sm==3.4.0
-    - en-core-web-trf==3.4.0
-    - pyqt5-sip==12.11.0
-    - pyyaml==6.0

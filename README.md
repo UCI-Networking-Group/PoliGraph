@@ -2,94 +2,176 @@
 
 The NLP-based privacy policy analyzer.
 
-## Dependencies
 
-TODO: There can be some residues of my development environment in this long dependency list. Clean it up before we publish.
+## Setup
 
-Create a new conda environment with most dependencies installed:
+### Dependencies
 
+**Hardware**: An NVIDIA GPU with CUDA support and at least 8GB memory is recommended. All the instructions are tested with RTX A5000 GPU.
+
+**System**: All the instructions are tested on Debian 11. Any modern GNU/Linux distribution should be sufficient.
+
+We use conda to manage the Python environment. Please follow [this instruction](https://conda.io/projects/conda/en/latest/user-guide/install/linux.html) to download and install conda.
+
+Create a new conda environment with dependencies installed:
+
+```sh
+$ conda env create -n nlp -f environment.yml
+$ conda activate nlp
 ```
-$ conda create --experimental-solver=libmamba -n nlp20220718 \
-    'anaconda::python>=3.10' anaconda::numpy anaconda::pandas pytorch::pytorch \
-    anaconda::pyyaml anaconda::lxml anaconda::bs4 anaconda::networkx \
-    huggingface::transformers 'conda-forge::spacy>=3.4.0' \
-    conda-forge::spacy-transformers  conda-forge::inflect conda-forge::anytree \
-    conda-forge::tldextract conda-forge::requests-cache \
-    conda-forge::unidecode microsoft::playwright conda-forge::langdetect \
-    anaconda::werkzeug anaconda::ipykernel anaconda::pylint \
-    anaconda::cudatoolkit=11.3 conda-forge::cudnn=8.2.1.32 conda-forge::cupy
+
+Playwright library (used by the crawler script) needs to be initialized:
+
+```sh
+$ playwright install
 ```
 
-If there is no GPU/CUDA, remove the last line from above command.
+### Cloning This Repository
+
+Use `git` to download this repository to local machine:
+
+```sh
+$ git clone https://github.uci.edu/NetworkingGroup/privacy_policy_analyzer.git
+```
+
+Clone external datasets as git submodules:
+
+```sh
+$ git submodule init
+$ git submodule update
+```
+
+
+## NLP Pipeline Setup
+
+### Pretrained NLP Pipelines
 
 Install spaCy's English NLP pipelines:
 
-```
+```sh
 $ python -m spacy download en_core_web_trf
-$ python -m spacy download en_core_web_lg
 $ python -m spacy download en_core_web_md
 $ python -m spacy download en_core_web_sm
 ```
 
-## Usage
+### Custom NER Training
 
-Before performing the following commands, download this repository first to local machine:
+Note that you may skip this step and use our released model checkpoint instead (see the next step).
 
-```
-$ git clone https://github.uci.edu/NetworkingGroup/privacy_policy_analyzer.git
-```
+All code related to NER training are inside `custom_ner_training` folder:
 
-### Named-entity recognition (NER)
-
-All code related to NER training are inside `ner` folder:
-
-```
-$ cd data_type_recognizer/
+```sh
+$ cd custom_ner_training/
 ```
 
-First step, use `get_actor_entity_list.py` to generate `actor_entities.list`, a list of entity names from Wikidata:
+Run `get_actor_entity_list.py` to fetch a list of entity names from Wikidata:
 
-```
+```sh
 $ python get_actor_entity_list.py
+# Output: actor_entities.list
 ```
 
-Run `gen_ner_data.py` generate synthetic training data (`train_dataset.spacy` and `dev_dataset.spacy`):
+Run `gen_ner_data.py` generate synthetic training data:
 
-```
+```sh
 $ python gen_ner_data.py
+# Output: train_dataset.spacy, dev_dataset.spacy
 ```
 
-Train the NLP model:
+Train the custom NER model:
 
+```sh
+$ python -m spacy init fill-config base_config.cfg config.cfg
+# Output: config.cfg
+$ python -m spacy train config.cfg --output checkpoints/ --paths.train train_dataset.spacy --paths.dev dev_dataset.spacy --gpu-id 0
+# Output: checkpoints/ folder
 ```
-$ python -m spacy init fill-config ./base_config.cfg ./config.cfg
-$ python -m spacy train config.cfg --output ./checkpoints --paths.train ./train_dataset.spacy --paths.dev ./dev_dataset.spacy --gpu-id 0
-```
 
-The model checkpoints are saved to `checkpoints` folder.
+The model checkpoint with best performance is saved to `checkpoints/model-best`.
 
-Now we go back to the root folder and run `privacy_policy_analyzer.scripts.repack_model` to embed our NER model into spaCy's transformer pipeline:
+### Packing the NLP Pipeline
 
-```
+Run the `repack_model` script to embed the custom NER model into spaCy's NLP pipeline.
+
+If you trained the NER model following the [Custom NER Training](#custom-ner-training) section, run the following commands:
+
+```sh
 $ cd ..
-$ python -m privacy_policy_analyzer.scripts.repack_model ner/checkpoints/model-best nlp_model
+$ python -m privacy_policy_analyzer.scripts.repack_model custom_ner_training/checkpoints/model-best/ nlp_model/
+# Output: nlp_model/ folder (about 1GB size)
+```
+
+Otherwise, please download our NER model checkpoint [here](#TODO) to `custom-ner-model.tar.gz` and run:
+
+```sh
+$ tar xf custom-ner-model.tar.gz
+$ python -m privacy_policy_analyzer.scripts.repack_model model-best/ nlp_model/
+# Output: nlp_model/ folder (about 1GB size)
+$ rm -rf model-best/
 ```
 
 The analyzer will use the packed NLP pipeline stored in the `nlp_model` folder.
 
 
-### Analyzing Text
+## Privacy Policy Analyzer
 
-TODO
+We will use [KAYAK privacy policy](https://www.kayak.com/privacy) as an example.
 
-## Notes
+### Download the Privacy Policy
 
-The latest spaCy version is 3.x, which supports transformer-based models. Unfortunately, neuralcoref library [hasn't yet support spaCy 3](https://github.com/huggingface/neuralcoref/issues/295). So I had to use spaCy 2 and thus cannot use transformer models.
+Run the HTML crawler script to download the privacy policy:
 
-Here are some useful resources to understand the code:
+```sh
+$ mkdir examples/
+$ python -m privacy_policy_analyzer.scripts.html_crawler https://www.kayak.com/privacy examples/kayak/
+```
 
-- [spaCy v2 website](https://v2.spacy.io/)
+A successful run outputs something like:
 
-- [How to Train spaCy to Autodetect New Entities (NER)](https://www.machinelearningplus.com/nlp/training-custom-ner-model-in-spacy/)
+```
+2022-10-18 13:25:06,858 [INFO] Testing URL 'https://www.kayak.com/privacy' with HEAD request
+2022-10-18 13:25:08,693 [INFO] Navigating to 'https://www.kayak.com/privacy'
+2022-10-18 13:25:13,408 [INFO] Saved to examples/kayak
+```
 
-- [neuralcoref demo](https://huggingface.co/coref/)
+The `examples/kayak/` folder will be used by all the subsequent scripts to store intermediate data and results.
+
+### HTML Preprocessing and NLP
+
+Execute the `init_document` script to preprocess HTML and run NLP pipeline on the privacy policy document:
+
+```sh
+$ python -m privacy_policy_analyzer.scripts.init_document --nlp nlp_model examples/kayak
+```
+
+The script and subsequent scripts generally take the following arguments:
+- The `--nlp` argument specifies the path to the packed NLP pipeline.
+- Positional arguments (`examples/kayak`) specify one or more paths to privacy policies downloaded by the crawler script.
+
+If you want to run the analyzer on a batch of privacy policies, it is recommended to run each script step once with all the paths appended in the command instead of multiple runs, because loading the NLP pipeline takes time.
+
+### Annotators
+
+Execute the `run_annotators` script to run annotators on the privacy policy document.
+
+```sh
+$ python -m privacy_policy_analyzer.scripts.run_annotators --nlp nlp_model
+```
+
+### Graph Building
+
+The first time you run this step, please generate `entity_info.json` from the Tracker Radar and Crunchbase datasets:
+
+```sh
+$ python dataset_preprocessing/merge_tracker_radar_and_crunchbase.py external_datasets/tracker-radar external_datasets/crunchbase-data entity_info.json
+```
+
+The output file `entity_info.json` contains information that help to normalize company names and build the global entity ontology.
+
+Execute the `build_graph` script to generate the PoliGraph:
+
+```sh
+$ python3 -m privacy_policy_analyzer.scripts.build_graph --nlp nlp_model -p privacy_policy_analyzer/extra-data/phrase_map.yml -e entity_info.json examples/kayak
+```
+
+The output is `examples/kayak/graph_trimmed.gml`. You may use a graph viewer like [yEd](https://www.yworks.com/products/yed) to open the file.
