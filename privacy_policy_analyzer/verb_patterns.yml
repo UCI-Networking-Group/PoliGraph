@@ -17,6 +17,7 @@ token_map:
   - give
   - divulge
   - pass
+  - submit
   VERB_COLLECT_FROM:
   - collect
   - gather
