@@ -1,0 +1,46 @@
+alias:
+  GENERAL_INFO: ["%DATA: (personal|non-personal|sensitive)? (information|data|identifiers?)%"]
+  GENERAL_ACTOR: ["%ACTOR: (third parties|(third-party|service|partner) (providers|entities|companies))%"]
+  PREP_SUBSUME: ["like", "including", "such as", "including but not limited to", "for example,", "especially",
+                 "which may include"]
+  CONJ: ["and", "or", "and/or"]
+  PURPOSES: ["(in order)? to (provide features|show ads)", "for (advertising|marketing) (purposes?)?"]
+  VERB_COLLECT_FROM: ["collect", "gather", "obtain", "receive", "solicit", "get"]
+  VERB_SHARE_WITH: ["share", "trade", "exchange"]
+  VERB_PROVIDE_WITH: ["provide", "supply"]
+  VERB_PROVIDE_TO: ["provide", "supply", "release", "disclose", "transfer", "transmit", "sell", "give"]
+  LAWS: ["our privacy policy", "the California Consumer Privacy Act", "the General Data Protection Regulation",
+         "Children's Online Privacy Protection Rule", "the (CCPA|(UK-)?GDPR|COPPA)"]
+
+template:
+# MANUALLY ADDED (30)
+- "(%DATA%|{GENERAL_INFO}) ({PREP_SUBSUME}? %DATA%, %DATA% {CONJ} %DATA%)?"
+- "(%ACTOR%|{GENERAL_ACTOR}) {PREP_SUBSUME}? %ACTOR%, %ACTOR% {CONJ} %ACTOR%"
+- "We (don't|may|might|(ask|require) you to)? {VERB_SHARE_WITH} (your)? %DATA% and %DATA% with %ACTOR% {PURPOSES}?"
+- "We (don't|may|might|(ask|require) you to)? {VERB_PROVIDE_WITH} %ACTOR% with %DATA% \\({PREP_SUBSUME} %DATA%, %DATA% and %DATA%\\) {PURPOSES}?"
+- "We (don't|may|might|(ask|require) you to)? {VERB_PROVIDE_TO} %DATA% to %ACTOR% {PURPOSES}?"
+- "We (don't|may|might)? {VERB_COLLECT_FROM} %DATA% from %ACTOR% {PURPOSES}?"
+- "We (may|might)? {VERB_COLLECT_FROM} %DATA% (directly from you|from %ACTOR%|from {GENERAL_ACTOR}), including: %DATA%, %DATA% {CONJ} %DATA%"
+- "We (don't|may)? (use|keep|access|process|store|save|log|utilize|analyze|record|retain|preserve|need|make use of) %DATA% {PURPOSES}?"
+- "(%DATA%|{GENERAL_INFO}) (may|might) be (used|processed|stored|saved|recorded) on (our servers|your devices|by {GENERAL_ACTOR})"
+- "The {GENERAL_INFO} (that (we {VERB_COLLECT_FROM}|you {VERB_PROVIDE_TO}|%ACTOR% {VERB_COLLECT_FROM}s))? includes the following: %DATA%, %DATA% and %DATA% \\({PREP_SUBSUME} %DATA%\\)?"
+- "%ACTOR% may collect (some|any|other|certain|all the) {GENERAL_INFO} from you {PURPOSES}? {PREP_SUBSUME} %DATA%, %DATA%, %DATA% and %DATA%"
+- "We do not collect nor {VERB_SHARE_WITH} %DATA% \\({PREP_SUBSUME} %DATA%, %DATA% {CONJ} %DATA%\\) with others {PURPOSES}?"
+- "%DATA% is an example of {GENERAL_INFO} (that (we {VERB_COLLECT_FROM}|you {VERB_PROVIDE_TO}|%ACTOR% {VERB_COLLECT_FROM}s)) {PURPOSES}?"
+- "%DATA%, %DATA% and %DATA% is an example of {GENERAL_INFO} (that (we {VERB_COLLECT_FROM}|you {VERB_PROVIDE_TO}|%ACTOR% {VERB_COLLECT_FROM}s))"
+- "You can(not)? opt out of the (collection|sharing) of %DATA% \\({PREP_SUBSUME} %DATA%, %DATA% {CONJ} %DATA%\\)"
+- "%ACTOR% can(not)? (process|store) (your)? %DATA% with(out)? your consent"
+- "{GENERAL_INFO} (includes (but not limits to)?|may include (but not limit to)?|is defined to include) the following: %DATA%"
+- '(These|Above|Such) {GENERAL_INFO} \(collectively, "%DATA%"\) is used for the following purposes: {PURPOSES}'
+- "We may work with {GENERAL_ACTOR}, {PREP_SUBSUME} %ACTOR% and %ACTOR% to (gather|process) (your)? %DATA%"
+- "Among the {GENERAL_INFO} (that (we {VERB_COLLECT_FROM}|you {VERB_PROVIDE_TO}|%ACTOR% {VERB_COLLECT_FROM}s)), there are %DATA%, %DATA%, %DATA% and %DATA%"
+- "%ACTOR% does access some {GENERAL_INFO} {PURPOSES}, {PREP_SUBSUME}: %DATA%"
+- "(We|%ACTOR%) may {VERB_COLLECT_FROM} (the following (categories|types)) of {GENERAL_INFO}: %DATA%, %DATA%, %DATA%"
+- "We may {VERB_SHARE_WITH} (your)? {GENERAL_INFO} with (the following (categories|types)) of {GENERAL_ACTOR}: %ACTOR%"
+- "(We|%ACTOR%) may {VERB_COLLECT_FROM} (the following (categories|types)) of {GENERAL_INFO}: %DATA%, %DATA%, %DATA%"
+- "We may {VERB_SHARE_WITH} (some|any) of (your)? {GENERAL_INFO}, {PREP_SUBSUME} %DATA%, %DATA% {CONJ} %DATA%"
+- "We are required by {LAWS} to ask for (your)? %DATA% ({PREP_SUBSUME}? %DATA%, %DATA% {CONJ} %DATA%)?"
+- "%ACTOR% and we do not {VERB_COLLECT_FROM} {GENERAL_INFO}, except for %DATA% and %DATA%"
+- "%ACTOR% and we do not {VERB_SHARE_WITH} {GENERAL_INFO} with any {GENERAL_ACTOR}, except for %ACTOR% and %ACTOR%"
+- "(%ACTOR%|{GENERAL_ACTOR}) may use %DATA: (cookies|pixel tags)% to collect %DATA%"
+- "You (consent to|accept) the (use|collection|disclosure|transfer|processing) of (your)? %DATA% \\({PREP_SUBSUME} %DATA%, %DATA% {CONJ} %DATA%\\)"

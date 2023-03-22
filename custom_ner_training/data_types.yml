@@ -1,357 +1,145 @@
 alias:
-  IP: ['IP', 'Internet Protocol', 'TCP/IP', 'IPv4', 'IPv6']
-  MAC: ['MAC', 'media access control', 'link-layer']
-  WIFI: ['WiFi', 'wireless', 'wireless network', 'WLAN', 'router', 'wireless router']
-  IDS: ['ID', 'identifier', 'identifiers', 'identification number', 'identificator']
-  PHONE: ['phone', 'mobile phone', 'cellphone', 'cell phone', 'telephone']
-  INFO: ['info', 'information', 'data', 'details']
-  AD: ['ad', 'ads', 'advertising', 'advertisement', 'advertiser']
-  OS: ['OS', 'operating system', 'system', 'Android', 'Apple', 'iOS', 'macOS', 'Oculus',
-       "device's", "Android's", "Apple's", "macOS's", "iOS's", "Oculus's"]
-  LOGIN: ['login name', 'user name', 'username', 'account name', 'ID']
-  SETTING: ['setting', 'preference', 'configuration', 'config']
-  IMAGE: ['image', 'imaging', 'imagery', 'photo', 'pattern']
-  CARD_SECURITY: ['card security', 'card verification', 'CVV', 'CVV2', 'CSC', 'CVC', 'CID']
-  COMPANY: ['DISCORD', 'Facebook', 'Twitter', 'Instagram', 'YouTube', 'TikTok', 'WeChat', 'WhatsApp']
+  # as root words
+  IDS: ['IDs?', 'identifiers?', 'id(entification)? numbers?', 'identificators?']
+  SETTING: ['settings?', 'preferences?', 'configuration', 'config', 'config files?']
+  INFO: ['info', 'information', 'data', 'details?']
+  # as modifiers
+  WIFI: ['WiFi', 'WLAN', 'wireless (network)?', '(wireless|WiFi|WLAN)? router']
+  ATS: ['ad(vertisement)?s?', 'advertising', 'advertiser', '(ad)? tracking']
+  OS: ['OS', 'operating system', 'system', 'Android', 'Apple', 'iOS', 'macOS',
+       "device's", "Android's", "Apple's", "computer's"]
+  COMPANY: ['Google', 'Facebook', 'Amazon', 'Microsoft', "Apple", "iCloud", 'WhatsApp', "TikTok", "WeChat", "SNS"]
 
-GENERAL_DATA:
-- aggregate INFO
-- aggregated INFO
-- non-personally identifiable INFO
-- personally identifiable INFO
-- de-identified INFO
-- personal INFO
-- consumer INFO
-- technical INFO
-- demographic INFO
-- health INFO
-- biometric INFO
-- user INFO
-- user's INFO
-- visitor's INFO
-- profile INFO
-- account INFO
-- device INFO
-- browser INFO
-- network INFO
-- system INFO
-- hardware INFO
-- software INFO
-- security INFO
-- financial INFO
-- social network INFO
-- OS INFO
+template:
+- ({INFO}|{IDS}|{SETTING})
+- ((non-)?(personal|technical|demographic|biometric|financial|sensitive|important))? {INFO} ((about|regarding) (users|consumers|customers|you))?
+- (user|visitor|account ?holder|card ?holder|consumer|customer|student|member)('s)? {INFO}
+- (account|profile|contact) {INFO}
+- (device|browser|network|system|hardware|software|security|social network) {INFO}
+- (anonymized|aggregated|de-?identified|pseudonymized) ({INFO}|{IDS})
+- (other|following|these|above-?mentioned) ({INFO}|{IDS})
+- (government|university|organization) {IDS}
 
-PERSONAL_CHARACTERISTICS:
-- protected classification
-- characteristics of protected classifications
-- personal characteristic
-- protected class
-- inference about users
-
-# (A) Identifiers such as a real name, alias, postal address, unique personal
-# identifier, online identifier Internet Protocol address, email address,
-# account name, social security number, driver’s license number, passport
-# number, or other similar identifiers.
-# (x) “Unique identifier” or “Unique personal identifier” means a persistent
-# identifier that can be used to recognize a consumer, a family, or a device
-# that is linked to a consumer or family, over time and across different
-# services, including, but not limited to, a device identifier; an Internet
-# Protocol address; cookies, beacons, pixel tags, mobile ad identifiers, or
-# similar technology; customer number, unique pseudonym, or user alias;
-# telephone numbers, or other forms of persistent or probabilistic identifiers
-# that can be used to identify a particular consumer or device.
+# personal characteristics
+- (characteristics of )?protected class(ification)?
+- (personal|user|consumer) characteristics?
+- inferences? about (users|consumers|customers|you)
 
 # real name
-REAL_NAME:
-- real name
-- full name
-- first name
-- middle name
-- last name
-- maiden name
-- surname
-- given name
-- legal name
-- (full) billing name
-- cardholder name
-- card holder name
-- recipient name
-- account holder name
-- bank account name
-- student name
-- member name
+- (real|full|first|middle|last|maiden|given|legal|billing) names?
+- (account ?holder|card ?holder|student|member)('s)? names?
+- (sur|nick)names?
+- name (prefix|suffix|affix)
 
 # account name / alias
-ACCOUNT_NAME:
-- account name
-- display name
-- login name
-- player name
-- profile name
-- user name
-- PIN (number)
-- PIN code
-- personal identification number
-- subscriber IDS
-- student IDS
-- user IDS
-- COMPANY LOGIN
-- COMPANY IDS
+- ((player|user|subscriber|student)('s)?)? (account|display|login|profile)? (names?|{IDS})
+- (name?|{IDS}) of ({COMPANY})? (players|users|subscribers|students)
+- PIN (numbers?|codes?)?
+- personal identification numbers?
 
-CONTACT_INFO:
-# email address
-- e-mail address
-- email address
-# postal address
-- home address
-- payment address
-- postal address
-- protocol address
-- shipping address
-- street address
-- billing address
-- delivery address
-- invoice address
-- ZIP Code
-- zipcode
-- postal code
-- post code
-- postcode
-- country of residence
-- country-level location
-- city-level location
-# phone/tax numbers
-- PHONE number
-- personal PHONE number
-- business PHONE number
-- daytime PHONE number
-- fax number
+# contact information
+- (e-?mail) address(es)?
+- (home|payment|postal|shipping|street|billing|delivery|invoice) address(es)?
+- (zip ?|post ?|postal )code
+- (country|city|state|province|county) of residence
+- (country|city|state|province|county)-level location
+- (personal|business|daytime|home)? (phone|mobile ?phone|cellphone|telephone|fax) numbers?
+- (social network|business|user|emergency)? contact {INFO}
+- list of (social network|business|user|emergency)? (contacts|friends)
 
-PERSON_ID:
-# social security number, driver’s license number, passport number
-- SSN
-- social security number
-- passport number
-- visa number
-- driver's license number
-- driver license number
-- identification number
-- (state) identification card number
+# government IDs
+- (social security|passport|visa|driver('s)? license) numbers?
+- (state|national|resident) id(entification)? card numbers?
+- (last (four|4|six|6) digits of)? SSN
 
-PAYMENT_INFO:
 # bank account / financial / payment
-- payment card number
-- card account number
-- CARD_SECURITY code
-- CARD_SECURITY number
-- credit card number
-- debit card number
-- bank account number
-- bank account INFO
-- routing number
-- last four digits of card number
+- (bank account|routing) numbers?
+- (CVV2?|CSC|CVC|CID|card security|card verification) codes?
+- (last (four|4|six|6) digits of)? (payment|debit|credit|gift)? card numbers?
+- (billing|payment|purchase|reservation) (history|status)
+- (card|account)? (renewal|expiration) date
 
-IDENTIFIERS:
-# device/hardware identifiers
-- (OS) IDS
-- (device) serial number
-- (unique) device IDS
-- console IDS
-- hardware IDS
-- hardware address
-- MAC address
-- Bluetooth MAC (address)
-- Ethernet MAC (address)
-- WIFI MAC (address)
-- Bluetooth (address)
-- IMEI (number)
-- International Mobile Equipment Identity (number)
-- IMSI (number)
-- International Mobile Subscriber Identity (number)
-- SIM (serial) number
-- SIM code
-- (WIFI) BSSID
-- (WIFI) Broadcast Service Set IDS
-- (WIFI) SSID
-- (WIFI) Service Set IDS
-- GSF IDS
+# hardware identifiers
+- (unique)? (device|console|hardware|WIFI|SIM|Bluetooth) ({IDS}|serial numbers?|address(es)?)
+- (WIFI)? ([BE]?SSID|(Broadcast|Extended)? Service Set {IDS})
+- (IMEI|IMSI|SIM) (numbers?|codes?)
+- International Mobile (Equipment|Subscriber) Identity (numbers?)?
+- (Bluetooth|WIFI|Ethernet|interface)? (MAC|Media Access Control|link layer) (address(es)?)?
+
 # software identifiers
-- host name
-- hostname
-- domain name
-- IP address
-- IP (address) SETTING
-- IP number
-- Internet address
-- network address
-- device model number
-- device identification number
-- application IDS
-- Unity IDS
-# AD ID
+- (GSF|{OS}|application|session|software|API) {IDS}
+- hostnames?
+- (host|domain|computer) names?
+- (IP|IPv4|IPv6|Internet Protocol|TCP/IP) (address|number)? ({SETTING})?
+- "{COMPANY} {IDS}"
+
+# advertising identifiers
+- ({OS})? {ATS} {IDS}
+- ({OS})? {IDS} for {ATS}
 - IDFA
-- (OS) AD IDS
-- (OS) IDS for ADS
-# Cookies
-- cookie
-- cookie SETTING
-- HTTP cookie
-- web cookie
-- Internet cookie
-- browser cookie
-- entity tag
-- ETag
-- HTTP header
-- web beacon
-- tracking pixel
-- pixel tag
-- session IDS
 
-# (F) Internet or other electronic network activity information, including, but
-# not limited to, browsing history, search history, and information regarding a
-# consumer’s interaction with an Internet Web site, application, or
-# advertisement.
-ACTIVITY:
-- log INFO
-- logging INFO
-- usage INFO
-- browsing INFO
-- system log
-- date of access
-- time of access
-- browsing history
-- search history
-- user activity
-- package dump
-- application list
-- list of applications
+# Cookies & HTTP headers
+- (HTTPS?|web|Internet|browser)? (cookies?|web beacons?|(E|entity|pixel) tags?|tracking pixels?) ({SETTING})?
+- ((non-)?functional|performance|necessary|persistent|session|permanent|(first-|third-)party|flash) cookies?
+- HTTPS? headers?
+- user[- ]?agent (strings?)?
 
-# (G) Geolocation data.
-GEOLOCATION:
-- location
-- geolocation
-- geo-location
-- geographical location
-- GPS location
-- GPS coordinate
-- GPS address
-- device GPS coordinate
-- geographic location
-- longitude
-- latitude
-- physical location
-- device geolocation
-- realtime location
-- realtime geolocation
-- realtime geo-location
-- real-time location
-- real-time geolocation
-- real-time geo-location
-- user location
+# Internet or other electronic network activity information
+- (log|logging|usage|browsing|search) ({INFO}|history|reports?|metrics?)
+- (browser|{OS}) (log|logging|crash log|journal|reports?)
+- (user|visitor|network|Internet) activity
+- (date|time|timestamp|details?) of (your|user)? (access|visit|use)
 
-# (b) “Biometric information” means an individual’s physiological, biological,
-# or behavioral characteristics, including an individual’s deoxyribonucleic acid
-# (DNA), that can be used, singly or in combination with each other or with
-# other identifying data, to establish individual identity. Biometric
-# information includes, but is not limited to, imagery of the iris, retina,
-# fingerprint, face, hand, palm, vein patterns, and voice recordings, from which
-# an identifier template, such as a faceprint, a minutiae template, or a
-# voiceprint, can be extracted, and keystroke patterns or rhythms, gait patterns
-# or rhythms, and sleep, health, or exercise data that contain identifying 
-# information.
-BIOMETRIC:
-- face IMAGE
-- iris IMAGE
-- retina IMAGE
-- fingerprint (IMAGE)
-- palm IMAGE
-- vein IMAGE
-- minutiae IMAGE
-- voice recording
-- recording of voice (command)
-- voice command
-- audio recording
-- video recording
-- faceprint
-- voiceprint
-- sleep INFO
-- exercise INFO
+# package list
+- (application|program|software|add-?on|extension|package) (list|dump)
+- list of (installed|enabled)? (applications|programs|software|add-?ons|extensions|packages)
 
-DEMOGRAPHIC:
-- gender (identity)
-- sexual orientation
+# geolocation
+- (device|user)? (geographical|physical|real-?time|GPS)? ((geo-?)?location|longitude|latitude|altitude|coordinate) ({INFO})?
+- (GPS|beacon|IP)-based (geo-?)?location
+
+# biometrics
+- (face|voice|finger)prints?
+- (face|iris|retina|fingerprint|palm|vein|minutiae) (image|imaging|imagery|photo|pattern)
+- (voice|audio|video) recordings?
+- recordings? of (voice|voice commands?)
+
+# health data
+- (health|sleep|exercise|medical) {INFO}
+- (meal|food) preferences?
+
+# demographics
+- (nationality|residency|race|ethnicity|ethnic group|language) ({INFO})?
+- (gender|sex) (identity)?
+- sexual (orientation|preference)
 - age
-- birthdate
-- birth date
-- birthday
-- birth day
-- date of birth
-- marital status
-- immigration status
-- employment status
-- veteran status
-- status of employment
-- national origin
-- nationality
+- (birth) ?(day|date)
+- (day|date|year|month|time) of birth
+- (marital|civil|employment|immigration|veteran|student|job|criminal) (status|title)
+- status of (employment|immigration|student|veteran)
+- (religious|philosophical|political) beliefs?
 
-AUTH_TOKEN:
-- password
-- passphrase
-- authentication token
-- credential
-- security question
+# auth tokens
+- pass(word|code|phrase|key)s?
+- auth(entication)? (token|credential|key)s?
+- security (question|code)s?
 
-SOFTWARE_INFO:
-- device type
-- type of device
-- device model
-- device manufacturer
-- platform type
-- CPU model
-- CPU frequency
-- number of CPU cores
-- GPU model
-- GPU frequency
-- number of GPUs
-- browser type
-- type of browser
-- network type
-- OS version
-- software version
-- API version
-- type of phone
-- type of mobile device
-- screen resolution
-- screen size
-- monitor resolution
-- monitor size
-- browser language
-- user agent (string)
-- carrier provider
-- language SETTING
-- timezone SETTING
-- system SETTING
-- notification SETTING
+# general hardware/software information
+- (device|hardware|CPU|GPU|browser|{OS}|phone) (type|model|manufacturer|version|property)
+- type of (device|platform|phone)
+- number of (CPUs|CPU cores|GPUs|processors)
+- (CPU|GPU|processor|memory) frequency
+- (screen|monitor|display) (size|resolution)
+- (language|timezone|notification|locale|{OS}) {SETTING}
 
-SENSOR_DATA:
-- sensory INFO
-- sensor INFO
-- sensor flag
-- accelerometer INFO
-- proximity sensor INFO
-- gyroscope INFO
-- compass INFO
-- barometer INFO
-- bluetooth INFO
+# sensor data
+- (sensory|sensor|accelerometer|proximity sensor|gyroscope|compass|barometer) ({INFO}|flags?|states?|status)
 
-FILE_CONTENT:
-- file content
-- content of file
-- email content
-- content of email
-- message content
-- content of message
-- crash report
-- crash log
-- log file
+# file content
+- (file|e-?mail|message|SMS|attachment|user|document) contents?
+- contents? of (file|e-?mail|message|SMS|attachment)
+
+# misc
+- (UU|GU|G|U)IDs?
+- profile (photos?|avatars?|pictures?)
+- (user|consumer)(-generated)? contents?
