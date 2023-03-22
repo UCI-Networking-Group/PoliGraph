@@ -16,15 +16,25 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_pla
 import requests
 from requests_cache import CachedSession
 
-READABILITY_JS_URL = "https://raw.githubusercontent.com/mozilla/readability/5ea9c2f/Readability.js"
+READABILITY_JS_COMMIT = "8e8ec27cd2013940bc6f3cc609de10e35a1d9d86"
+READABILITY_JS_URL = f"https://raw.githubusercontent.com/mozilla/readability/{READABILITY_JS_COMMIT}"
 REQUESTS_TIMEOUT = 10
 
 
 def get_readability_js():
     session = CachedSession("py_request_cache", backend="filesystem", use_temp=True)
-    res = session.get(READABILITY_JS_URL, timeout=REQUESTS_TIMEOUT)
+    js_code = []
+
+    res = session.get(f"{READABILITY_JS_URL}/Readability.js", timeout=REQUESTS_TIMEOUT)
     res.raise_for_status()
-    return res.text
+    js_code.append(res.text)
+    js_code.append(res.text)
+
+    res = session.get(f"{READABILITY_JS_URL}/Readability-readerable.js", timeout=REQUESTS_TIMEOUT)
+    res.raise_for_status()
+    js_code.append(res.text)
+
+    return "\n".join(js_code)
 
 
 def url_arg_handler(url):
@@ -102,13 +112,15 @@ def main():
         # Firefox generates simpler accessibility tree than chromium
         # Tested on Debian's firefox-esr 91.5.0esr-1~deb11u1
         browser = p.firefox.launch(firefox_user_prefs=firefox_configs)
+        context = browser.new_context(bypass_csp=True)
 
         def error_cleanup(msg):
             logging.error(msg)
+            context.close()
             browser.close()
             sys.exit(-1)
 
-        page = browser.new_page()
+        page = context.new_page()
         page.set_viewport_size({"width": 1080, "height": 1920})
         logging.info("Navigating to %r", access_url)
 
@@ -133,12 +145,27 @@ def main():
         # Apply readability.js
         page.evaluate("window.stop()")
         page.add_script_tag(content=get_readability_js())
-        readability_info = page.evaluate("""() => {
+        readability_info = page.evaluate(r"""() => {
             window.stop();
+
             const documentClone = document.cloneNode(true);
             const article = new Readability(documentClone).parse();
-            document.body.innerHTML = article.content;
-            for (const elem of document.head.querySelectorAll('script')) elem.remove();
+            article.applied = false;
+
+            document.querySelectorAll('[aria-hidden=true]').forEach((x) => x.setAttribute("aria-hidden", false));
+
+            if (isProbablyReaderable(document)) {
+                documentClone.body.innerHTML = article.content;
+
+                if (documentClone.body.innerText.search(/(data|privacy|cookie)\s*(policy|notice)/) >= 0) {
+                    document.body.innerHTML = article.content;
+                    article.applied = true;
+                }
+            }
+
+            for (const elem of document.querySelectorAll('script, link, style, header, footer, nav'))
+                elem.remove();
+
             return article;
         }""", [])
         cleaned_html = page.content()
@@ -174,6 +201,7 @@ def main():
             json.dump(readability_info, fout)
 
         logging.info("Saved to %s", output_dir)
+        context.close()
         browser.close()
 
 
