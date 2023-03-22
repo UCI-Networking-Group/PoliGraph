@@ -15,6 +15,7 @@ import spacy
 import torch
 
 from privacy_policy_analyzer.document import PolicyDocument
+from privacy_policy_analyzer.utils import setup_nlp_pipeline
 
 
 def main():
@@ -29,10 +30,7 @@ def main():
     args = parser.parse_args()
 
     use_gpu = spacy.prefer_gpu()
-
-    nlp = spacy.load(args.nlp)
-    nlp.add_pipe("get_noun_phrases")
-    nlp.add_pipe("align_named_entities")
+    nlp = setup_nlp_pipeline(args.nlp)
 
     for d in args.workdirs:
         logging.info("Processing %s ...", d)

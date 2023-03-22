@@ -10,11 +10,13 @@ from collections import defaultdict, deque
 import networkx as nx
 import spacy
 import yaml
+
 from privacy_policy_analyzer.document import PolicyDocument
 from privacy_policy_analyzer.graph_utils import gml_stringizer
 from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS, TRIVIAL_WORDS
 from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
 from privacy_policy_analyzer.purpose_classification import PurposeClassifier
+from privacy_policy_analyzer.utils import setup_nlp_pipeline
 
 
 def expand_phrase(root_token):
@@ -423,11 +425,11 @@ def main():
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
 
-    nlp = spacy.load(args.nlp)
+    nlp = setup_nlp_pipeline(args.nlp)
     graph_builder = GraphBuilder(args.phrase_map, args.entity_info)
 
     for d in args.workdirs:
-        logging.info(f"Processing {d} ...")
+        logging.info("Processing %s ...", d)
 
         document = PolicyDocument.load(d, nlp)
         knowledge_graph = graph_builder.build_graph(document)

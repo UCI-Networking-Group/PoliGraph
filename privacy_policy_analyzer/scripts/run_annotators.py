@@ -3,7 +3,6 @@
 import argparse
 import logging
 
-import spacy
 from privacy_policy_analyzer.annotators import (
     CollectionAnnotator,
     CoreferenceAnnotator,
@@ -12,6 +11,7 @@ from privacy_policy_analyzer.annotators import (
     SubsumptionAnnotator
 )
 from privacy_policy_analyzer.document import PolicyDocument
+from privacy_policy_analyzer.utils import setup_nlp_pipeline
 
 
 def main():
@@ -22,7 +22,7 @@ def main():
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
 
-    nlp = spacy.load(args.nlp)
+    nlp = setup_nlp_pipeline(args.nlp)
 
     annotators = [
         SubsumptionAnnotator(nlp),

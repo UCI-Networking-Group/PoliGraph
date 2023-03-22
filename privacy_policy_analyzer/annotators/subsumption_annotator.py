@@ -3,7 +3,6 @@ from collections import deque
 import networkx as nx
 from spacy.matcher import DependencyMatcher
 
-from ..utils import get_conjuncts
 from .base import BaseAnnotator
 
 

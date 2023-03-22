@@ -1,5 +1,6 @@
 from spacy.tokens import Doc, Token, Span, SpanGroup
 from spacy.language import Language
+import spacy
 
 
 def is_left_bracket(char):
@@ -18,9 +19,12 @@ def get_matched_bracket(char):
     }[char]
 
 
-@Language.component("get_noun_phrases")
-def get_noun_phrases(doc: Doc):
-    """Partitions noun phrases in the doc.
+@Language.component(
+    "align_noun_phrases",
+    requires=["doc.ents", "token.ent_iob", "token.ent_type", "token.tag", "token.sent_start"],
+)
+def align_noun_phrases(doc: Doc):
+    """Partitions noun phrases and aligns named entities
 
     Noun phrases are used to align boundaries of named entities. A noun phrase
     is conceptually the same as a noun chunk in spaCy. We handle some corner
@@ -37,36 +41,61 @@ def get_noun_phrases(doc: Doc):
     So "personal info", "X info", "Y info" are identified as separated phrases.
     """
 
-    # Dependencies that will be excluded in right subtrees
-    complex_deps = frozenset([
-        "relcl", "advcl", "acl", "acomp", "pcomp", "ccomp", "xcomp",  # clauses
-        "appos", "conj", "cc",  # conjuncts
-        "punct", "dep",  # NLP glitches
+    # Interested root deps of noun phrases
+    phrase_root_deps = frozenset([
+        "nsubj", "nsubjpass", "attr", "dobj", "dative", "oprd", "pobj",
+        "conj", "appos", "ROOT"
     ])
 
+    # Excluded dependencies of left children
+    left_forbidden_deps = frozenset([
+        "dep",   # NLP glitches
+        "meta",  # e.g. bullet point
+    ])
+
+    # Excluded dependencies of right children
+    right_forbidden_deps = frozenset([
+        "relcl", "advcl", "acomp", "pcomp", "ccomp", "xcomp",  # clauses except "acl"
+        "appos", "conj", "cc", "preconj", # conjuncts
+        "punct", "dep",                   # NLP glitches
+        "meta",                           # e.g. bullet point
+    ])
+
+    def like_phrase_root(token):
+        return token.pos_ in ("NOUN", "PROPN", "PRON") and token.dep_ in phrase_root_deps
+
+    # Map root tokens of named entities to labels
+    ent_root_mapping = {e.root.i: e.label_ for e in doc.ents if like_phrase_root(e.root)}
+
     def dfs(current_token: Token):
-        if current_token.pos_ in ("NOUN", "PROPN", "PRON"):
+        if like_phrase_root(current_token):
+            # Include left children
             left_boundaries = [current_token.i]
 
-            # Include all the continous left children
             for child in sorted(current_token.lefts, reverse=True):
                 child_indices = sorted(t.i for t in child.subtree)
 
-                if (left_boundaries[-1] == child_indices[-1] + 1
-                    and child_indices[-1] - child_indices[0] + 1 == len(child_indices)):
+                if (
+                    not any(t.dep_ in left_forbidden_deps for t in child.subtree)      # Forbidden deps
+                    and left_boundaries[-1] == child_indices[-1] + 1                   # Continuous
+                    and child_indices[-1] - child_indices[0] + 1 == len(child_indices) # Continuous subtree
+                ):
                     left_boundaries.append(child_indices[0])
                 else:
                     break
 
-            # Include "simple" right tokens that do not contain "complex" dependencies
+            # Include right children
             right_boundaries = [current_token.i + 1]
 
             for child in sorted(current_token.rights):
                 child_indices = sorted(t.i for t in child.subtree)
 
-                if (all(t.dep_ not in complex_deps for t in child.subtree)  # doesn't contain clauses or conj
-                    and right_boundaries[-1] == child_indices[0]  # continuous
-                    and child_indices[-1] - child_indices[0] + 1 == len(child_indices)):  # subtree is continuous
+                if (
+                    not any(t.dep_ in right_forbidden_deps for t in child.subtree)     # Forbidden deps
+                    and ent_root_mapping.keys().isdisjoint(child_indices)              # No overlap w/ other named ents
+                    and right_boundaries[-1] == child_indices[0]                       # Continuous
+                    and child_indices[-1] - child_indices[0] + 1 == len(child_indices) # Continuous subtree
+                ):
                     right_boundaries.append(child_indices[-1] + 1)
                 else:
                     break
@@ -105,7 +134,7 @@ def get_noun_phrases(doc: Doc):
 
             # Save the phrase
             left_idx, right_idx = left_boundaries[-1], right_boundaries[-1]
-            yield doc[left_idx:right_idx]
+            yield Span(doc, left_idx, right_idx, ent_root_mapping.get(current_token.i, 0))
 
             # Iterate through the rest of children to label phrases
             for child in current_token.children:
@@ -123,23 +152,55 @@ def get_noun_phrases(doc: Doc):
     doc.spans["noun_phrases"] = noun_phrases
     assert not doc.spans["noun_phrases"].has_overlap
 
+    doc.set_ents(noun_phrases)
+
     return doc
 
 
-@Language.component("align_named_entities")
-def align_named_entities(doc: Doc):
-    """Align NER results to noun phrase boundaries"""
+@Language.component(
+    "label_all_phrases",
+    requires=["doc.ents", "token.ent_iob", "token.ent_type", "token.tag", "token.sent_start"],
+)
+def label_all_phrases(doc):
+    if "noun_phrases" not in doc.spans:
+        doc = align_noun_phrases(doc)
 
-    root_token_ne_labels = {e.root.i: e.label for e in doc.ents}
-    aligned_ne = []
+    doc.set_ents([], default="outside")
+
+    relabelled_ents = []
 
     for span in doc.spans["noun_phrases"]:
-        if ne_label := root_token_ne_labels.get(span.root.i):
-            aligned_ne.append(Span(doc, span.start, span.end, label=ne_label))
+        root_token = span.root
 
-    doc.set_ents(aligned_ne, default="outside")
+        if root_token.pos_ == "PRON" and root_token.lemma_ in {"I", "we", "you", "he", "she"}:
+            label = "ACTOR"
+        else:
+            label = span.label_ or 'NN'
 
+        relabelled_ents.append(Span(doc, span.start, span.end, label))
+
+    doc.set_ents(relabelled_ents, default="outside")
     return doc
+
+
+def setup_nlp_pipeline(ner_path):
+    nlp = spacy.load("en_core_web_trf", disable=["ner"])
+    our_ner = spacy.load(ner_path)
+
+    # Chain NERs: https://github.com/explosion/projects/tree/v3/tutorials/ner_double
+    our_ner.replace_listeners("transformer", "ner", ["model.tok2vec"])
+    nlp.add_pipe(
+        "ner",
+        name="privacy_policy_ner",
+        source=our_ner,
+    )
+    nlp.add_pipe(
+        "label_all_phrases",
+        name="label_all_phrases",
+        after="privacy_policy_ner",
+    )
+
+    return nlp
 
 
 def get_conjuncts(token):

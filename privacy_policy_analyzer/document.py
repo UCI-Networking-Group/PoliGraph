@@ -344,10 +344,12 @@ class SegmentExtractor:
         # Strip non-ASCII text whenever possible
         inner_text = unidecode(inner_text)
 
-        # Workaround: Tokenizer wrongly split some words containing "-" 
-        inner_text = re.sub(r"\be-mail\b", "email", inner_text, flags=re.I)
+        # FIXME: workaround common tokenizer errors
+        inner_text = re.sub(r"\be-mails?\b", "email", inner_text, flags=re.I)
         inner_text = re.sub(r"\bwi-fi\b", "WiFi", inner_text, flags=re.I)
+        inner_text = re.sub(r"\bgeo-location\b", "geolocation", inner_text, flags=re.I)
         inner_text = re.sub(r"\bid\b", "ID", inner_text)
+        inner_text = re.sub(r"\b(\w+)\(s\)", r"\1s", inner_text)  # e.g. App(s) => "App(s" + ")"
 
         return inner_text
 
@@ -411,13 +413,9 @@ class SegmentExtractor:
             else:
                 parent = self.headings[-1][0] if self.headings else None
 
-            # A list should have more than one listitem children
-            listitem_count = 0
-
             for child in self.find_listitems(node):
                 listitem = None
                 text_element_queue = []
-                listitem_count += 1
 
                 for idx, grandchild in enumerate(chain(child.get("children", []), [None])):
                     if grandchild is None or grandchild["role"] in SECTION_ELEMENTS or grandchild["role"] == "list":

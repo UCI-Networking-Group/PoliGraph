@@ -130,12 +130,10 @@ class CoreferenceAnnotator(BaseAnnotator):
             coref_noun_phrase = match_info["coref_token"]._.ent
             main_noun_phrase = match_info["main_token"]._.ent
 
-            if coref_noun_phrase is None or main_noun_phrase is None or coref_noun_phrase == main_noun_phrase:
-                continue
-
-            self.logger.info("Rule %s matches %r", rule_name, main_noun_phrase.sent.text)
-            self.logger.info("Edge COREF: %r -> %r", coref_noun_phrase.text, main_noun_phrase.text)
-            document.link(coref_noun_phrase.root, main_noun_phrase.root, "COREF")
+            if coref_noun_phrase and main_noun_phrase and coref_noun_phrase != main_noun_phrase:
+                self.logger.info("Rule %s matches %r", rule_name, main_noun_phrase.sent.text)
+                self.logger.info("Edge COREF: %r -> %r", coref_noun_phrase.text, main_noun_phrase.text)
+                document.link(coref_noun_phrase.root, main_noun_phrase.root, "COREF")
 
     def annotate(self, document):
         for doc in document.iter_docs():

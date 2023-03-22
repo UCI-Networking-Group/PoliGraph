@@ -11,6 +11,8 @@ from .base import BaseAnnotator
 
 
 class TokenMatcher:
+    """Matcher to match one token, used by ChainMatcher."""
+
     def __init__(self, allow_lemmas=None, allow_pos=None, allow_dep=None, save_to_variable=None):
         self.lemmas = allow_lemmas
         self.pos = allow_pos
@@ -34,6 +36,8 @@ class TokenMatcher:
 
 
 class ChainMatcher:
+    """Matcher to match a "chain" in the dependency tree."""
+
     CONTINUE = 1
     SUCCEEDED = 2
     FAILED = 3
@@ -327,7 +331,11 @@ class CollectionAnnotator(BaseAnnotator):
                     document.link(entity, dtype, relationship)
 
         def collect_handler(neg_flag, e1, dt, e2):
-            # e1 collect dt from e2
+            """Handle "collect" like verbs
+
+            e1     collect dt from e2 -> COLLECT(e1, dt)
+            e1 not collect dt from e2 -> NOT_COLLECT(e1, dt)
+            """
 
             if not(dt and like_type(dt, "DATA")):
                 return
@@ -336,7 +344,11 @@ class CollectionAnnotator(BaseAnnotator):
                 link_pairs(e1, dt, "NOT_COLLECT" if neg_flag else "COLLECT")
 
         def share_handler(neg_flag, e1, dt, e2):
-            # e1 share dt with e2
+            """Handle "share" like verbs
+
+            e1     share dt with e2 -> COLLECT(e1, dt), COLLECT(e2, dt)
+            e1 not share dt with e2 -> NOT_COLLECT(e2, dt)
+            """
 
             if not(dt and like_type(dt, "DATA")):
                 return
@@ -349,7 +361,11 @@ class CollectionAnnotator(BaseAnnotator):
                 link_pairs(e1, dt, "COLLECT")
 
         def use_handler(neg_flag, e1, dt):
-            # e1 use dt
+            """Handle "use" like verbs
+
+            e1     use dt -> COLLECT(e1, dt), COLLECT(e2, dt)
+            e1 not use dt -> (ignored)
+            """
 
             if (not neg_flag and (e1 and like_type(e1, "ACTOR")) and (dt and like_type(dt, "DATA"))):
                 # Consistent with PolicyLint, ignore "not use"
