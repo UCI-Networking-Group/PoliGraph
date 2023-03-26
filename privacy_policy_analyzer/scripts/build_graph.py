@@ -132,14 +132,14 @@ def dag_add_edge(G, n1, n2, *args, **kwargs):
 
 
 class GraphBuilder:
-    def __init__(self, phrase_map, entity_map):
+    def __init__(self, phrase_map, entity_map, purpose_classification_model_path):
         with open(phrase_map, "r", encoding="utf-8") as fin:
             phrase_map_rules = yaml.safe_load(fin)
 
         self.entity_mapper = EntityMatcher(entity_map)
         self.data_phrase_normalizer = RuleBasedPhraseNormalizer(phrase_map_rules["DATA"])
         self.actor_phrase_normalizer = RuleBasedPhraseNormalizer(phrase_map_rules["ACTOR"])
-        self.purpose_classifier = PurposeClassifier()
+        self.purpose_classifier = PurposeClassifier(purpose_classification_model_path)
 
     def build_graph(self, document: PolicyDocument):
         stage1_graph = self.__build_graph_stage1(document)
@@ -211,7 +211,7 @@ class GraphBuilder:
                     edge_purposes.add((purpose, purpose_text))
 
             for _, _, edge_data in stage1_graph.in_edges(data_type, data=True):
-                if edge_data["relationship"] == "COLLECT":
+                if edge_data["relationship"] in ["COLLECT", "NOT_COLLECT"]:
                     edge_data["purposes"] = sorted(edge_purposes)
 
         # Step 4: Infer phrase type using SUBSUM / COREF relationship
@@ -420,13 +420,14 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--nlp", required=True, help="NLP model directory")
+    parser.add_argument("--purpose-classification", required=True, help="Purpose classification model directory")
     parser.add_argument("-p", "--phrase-map", required=True, help="Path to phrase_map.yml")
     parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
 
     nlp = setup_nlp_pipeline(args.nlp)
-    graph_builder = GraphBuilder(args.phrase_map, args.entity_info)
+    graph_builder = GraphBuilder(args.phrase_map, args.entity_info, args.purpose_classification)
 
     for d in args.workdirs:
         logging.info("Processing %s ...", d)

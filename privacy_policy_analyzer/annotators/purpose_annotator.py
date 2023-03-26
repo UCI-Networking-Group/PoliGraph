@@ -148,7 +148,7 @@ class PurposeAnnotator(BaseAnnotator):
 
         for noun_phrase in doc.ents:
             for _, _, relationship in document.get_all_links(noun_phrase.root, "in"):
-                if relationship == "COLLECT":
+                if relationship in ["COLLECT", "NOT_COLLECT"]:
                     collected_dtypes.append(noun_phrase.root)
                     break
 
