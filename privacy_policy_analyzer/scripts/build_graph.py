@@ -153,7 +153,7 @@ class GraphBuilder:
         for src in document.token_relationship.nodes:
             token = document.get_token_with_src(src)
 
-            match token._.ent_type:
+            match token.ent_type_:
                 case "NN":
                     # unknown type, figure it out later
                     continue
