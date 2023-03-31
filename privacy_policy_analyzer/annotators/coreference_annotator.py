@@ -49,9 +49,9 @@ class CoreferenceAnnotator(BaseAnnotator):
                 tok = bfs_queue[i]
                 i += 1
 
-                if tok._.ent_type in ["DATA", "ACTOR"]:
-                    return tok._.ent_type
-                elif tok._.ent_type == "NN":
+                if tok.ent_type_ in ["DATA", "ACTOR"]:
+                    return tok.ent_type_
+                elif tok.ent_type_ == "NN":
                     for _, linked_token, relationship in document.get_all_links(tok):
                         if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
                             bfs_queue.append(linked_token)
@@ -87,7 +87,7 @@ class CoreferenceAnnotator(BaseAnnotator):
                 if not found and startswith_det and noun_phrase.root.lemma_ in {"data", "datum", "information"}:
                     # Resolve this information
                     for prev_noun_phrase in chain(current_sentence_ents, last_sentence_ents):
-                        if prev_noun_phrase._.ent_type  == "DATA":
+                        if prev_noun_phrase.root.ent_type_  == "DATA":
                             link_coref(noun_phrase, prev_noun_phrase, "THIS_INFO")
 
                             for conj in prev_noun_phrase.root.conjuncts:
@@ -109,7 +109,7 @@ class CoreferenceAnnotator(BaseAnnotator):
                             inferred_type = "ACTOR"
 
                     for prev_noun_phrase in chain(current_sentence_ents, last_sentence_ents):
-                        if (prev_noun_phrase._.ent_type == inferred_type and
+                        if (prev_noun_phrase.root.ent_type_ == inferred_type and
                             prev_noun_phrase.root.tag_ in target_tags and
                             prev_noun_phrase.root.pos_ != "PRON"):
                             link_coref(noun_phrase, prev_noun_phrase, "PRON_SAME_TYPE")

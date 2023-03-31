@@ -1,17 +1,17 @@
-from spacy.tokens import Doc, Token, Span, SpanGroup
+from spacy.tokens import Doc, Token, Span
 from spacy.language import Language
 import spacy
 
 
-def is_left_bracket(char):
-    return char in ['(', '[', '{']
+def is_left_bracket(char: str) -> bool:
+    return char in ('(', '[', '{')
 
 
-def is_right_bracket(char):
-    return char in [')', ']', '}']
+def is_right_bracket(char: str) -> bool:
+    return char in (')', ']', '}')
 
 
-def get_matched_bracket(char):
+def get_matched_bracket(char: str) -> str:
     return {
         '(': ')', ')': '(',
         '[': ']', ']': '[',
@@ -23,7 +23,7 @@ def get_matched_bracket(char):
     "align_noun_phrases",
     requires=["doc.ents", "token.ent_iob", "token.ent_type", "token.tag", "token.sent_start"],
 )
-def align_noun_phrases(doc: Doc):
+def align_noun_phrases(doc: Doc) -> Doc:
     """Partitions noun phrases and aligns named entities
 
     Noun phrases are used to align boundaries of named entities. A noun phrase
@@ -161,7 +161,7 @@ def align_noun_phrases(doc: Doc):
     "label_all_phrases",
     requires=["doc.ents", "token.ent_iob", "token.ent_type", "token.tag", "token.sent_start"],
 )
-def label_all_phrases(doc):
+def label_all_phrases(doc: Doc) -> Doc:
     if "noun_phrases" not in doc.spans:
         doc = align_noun_phrases(doc)
 
@@ -172,9 +172,11 @@ def label_all_phrases(doc):
     for span in doc.spans["noun_phrases"]:
         root_token = span.root
 
-        if root_token.pos_ == "PRON" and root_token.lemma_ in {"I", "we", "you", "he", "she"}:
+        if root_token.pos_ == "PRON" and root_token.lemma_ in ("I", "we"):
+            # Pronoun I / we = First party
             label = "ACTOR"
         else:
+            # Use NER label, or "NN" indicating unknown NER type
             label = span.label_ or 'NN'
 
         relabelled_ents.append(Span(doc, span.start, span.end, label))
@@ -183,11 +185,11 @@ def label_all_phrases(doc):
     return doc
 
 
-def setup_nlp_pipeline(ner_path):
+def setup_nlp_pipeline(ner_path: str):
     nlp = spacy.load("en_core_web_trf", disable=["ner"])
     our_ner = spacy.load(ner_path)
 
-    # Chain NERs: https://github.com/explosion/projects/tree/v3/tutorials/ner_double
+    # Disable spaCy's NER and use our NER
     our_ner.replace_listeners("transformer", "ner", ["model.tok2vec"])
     nlp.add_pipe(
         "ner",
@@ -203,23 +205,7 @@ def setup_nlp_pipeline(ner_path):
     return nlp
 
 
-def get_conjuncts(token):
-    for child in token.children:
-        if child.dep_ == "conj":
-            yield child
-            yield from get_conjuncts(child)
-        elif child.dep_ == "appos":
-            # appos often appears to be wrong in long doc
-            # take it only when parent and child are in the same segment and parent.i < child.i
-            src1 = token._.src or (-1, 0)
-            src2 = child._.src or (-2, 0)
-
-            if src1[0] == src2[0] and src1[1] < src2[1]:
-                yield child
-                yield from get_conjuncts(child)
-
-
-def token_to_ent(token):
+def token_to_ent(token: Token) -> Span:
     doc = token.doc
     if token.ent_iob_ not in "BI":
         return None
@@ -235,45 +221,7 @@ def token_to_ent(token):
     return doc[left:right]
 
 
-def token_to_source(token):
+def token_to_source(token: Token) -> tuple:
     doc = token.doc
     source_mapping = doc.user_data["source"]
     return source_mapping[token.i]
-
-
-def chunk_to_conjuncts(chunk):
-    conjuncts = []
-
-    def dfs(token):
-        chunk = token_to_ent(token)
-        if chunk is not None:
-            conjuncts.append(chunk)
-
-        for child in token.children:
-            if child.dep_ in ["conj", "appos"]:
-                dfs(child)
-
-    doc = chunk.doc
-    dfs(chunk.root)
-    group = SpanGroup(doc, name="conjuncts", spans=conjuncts)
-
-    return group
-
-
-def __normalize_ent_label(label):
-    if label == "DATA":
-        return "DATA"
-    elif label in {"ACTOR", "EVENT", "FAC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
-        return "ACTOR"
-    elif label == "NN":
-        return "NN"
-    else:
-        return "OTHER"
-
-
-def token_ent_type(token):
-    return __normalize_ent_label(token.ent_type_)
-
-
-def span_ent_type(span):
-    return __normalize_ent_label(span.root.ent_type_)

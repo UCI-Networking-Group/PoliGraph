@@ -30,6 +30,7 @@ DetectorFactory.seed = 42
 
 
 def detect_english(text: str):
+    """Check whether the text 'looks like' English."""
     # Treat as English if langdetect detect text as en (even w/ small prob)
     try:
         for lang_result in detect_langs(text):
@@ -215,14 +216,14 @@ class PolicyDocument:
     def iter_docs(self):
         yield from self.all_docs.values()
 
-    def get_doc_with_context(self, segment):
+    def get_doc_with_context(self, segment: DocumentSegment):
         for i in range(len(segment.context) - 1, 0, -1):
             if (segment.segment_id, i) in self.all_docs:
                 return self.all_docs[(segment.segment_id, i)]
 
         return self.all_docs[(segment.segment_id, 0)]
 
-    def get_doc_without_context(self, segment):
+    def get_doc_without_context(self, segment: DocumentSegment):
         return self.all_docs[(segment.segment_id, 0)]
 
     def get_token_with_src(self, src):
@@ -231,14 +232,14 @@ class PolicyDocument:
         rmap = long_doc.user_data["source_rmap"]
         return long_doc[rmap[src]]
 
-    def link(self, token1, token2, relationship):
+    def link(self, token1, token2, relationship, **kwargs):
         src1 = token1._.src
         src2 = token2._.src
 
         if src1 is None or src2 is None:
             raise ValueError("Invalid token link")
 
-        self.token_relationship.add_edge(src1, src2, relationship=relationship)
+        self.token_relationship.add_edge(src1, src2, relationship=relationship, **kwargs)
 
     def get_link(self, token1, token2):
         src1 = token1._.src
@@ -478,6 +479,7 @@ class SegmentExtractor:
                         current_seg.parent = listitem_seg
 
                         new_text = bullet_matcher.trim_bullet(current_seg.text)
+                        new_text = new_text or current_seg.text  # FIXME: avoid empty segment (only bullet point)
                         current_seg.set_doc(self.tokenizer(new_text))
 
                         self.segments.insert(i + k * 2, listitem_seg)

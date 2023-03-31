@@ -7,16 +7,11 @@ from .base import BaseAnnotator
 
 
 def ent_type_is_compatible(ent1, ent2):
-    t1 = ent1._.ent_type
-    t2 = ent2._.ent_type
+    t1 = ent1.root.ent_type_
+    t2 = ent2.root.ent_type_
 
-    if t1 == "OTHER" or t2 == "OTHER":
-        return False
-
-    if (t1 == "DATA" or t2 == "DATA") and (t1 == "ACTOR" or t2 == "ACTOR"):
-        return False
-
-    return True
+    if (t1 == "DATA" and t2 in ("DATA", "NN")) or (t2 == "DATA" and t1 in ("DATA", "NN")):
+        return True
 
 
 class SubsumptionAnnotator(BaseAnnotator):
@@ -369,7 +364,7 @@ class SubsumptionAnnotator(BaseAnnotator):
 
             if rule_name == "SUBSUM_INCLUDE":
                 # prevent false positives like "Our website include social media features..."
-                if upper_token._.ent_type == "ACTOR":
+                if upper_token.ent_type_ == "ACTOR":
                     continue
 
             if upper_token.dep_ == "attr" and upper_token.head.lemma_ == "be":
@@ -413,7 +408,7 @@ class SubsumptionAnnotator(BaseAnnotator):
             else:
                 continue
 
-            if max(length_to_us.values()) > 0:
+            if max(length_to_us.values()) > 0 and upper_ent:
                 self.logger.info("Possible 1st-party appos: %r", sent.text)
             else:
                 continue

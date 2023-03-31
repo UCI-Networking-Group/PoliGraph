@@ -3,6 +3,8 @@ from .base import BaseAnnotator
 
 
 class ListAnnotator(BaseAnnotator):
+    """List annotator."""
+
     def __init__(self, nlp):
         super().__init__(nlp)
 
@@ -29,9 +31,7 @@ class ListAnnotator(BaseAnnotator):
                     break
 
         for c in child_listitems:
-            text_segment = c.children[0]
-
-            doc = document.get_doc_without_context(text_segment)
+            doc = document.get_doc_without_context(c.children[0])
             root_noun_phrase = next(doc.sents).root._.ent
 
             if root_noun_phrase is None:

@@ -1,395 +1,381 @@
 import importlib.resources as pkg_resources
 import itertools
-from typing import Optional
+from collections import defaultdict
 
+import networkx as nx
 import yaml
-from spacy.tokens import Span, Token
+from spacy.tokens import Token
 
 import privacy_policy_analyzer
-from ..utils import get_conjuncts
+
 from .base import BaseAnnotator
+
+IMPORTANT_DEPS_OF_POS = {
+    "VERB": {
+        "nsubj", "dobj", "nsubjpass", "dative", "agent", "prep",
+        "ccomp", "xcomp",
+        "pobj",  "pcomp", # information _regarding_ ...
+    },
+    "NOUN": {"prep", "relcl", "appos"},
+    "ADP": {"pobj", "pcomp"},
+}
+IMPORTANT_DEPS_OF_POS["PRON"] = IMPORTANT_DEPS_OF_POS["PROPN"] = IMPORTANT_DEPS_OF_POS["NOUN"]
+
+
+def build_dependency_graph(root_token: Token):
+    """Transform dependency tree into a dependency graph for easier parsing.
+
+    The original dependency tree has many trivial details and unwanted features
+    that make parsing difficult. This function does:
+      - Flatten conjunct tokens to become children of the conjunct head.
+      - Transform passive voices to the same structure as active voices.
+      - Avoid interrogative sentences (or clauses).
+      - Avoid uninteresting dependencies.
+      - ......
+    """
+
+    def is_interrogative(token: Token):
+        if token.sent[-1].lemma_ == "?":
+            return True
+
+        while token.dep_ == "conj":
+            token = token.head
+
+        left_edge = token.left_edge
+
+        return left_edge.head == token and token.left_edge.tag_ in (
+            "VBP", # _Do_ we ...
+            "MD",  # _Will_ we ...
+            "WRB", # _When/How_ do we ...
+            "WP",  # _What_ information do we ...
+        )
+
+    def is_negative(token: Token):
+        for conj in itertools.chain([token], token.conjuncts):
+            if conj.i <= token.i and any(c.dep_ == "neg" for c in conj.children):
+                return True
+
+        return False
+
+    def handle_agent(parent_token: Token, agent_token: Token):
+        negation_flag = is_negative(agent_token)  # "not by"?
+
+        try:
+            first_grand_child = next(filter(lambda t: t.dep_ == "pobj", agent_token.children))
+        except StopIteration:
+            return
+
+        for grand_child in itertools.chain([first_grand_child], first_grand_child.conjuncts):
+            modified_dep_tree.add_edge(parent_token, grand_child, dep="subj")
+            modified_dep_tree.nodes[grand_child]["negation"] = negation_flag
+            dfs(grand_child)
+
+    def handle_dative(parent_token: Token, dative_token: Token):
+        if dative_token.pos_ == "ADP":
+            # be given to us (to: ADP) => link "us" to "given"
+            try:
+                first_grand_child = next(filter(lambda t: t.dep_ == "pobj", dative_token.children))
+            except StopIteration:
+                return
+
+            negation_flag = is_negative(dative_token)  # "not to"?
+
+            for grand_child in itertools.chain([first_grand_child], first_grand_child.conjuncts):
+                modified_dep_tree.add_edge(parent_token, grand_child, dep="dative")
+                modified_dep_tree.nodes[grand_child]["negation"] = negation_flag
+                dfs(grand_child)
+        elif dative_token.pos_ in ('NOUN', 'PRON', 'PROPN'):
+            # give us X (us: PRON)
+            modified_dep_tree.add_edge(parent_token, dative_token, dep="dative")
+            dfs(dative_token)
+
+    def handle_xcomp(parent_token: Token, xcomp_root_token: Token):
+        modified_dep_tree.add_edge(parent_token, xcomp_root_token, dep="xcomp")
+        dfs(xcomp_root_token)
+
+        for _, node, data in modified_dep_tree.out_edges(xcomp_root_token, data=True):
+            if data["dep"] == "subj":
+                break
+        else:
+            # If xcomp_root has no subject, assign any object of parent node as its subject
+            for _, node, data in modified_dep_tree.out_edges(parent_token, data=True):
+                if data["dep"] == "obj":
+                    modified_dep_tree.add_edge(xcomp_root_token, node, dep="subj")
+
+    def handle_appos(parent_token: Token, appos_token: Token):
+        modified_dep_tree.add_node(appos_token, negation=is_negative(parent_token))
+
+        for grand_parent_token, _, data in modified_dep_tree.in_edges(parent_token, data=True):
+            modified_dep_tree.add_edge(grand_parent_token, appos_token, **data)
+
+    def find_all_children(current_token: Token):
+        children = list(current_token.children)
+        existing_deps = {t.dep_ for t in current_token.children}
+        conjuncts = current_token.conjuncts
+
+        if (leftist_conj := min(conjuncts, default=current_token)) != current_token:
+            # Copy children from the first left conjunct
+            # e.g. "We collect and share ..." => Link "we" as subj of "share"
+            for child in leftist_conj.children:
+                if child.i < leftist_conj.i and child.dep_ not in existing_deps:
+                    existing_deps.add(child.dep_)
+                    children.append(child)
+
+        for right_conj in filter(current_token.__lt__, conjuncts):
+            # Copy children from right conjuncts
+            # e.g. "We collect and share X" => Link "X" as obj of "collect"
+            for child in right_conj.children:
+                if child.dep_ not in existing_deps:
+                    existing_deps.add(child.dep_)
+                    children.append(child)
+
+        important_deps = IMPORTANT_DEPS_OF_POS.get(current_token.pos_, [])
+        return sorted(filter(lambda t: t.dep_ in important_deps, children))
+
+    def dfs(current_token: Token):
+        # Check negation
+        modified_dep_tree.nodes[current_token]["negation"] = is_negative(current_token)
+
+        # Link children
+        for immediate_child in find_all_children(current_token):
+            conjuncts = immediate_child.conjuncts
+            dependency = immediate_child.dep_
+
+            for child in itertools.chain([immediate_child], conjuncts):
+                match dependency:
+                    case "nsubj":
+                        # Nominal subject
+                        modified_dep_tree.add_edge(current_token, child, dep="subj")
+                        dfs(child)
+                    case "dobj" | "nsubjpass" | "pobj":
+                        # Object or passive subject
+                        modified_dep_tree.add_edge(current_token, child, dep="obj")
+                        dfs(child)
+                    case "agent":
+                        # "by" after a passive verb. Assign grandchildren as "subj" (subject).
+                        handle_agent(current_token, child)
+                    case "dative":
+                        # Dative or indirect object
+                        # give us something => us: dative
+                        # is given to us => to: dative, us: pobj
+                        handle_dative(current_token, child)
+                    case "xcomp":
+                        handle_xcomp(current_token, child)
+                    case "appos":
+                        handle_appos(current_token, child)
+                    case _:
+                        modified_dep_tree.add_edge(current_token, child, dep=dependency)
+                        dfs(child)
+
+    modified_dep_tree = nx.DiGraph()
+    modified_dep_tree.add_node("")
+
+    for token in itertools.chain([root_token], root_token.conjuncts):
+        if not is_interrogative(token):
+            modified_dep_tree.add_edge("", token, dep="root")
+            dfs(token)
+
+    return modified_dep_tree
 
 
 class TokenMatcher:
-    """Matcher to match one token, used by ChainMatcher."""
+    """Matcher to match one token, used by DependencyPatternMatcher."""
 
-    def __init__(self, allow_lemmas=None, allow_pos=None, allow_dep=None, save_to_variable=None):
-        self.lemmas = allow_lemmas
-        self.pos = allow_pos
-        self.dep = allow_dep
-        self.variable = save_to_variable
+    def __init__(self, rule: str, token_map: dict[str, list[str]]):
+        lemma_spec, *res = rule.split(":", 1)
+        dep_spec = res[0] if res else ""
 
-    def match(self, token: Token, overrided_dep: Optional[str]=None):
-        if self.lemmas:
-            if token.lemma_ not in self.lemmas:
-                return None
+        self.match_lemmas = set()
 
-        if self.pos:
-            if token.pos_ != self.pos:
-                return None
+        for item in filter(None, lemma_spec.split('|')):
+            if item.startswith('*'):
+                self.match_lemmas.update(token_map[item[1:]])
+            else:
+                self.match_lemmas.add(item)
 
-        if self.dep:
-            if (overrided_dep or token.dep_) != self.dep:
-                return None
+        self.match_deps = set(filter(None, dep_spec.split('|')))
 
-        return (token, self.variable)
-
-
-class ChainMatcher:
-    """Matcher to match a "chain" in the dependency tree."""
-
-    CONTINUE = 1
-    SUCCEEDED = 2
-    FAILED = 3
-
-    def __init__(self, chain: list[TokenMatcher], on_success):
-        self.chain = chain
-        self.current_token_is_matched = True
-        self.cursor = -1
-        self.matched_tokens = []
-        self.previous_status = []
-
-        self.on_success = on_success
-
-    def match(self, token: Optional[Token], inherited_dep: Optional[str]=None):
-        self.previous_status.append((self.cursor, self.current_token_is_matched, len(self.matched_tokens)))
-
-        if token and token.dep_ in ["conj", "appos"]:
-            # Stay in the current state. Cursor == -1 means conjuncts of the root verb
-            if self.cursor == -1:
-                return ChainMatcher.CONTINUE
-        else:
-            # Next state. if the old one hasn't been matched, the matching fails
-            if not self.current_token_is_matched:
-                return ChainMatcher.FAILED
-
-            self.cursor += 1
-            self.current_token_is_matched = False
-            assert self.cursor < len(self.chain)
-
-        if token and (m := self.chain[self.cursor].match(token, inherited_dep)) is not None:
-            self.matched_tokens.append(m)
-            self.current_token_is_matched = True
-
-            # Successfully matched the full chain
-            if self.cursor + 1 == len(self.chain):
-                self.on_success(self.matched_tokens)
-                return ChainMatcher.SUCCEEDED
-
-        return ChainMatcher.CONTINUE
-
-    def rollback(self):
-        self.cursor, self.current_token_is_matched, matched_token_pos = self.previous_status.pop()
-
-        while len(self.matched_tokens) > matched_token_pos:
-            self.matched_tokens.pop()
+    def match(self, token: Token, dependency: str):
+        return (
+            len(self.match_deps) == 0
+            or dependency in self.match_deps
+        ) and (
+            len(self.match_lemmas) == 0
+            or token.lemma_.lower() in self.match_lemmas
+        )
 
 
-class SentencePattern:
+class DependencyPatternMatcher:
     counter = itertools.count()
 
-    def __init__(self, pattern, token_map):
+    def __init__(self, pattern_spec: dict, token_map: dict[str, list[str]]):
         # For logging / debugging
-        self.original_pattern = pattern
-        self.rule_id = next(SentencePattern.counter)
+        self.original_pattern: list[str] = pattern_spec
+        self.id: int = next(DependencyPatternMatcher.counter)
 
-        self.root_lemmas = set()
+        # Token matcher for the root
+        self.root_matcher = TokenMatcher(pattern_spec["root"], token_map)
 
-        for k in pattern["root"]:
-            if k.isupper():
-                self.root_lemmas.update(token_map[k])
-            else:
-                self.root_lemmas.add(k)
+        # Patterns to match chains (paths) in the dependency tree that start
+        # from the root token.
+        self.all_chains: list[list[tuple[TokenMatcher, str]]] = []
 
-        self.all_chains = []
+        # Chains that must be matched
+        self.required_indices = []
 
-        for p in pattern["match"]:
-            if p.startswith("!"):
-                is_important = True
-                p = p[1:]
-            else:
-                is_important = False
+        for match_rule in pattern_spec["match"]:
+            if match_rule.startswith("!"):
+                self.required_indices.append(len(self.all_chains))
+                match_rule = match_rule[1:]
 
             chain = []
-            self.all_chains.append((chain, is_important))
+            self.all_chains.append(chain)
 
-            for item in p.split(","):
-                lemma_spec, *properties = item.split(":")
+            for item in match_rule.split(","):
+                token_rule, *res = item.split('@', 1)
+                save_to = res[0] if res else None
+                chain.append((TokenMatcher(token_rule, token_map), save_to))
 
-                allow_lemmas = set()
-                kwargs = dict(allow_lemmas=allow_lemmas)
+        self.transform_rule: list[str] = pattern_spec["transform"]
 
-                for lemma in lemma_spec.split("/"):
-                    if lemma.startswith("@"):
-                        kwargs["save_to_variable"] = lemma[1:]
-                    elif lemma.isupper():
-                        allow_lemmas.update(token_map[lemma])
-                    else:
-                        allow_lemmas.add(lemma)
+    def match(self, dependency_graph: nx.DiGraph):
+        named_tokens: dict[str, list[Token]] = defaultdict(list)
+        unmatched_required_indices: set[int] = set()
 
-                if len(allow_lemmas) == 0 or "*" in allow_lemmas:
-                    kwargs.pop("allow_lemmas")
-
-                for prop in properties:
-                    if prop.islower():
-                        kwargs["allow_dep"] = prop
-                    elif prop.isupper():
-                        kwargs["allow_pos"] = prop
-                    else:
-                        assert False
-
-                chain.append(TokenMatcher(**kwargs))
-
-        self.transform_rule = pattern["transform"]
-
-    def __repr__(self):
-        return f"SentencePattern: {self.original_pattern}"
-
-    def match_root(self, root_token):
-        if root_token.lemma_ not in self.root_lemmas:
-            return None
-
-        sentence_matcher = SentenceMatcher(self, root_token)
-
-        for chain, is_important in self.all_chains:
-            sentence_matcher.add_chain(chain, is_important)
-
-        return sentence_matcher
-
-
-class SentenceMatcher:
-    def __init__(self, parent_pattern: SentencePattern, root_token):
-        self.pattern = parent_pattern
-        self.root_token = root_token
-        self.chain_matchers: list[ChainMatcher] = []
-        self.unmatched: list[bool] = []
-        self.matched_data: dict[str, tuple(Token, int)] = {}
-
-    def add_chain(self, chain, is_important):
-        idx = len(self.chain_matchers)
-        self.chain_matchers.append(ChainMatcher(chain, lambda x: self.on_success(x, idx)))
-        self.unmatched.append(is_important)
-
-    @property
-    def fully_matched(self):
-        return len(self.matched_data) > 0 and not any(self.unmatched)
-
-    def on_success(self, matched_chain, idx):
-        for token, variable in matched_chain:
-            if any(t.dep_ == "neg" for t in token.children):
-                break
-
-            if variable:
-                conj_list = [token]
-                self.matched_data[variable] = conj_list
-
-                for conj in sorted(get_conjuncts(token), key=lambda t: t.i):
-                    if conj.i <= token.i:
-                        continue
-                    elif any(t.dep_ == "neg" for t in conj.children):
-                        break
-                    else:
-                        conj_list.append(conj)
-
-        self.unmatched[idx] = False
-
-    def get_result(self):
-        action, *args = self.pattern.transform_rule
-        real_args = []
-
-        for item in args:
-            token = None
-
-            if isinstance(item, str):
-                variable_list = [item]
-            else:
-                variable_list = list(item)
-
-            for var in variable_list:
-                if var in self.matched_data:
-                    token = self.matched_data[var]
+        def on_success(chain_idx: int, progress: list[Token]):
+            for (_, save_to), node in zip(self.all_chains[chain_idx], progress):
+                if dependency_graph.nodes[node]['negation']:
+                    # Only handle negation at the root and give up on negations
+                    # in the chain. Cases like following will be missed:
+                    #   "We share ... with X but _not with_ Y"
                     break
 
-            real_args.append(token)
+                named_tokens[save_to].append(node)
+            else:
+                unmatched_required_indices.discard(chain_idx)
 
-        return self.root_token, action, real_args
+        def dfs_match_chain(node: Token, dependency: str, match_progress: dict[int, list[Token]]):
+            """DFS to find all chains (paths) that match chain patterns"""
+            continue_chains = []
+
+            for chain_idx, progress in match_progress.items():
+                chain = self.all_chains[chain_idx]
+
+                if chain[len(progress)][0].match(node, dependency):
+                    progress.append(node)
+
+                    if len(progress) == len(chain):
+                        on_success(chain_idx, progress)
+                    else:
+                        continue_chains.append(chain_idx)
+                else:
+                    progress.append(None)
+
+            if len(continue_chains) > 0:
+                for _, child, data in dependency_graph.out_edges(node, data=True):
+                    dfs_match_chain(child, data["dep"], {i: match_progress[i] for i in continue_chains})
+
+            for progress in match_progress.values():
+                progress.pop()
+
+        for _, v, data in dependency_graph.edges(data=True):
+            if self.root_matcher.match(v, data["dep"]):
+                named_tokens.clear()
+                unmatched_required_indices.clear()
+                unmatched_required_indices.update(self.required_indices)
+
+                for _, child, data in dependency_graph.out_edges(v, data=True):
+                    dfs_match_chain(child, data["dep"], {i: [] for i in range(len(self.all_chains))})
+
+                if len(unmatched_required_indices) == 0:
+                    action, *arg_names = self.transform_rule
+                    arg_list = []
+
+                    for item in arg_names:
+                        for arg_name in item.split("|"):
+                            if arg_name in named_tokens:
+                                arg_list.append(named_tokens[arg_name])
+                                break
+                        else:
+                            arg_list.append([])
+
+                    negation_flag = dependency_graph.nodes[v]["negation"]
+                    yield action, negation_flag, arg_list
 
 
 class CollectionAnnotator(BaseAnnotator):
+    """The collection annotator"""
+
+    ACTION_MAP = {
+        ("COLLECT", False): [(0, 1, "COLLECT", "COLLECT")],
+        ("COLLECT", True):  [(0, 1, "NOT_COLLECT", "COLLECT")],
+        ("SHARE", False):   [(2, 1, "COLLECT", "SHARE_WITH"),
+                             (0, 1, "COLLECT", "COLLECT")],
+        ("SHARE", True):    [(2, 1, "NOT_COLLECT", "SHARE_WITH")],
+        ("SELL", False):    [(2, 1, "COLLECT", "SELL_TO"),
+                             (0, 1, "COLLECT", "COLLECT")],
+        ("SELL", True):     [(2, 1, "NOT_COLLECT", "SELL_TO")],
+        ("USE", False):     [(0, 1, "COLLECT", "USE")],
+        ("USE", True):      [(0, 1, "NOT_COLLECT", "USE")],
+        ("STORE", False):   [(0, 1, "COLLECT", "STORE")],
+        ("STORE", True):    [(0, 1, "NOT_COLLECT", "STORE")],
+    }
+
     def __init__(self, nlp):
         super().__init__(nlp)
 
         with pkg_resources.open_text(privacy_policy_analyzer, "verb_patterns.yml") as fin:
             config = yaml.safe_load(fin)
 
-        self.patterns: list[SentencePattern] = []
+        token_map = config["token_map"]
+        self.pattern_matchers: list[DependencyPatternMatcher] = []
 
         for p in config["patterns"]:
-            self.patterns.append(SentencePattern(p, config["token_map"]))
-
-    def match_sentence(self, sent: Span):
-        def dfs(token, chain_matchers: list[ChainMatcher], inherited_dep, inherited_left_children):
-            to_continue: list[ChainMatcher] = []
-            to_return: list[ChainMatcher] = []
-
-            for matcher in chain_matchers:
-                match matcher.match(token, inherited_dep):
-                    case ChainMatcher.CONTINUE:
-                        to_continue.append(matcher)
-                    case ChainMatcher.FAILED:
-                        to_return.append(matcher)
-                    case ChainMatcher.SUCCEEDED:
-                        pass
-
-            # Start new matchers
-            sentence_matcher_list: list[SentenceMatcher] = []
-            new_matchers = []
-
-            if ((inherited_dep or token.dep_) in ["ROOT", "ccomp"] and
-                all(c.tag_ != "WRB" for c in token.children)):
-                # Limit new matchings to ROOT verbs + ccomp
-                # ccomp e.g. We inform you that we collect ...
-                # Plus: no when/how/whether... adverb
-                for p in self.patterns:
-                    if sentence_matcher := p.match_root(token):
-                        new_matchers.extend(sentence_matcher.chain_matchers)
-                        sentence_matcher_list.append(sentence_matcher)
-
-            to_continue.extend(new_matchers)
-
-            # Children = direct children + inherited_left_children
-            children = list(token.children)
-
-            if token.dep_ in ["conj", "appos"]:
-                children_deps = frozenset(t.dep_ for t in children)
-
-                for left_token in inherited_left_children:
-                    assert left_token != token
-
-                    if left_token.dep_ not in children_deps:
-                        children.append(left_token)
-
-            children.sort()
-
-            for child in children:
-                if child.dep_ in ["conj", "appos"]:
-                    inherited_dep = inherited_dep or token.dep_
-                    left_children = []
-                    for t in itertools.chain(token.lefts, inherited_left_children):
-                        if t.i < child.i and t.i < token.i:
-                            left_children.append(t)
-                else:
-                    inherited_dep = None
-                    left_children = []
-
-                to_continue = dfs(child, to_continue, inherited_dep, left_children)
-
-            to_return.extend(set(to_continue).difference(new_matchers))
-
-            for matcher in to_return:
-                matcher.rollback()
-
-            if sentence_matcher_list:
-                neg_flag = any(c.dep_ == "neg" for c in children)
-
-                for sentence_matcher in sentence_matcher_list:
-                    if sentence_matcher.fully_matched:
-                        matched_results.append((sentence_matcher.pattern, neg_flag, sentence_matcher.get_result()))
-
-            return to_return
-
-        matched_results = []
-        dfs(sent.root, [], None, [])
-        return matched_results
+            self.pattern_matchers.append(DependencyPatternMatcher(p, token_map))
 
     def annotate(self, document):
-        def like_type(tok_list, target_type):
-            """Check if the phrase started by the token is a data type or subsums a data type"""
-            # Use BFS here to avoid a loop.
-            bfs_queue = list(tok_list)
-            seen = set(tok_list)
+        def validate_type(token_list, target_type):
+            """Use existing SUBSUM / COREF edges to check if the tokens to be
+            linked has compatible NER type"""
+
+            # Use BFS here to avoid any loop.
+            bfs_queue = list(token_list)
+            visited_tokens = set(token_list)
             i = 0
 
             while i < len(bfs_queue):
                 tok = bfs_queue[i]
                 i += 1
 
-                if tok._.ent_type == target_type:
+                if tok.ent_type_ == target_type:
                     return True
-                elif tok._.ent_type == "NN":
+                elif tok.ent_type_ == "NN":
                     for _, linked_token, relationship in document.get_all_links(tok):
-                        if relationship in ["SUBSUM", "COREF"] and linked_token not in seen:
+                        if relationship in ["SUBSUM", "COREF"] and linked_token not in visited_tokens:
                             bfs_queue.append(linked_token)
-                            seen.add(linked_token)
+                            visited_tokens.add(linked_token)
 
             return False
 
-        def link_pairs(ent_list, data_list, relationship):
-            for entity in ent_list:
-                for dtype in data_list:
-                    self.logger.info("Edge %s: %r -> %r", relationship, entity, dtype)
-                    document.link(entity, dtype, relationship)
+        def make_links(action, neg_flag, args):
+            nonlocal matcher, sent
 
-        def collect_handler(neg_flag, e1, dt, e2):
-            """Handle "collect" like verbs
+            for entity_idx, data_idx, relation, action in self.ACTION_MAP[action, neg_flag]:
+                entity_tokens = args[entity_idx]
+                data_tokens = args[data_idx]
 
-            e1     collect dt from e2 -> COLLECT(e1, dt)
-            e1 not collect dt from e2 -> NOT_COLLECT(e1, dt)
-            """
+                if validate_type(entity_tokens, "ACTOR") and validate_type(data_tokens, "DATA"):
+                    self.logger.info("Collection statement (rule #%d): %r", matcher.id, sent.text)
 
-            if not(dt and like_type(dt, "DATA")):
-                return
-
-            if e1 and like_type(e1, "ACTOR"):
-                link_pairs(e1, dt, "NOT_COLLECT" if neg_flag else "COLLECT")
-
-        def share_handler(neg_flag, e1, dt, e2):
-            """Handle "share" like verbs
-
-            e1     share dt with e2 -> COLLECT(e1, dt), COLLECT(e2, dt)
-            e1 not share dt with e2 -> NOT_COLLECT(e2, dt)
-            """
-
-            if not(dt and like_type(dt, "DATA")):
-                return
-
-            if e2 and like_type(e2, "ACTOR"):
-                link_pairs(e2, dt, "NOT_COLLECT" if neg_flag else "COLLECT")
-
-            if not neg_flag and (e1 and like_type(e1, "ACTOR")):
-                # Consistent with PolicyLint, "we share" implies "we collect"
-                link_pairs(e1, dt, "COLLECT")
-
-        def use_handler(neg_flag, e1, dt):
-            """Handle "use" like verbs
-
-            e1     use dt -> COLLECT(e1, dt), COLLECT(e2, dt)
-            e1 not use dt -> (ignored)
-            """
-
-            if (not neg_flag and (e1 and like_type(e1, "ACTOR")) and (dt and like_type(dt, "DATA"))):
-                # Consistent with PolicyLint, ignore "not use"
-                link_pairs(e1, dt, "COLLECT")
+                    for entity in entity_tokens:
+                        for dtype in data_tokens:
+                            self.logger.info("Edge %s (%s): %r -> %r", relation, action, entity._.ent, dtype._.ent)
+                            document.link(entity, dtype, relation, action=action)
 
         for doc in document.iter_docs():
             for sent in doc.sents:
-                if sent[-1].norm_ == "?":
-                    # Skip interrogative sentences
-                    continue
+                dependency_graph = build_dependency_graph(sent.root)
 
-                if len(results := self.match_sentence(sent)) == 0:
-                    continue
-
-                self.logger.info("Found collection statement: %r", sent.text)
-
-                for pattern, neg_flag, (verb, action, args) in results:
-                    self.logger.info("Rule %d: verb = %s, action = %s, args = %r",
-                                     pattern.rule_id, verb.lemma_, action, args)
-
-                    match action:
-                        case "COLLECT":
-                            collect_handler(neg_flag, *args)
-                        case "SHARE":
-                            share_handler(neg_flag, *args)
-                        case "USE":
-                            use_handler(neg_flag, *args)
+                for matcher in self.pattern_matchers:
+                    for action, neg_flag, arg_list in matcher.match(dependency_graph):
+                        make_links(action, neg_flag, arg_list)
