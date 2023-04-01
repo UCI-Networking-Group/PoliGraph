@@ -4,99 +4,17 @@ import argparse
 import itertools
 import logging
 import os
-import re
 from collections import defaultdict, deque
 
 import networkx as nx
-import spacy
 import yaml
 
 from privacy_policy_analyzer.document import PolicyDocument
-from privacy_policy_analyzer.graph_utils import gml_stringizer
+from privacy_policy_analyzer.graph_utils import yaml_dump_graph
 from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS, TRIVIAL_WORDS
 from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
 from privacy_policy_analyzer.purpose_classification import PurposeClassifier
 from privacy_policy_analyzer.utils import setup_nlp_pipeline
-
-
-def expand_phrase(root_token):
-    doc = root_token.doc
-
-    def has_alpha(s):
-        return re.search(r"[a-zA-Z]", s, flags=re.ASCII) is not None
-
-    def should_include(current_token, in_left_modifier=False):
-        if current_token._.src is None:
-            return False
-
-        match current_token.dep_:
-            case "dep" | "meta":
-                # NLP glitches
-                return current_token.ent_type_ != ""
-            case "prep":
-                if not in_left_modifier and current_token.lemma_ in ["as"]:
-                    return False
-            case "punct":
-                # Keep punct only it's inside a word/entity (e.g. health-related info)
-                flag = (current_token.i > 0 and current_token.i + 1 < len(doc)
-                        and doc[current_token.i - 1].whitespace_ == "" and has_alpha(doc[current_token.i - 1].text)
-                        and current_token.whitespace_ == "" and has_alpha(doc[current_token.i + 1].text))
-                flag |= current_token.ent_type_ != ""
-                flag |= in_left_modifier
-
-                if not flag:
-                    return False
-
-        if current_token.dep_ in ["amod", "nmod", "nummod", "compound"] and current_token.i < current_token.head.i:
-            in_left_modifier = True
-
-        for c in current_token.children:
-            if not should_include(c, in_left_modifier):
-                return False
-
-        return True
-
-    # Noun phrase, try to include simple children
-    left_idx = root_token.i
-    for child in sorted(root_token.lefts, reverse=True):
-        if should_include(child):
-            child_indices = sorted(t.i for t in child.subtree)
-
-            if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
-                and left_idx - 1 == child_indices[-1]):
-                left_idx = child_indices[0]
-            else:
-                break
-        else:
-            break
-
-    right_idx = root_token.i + 1
-    for child in sorted(root_token.rights):
-        if child.dep_ in ["conj", "appos"]:
-            break
-        elif should_include(child):
-            child_indices = sorted(t.i for t in child.subtree)
-
-            if (child_indices[-1] - child_indices[0] == len(child_indices) - 1
-                and right_idx == child_indices[0]):
-                right_idx = child_indices[-1] + 1
-            else:
-                break
-        else:
-            break
-
-    # strip suffix "cc" words (e.g. and/or)
-    if doc[right_idx - 1].dep_ == "cc":
-        right_idx -= 1
-
-    # strip surrounding puncts
-    while doc[left_idx].lemma_ in '"\'([':
-        left_idx += 1
-
-    while doc[right_idx - 1].lemma_ in '"\')]':
-        right_idx -= 1
-
-    return doc[left_idx:right_idx]
 
 
 def simplify_phrase(phrase):
@@ -124,11 +42,20 @@ def simplify_phrase(phrase):
 
 
 def dag_add_edge(G, n1, n2, *args, **kwargs):
-    if n1 == n2 or n2 in nx.ancestors(G, n1):
+    if (n1 == n2) or (G.has_node(n1) and n2 in nx.ancestors(G, n1)):
         return False
     else:
         G.add_edge(n1, n2, *args, **kwargs)
         return True
+
+
+COLLECT_EDGE_TYPES = frozenset({
+    "COLLECT", "NOT_COLLECT",
+    "SHARE_WITH", "NOT_SHARE_WITH",
+    "SELL_TO", "NOT_SELL_TO",
+    "USE", "NOT_USE",
+    "STORE", "NOT_STORE",
+})
 
 
 class GraphBuilder:
@@ -142,212 +69,221 @@ class GraphBuilder:
         self.purpose_classifier = PurposeClassifier(purpose_classification_model_path)
 
     def build_graph(self, document: PolicyDocument):
-        stage1_graph = self.__build_graph_stage1(document)
-        stage2_graph = self.__build_graph_stage2(document, stage1_graph)
-        return stage2_graph
+        token_type_map = {}
 
-    def __build_graph_stage1(self, document: PolicyDocument):
-        stage1_graph = nx.DiGraph()
+        G_collect = nx.DiGraph()
+        G_subsum = nx.DiGraph()
+        G_coref = nx.DiGraph()
 
-        # Step 1: Infer phrase type using NER label
-        for src in document.token_relationship.nodes:
-            token = document.get_token_with_src(src)
+        normalized_terms_map = {}
+        G_final = nx.MultiDiGraph()
 
-            match token.ent_type_:
-                case "NN":
-                    # unknown type, figure it out later
-                    continue
-                case "DATA":
-                    stage1_graph.add_node(src, token=token, type="DATA")
-                case "ACTOR":
-                    stage1_graph.add_node(src, token=token, type="ACTOR")
+        def build_phrase_map_from_ent_labels():
+            """Step 1: Populate token_type_map using NER labels."""
 
-        # Step 2: Infer phrase type using COLLECT / NOT_COLLECT relationship
-        for src1, src2, data in document.token_relationship.edges(data=True):
-            relationship = data["relationship"]
+            for src in document.token_relationship.nodes:
+                token = document.get_token_with_src(src)
 
-            if relationship in ["COLLECT", "NOT_COLLECT"]:
-                token1 = document.get_token_with_src(src1)
-                token2 = document.get_token_with_src(src2)
+                if (ent_type := token.ent_type_) in ("DATA", "ACTOR"):
+                    token_type_map[src] = ent_type
 
-                if src1 not in stage1_graph:
-                    stage1_graph.add_node(src1, token=token1, type="ACTOR")
+        def build_collect_graph():
+            """Step 2: Infer phrase types using COLLECT-like edges and copy
+            non-conflict edges to G_collect. Classify purpose phrases and save
+            them as edge attributes in G_collect.
+            """
 
-                if src2 not in stage1_graph:
-                    stage1_graph.add_node(src2, token=token2, type="DATA")
+            data_type_purposes: dict[tuple, list[str]] = {}
 
-                if [stage1_graph.nodes[s]["type"] for s in (src1, src2)] == ["ACTOR", "DATA"]:
-                    # This will never create a circle
-                    stage1_graph.add_edge(src1, src2, relationship=relationship)
+            for src1, src2, data in document.token_relationship.edges(data=True):
+                relationship = data["relationship"]
 
-        # Step 3: Annotate purposes
-        data_type_to_purpose_text_list = defaultdict(list)
-        all_purpose_text = set()
+                if relationship in COLLECT_EDGE_TYPES:
+                    for src, expected_type in (src1, "ACTOR"), (src2, "DATA"):
+                        if token_type_map.setdefault(src, expected_type) != expected_type:
+                            break
+                    else:
+                        # Add the edge. This cannot create a circle so no need for DAG check
+                        G_collect.add_edge(src1, src2, relationship=relationship)
 
-        for data_type, node_data in stage1_graph.nodes(data=True):
-            if node_data["type"] != "DATA":
-                continue
+                        if src2 not in data_type_purposes:
+                            data_type_purposes[src2] = []
 
-            for _, purpose_src, edge_data in document.token_relationship.edges(data_type, data=True):
-                if edge_data["relationship"] == "PURPOSE":
-                    purpose_root = document.get_token_with_src(purpose_src)
-                    right_end = max(t.i for t in purpose_root.subtree) + 1
-                    purpose_part = purpose_root.doc[purpose_root.i:right_end]
+            # Annotate purposes
+            purpose_text_to_labels: dict[str, list[str]] = {}
 
-                    data_type_to_purpose_text_list[data_type].append(purpose_part.text)
-                    all_purpose_text.add(purpose_part.text)
+            for data_type_src, purposes in data_type_purposes.items():
+                for _, purpose_src, edge_data in document.token_relationship.edges(data_type_src, data=True):
+                    if edge_data["relationship"] == "PURPOSE":
+                        purpose_root = document.get_token_with_src(purpose_src)
 
-        all_purpose_text = list(all_purpose_text)
-        purpose_text_to_purposes = dict(zip(all_purpose_text, self.purpose_classifier(all_purpose_text)))
+                        left = purpose_root.left_edge.i
+                        right = purpose_root.right_edge.i + 1
+                        purpose_span = purpose_root.doc[left:right]
 
-        for k, v in purpose_text_to_purposes.items():
-            logging.info("Purpose %r -> %s", k, v)
+                        purposes.append(purpose_span.text)
+                        purpose_text_to_labels[purpose_span.text] = []
 
-        for data_type, purpose_text_list in data_type_to_purpose_text_list.items():
-            edge_purposes = set()
+            for (text, labels), predictions in zip(purpose_text_to_labels.items(),
+                                                   self.purpose_classifier(list(purpose_text_to_labels))):
+                logging.info("Purpose %r -> %s", text, predictions)
+                labels.extend(predictions)
 
-            for purpose_text in purpose_text_list:
-                for purpose in purpose_text_to_purposes[purpose_text]:
-                    edge_purposes.add((purpose, purpose_text))
+            for data_type_src, purpose_text_list in data_type_purposes.items():
+                edge_purposes = set()
 
-            for _, _, edge_data in stage1_graph.in_edges(data_type, data=True):
-                if edge_data["relationship"] in ["COLLECT", "NOT_COLLECT"]:
+                for purpose_text in purpose_text_list:
+                    for purpose in purpose_text_to_labels[purpose_text]:
+                        edge_purposes.add((purpose, purpose_text))
+
+                for _, _, edge_data in G_collect.in_edges(data_type_src, data=True):
                     edge_data["purposes"] = sorted(edge_purposes)
 
-        # Step 4: Infer phrase type using SUBSUM / COREF relationship
-        # Run a BFS starting from nodes with known types.
-        bfs_queue = deque(stage1_graph.nodes)
-        visited_nodes = set(stage1_graph.nodes)
+        def build_subsum_and_coref_graphs():
+            """Step 3: Infer phrase types using SUBSUM / COREF edges and copy
+            non-conflict edges to G_subsum / G_coref.
+            """
 
-        while len(bfs_queue) > 0:
-            src1 = bfs_queue.popleft()
-            phrase_type = stage1_graph.nodes[src1]["type"]
+            # Run a BFS starting from nodes with known types.
+            bfs_queue = deque(token_type_map.keys())
+            visited_nodes = set(token_type_map.keys())
 
-            in_edge_view = document.token_relationship.in_edges(src1, data=True)
-            out_edge_view = document.token_relationship.out_edges(src1, data=True)
+            while len(bfs_queue) > 0:
+                src1 = bfs_queue.popleft()
+                token_type = token_type_map[src1]
 
-            for edge_from, edge_to, data in itertools.chain(in_edge_view, out_edge_view):
-                if data["relationship"] in ["SUBSUM", "COREF"]:
-                    src2 = edge_to if src1 == edge_from else edge_from
+                in_edge_view = document.token_relationship.in_edges(src1, data=True)
+                out_edge_view = document.token_relationship.out_edges(src1, data=True)
 
-                    if src2 not in stage1_graph:
-                        token2 = document.get_token_with_src(src2)
-                        stage1_graph.add_node(src2, token=token2, type=phrase_type)
+                for edge_from, edge_to, data in itertools.chain(in_edge_view, out_edge_view):
+                    if (relationship := data["relationship"]) in ["SUBSUM", "COREF"]:
+                        src2 = edge_to if src1 == edge_from else edge_from
 
-                        if src2 in visited_nodes:
-                            # Avoid loop
-                            visited_nodes.add(src2)
-                            bfs_queue.append(src2)
+                        if token_type_map.setdefault(src2, token_type) == token_type:
+                            if src2 not in visited_nodes:
+                                visited_nodes.add(src2)
+                                bfs_queue.append(src2)
 
-                    if stage1_graph.nodes[src2]["type"] == phrase_type:
-                        # Call dag_add_edge to safely add an edge without creating a circle
-                        if dag_add_edge(stage1_graph, edge_from, edge_to, relationship=data["relationship"]):
-                            stage1_graph.nodes[edge_from]['has_subsum_or_coref'] = True
+                            # Call dag_add_edge to safely add an edge without creating a circle
+                            match relationship:
+                                case "SUBSUM": dag_add_edge(G_subsum, edge_from, edge_to)
+                                case "COREF": dag_add_edge(G_coref, edge_from, edge_to)
 
-        # Step 5: Infer meaning of each phrase using normalizers
-        # Follow topological order to resolve coreferences
-        for src in reversed(list(nx.topological_sort(stage1_graph))):
-            data = stage1_graph.nodes[src]
-            token = data["token"]
-            # Normalized terms
-            data["normalized_terms"] = normalized_terms = set()
+        def contract_coref_nodes():
+            """Step 4: Follow G_coref to contract coreferences in G_subsum and
+            G_collect into their main mentions.
+            """
 
-            # 5.1. COREF: inherit normalized_terms from coref main
-            coref_src_list = []
+            for src1 in nx.topological_sort(G_coref):
+                match G_coref.out_degree(src1):
+                    case 0:
+                        continue
+                    case 1:
+                        (_, src2), = G_coref.out_edges(src1)
 
-            for _, ref_src, edge_data in stage1_graph.out_edges(src, data=True):
-                if edge_data["relationship"] == "COREF":
-                    coref_src_list.append(ref_src)
+                        if src1 in G_collect:
+                            nx.contracted_nodes(G_collect, src2, src1, self_loops=False, copy=False)
 
-            if len(coref_src_list) == 1:
-                data["coref_main"] = stage1_graph.nodes[coref_src_list[0]]["coref_main"]
-                continue
-            else:
-                data["coref_main"] = src
+                        if src1 in G_subsum:
+                            nx.contracted_nodes(G_subsum, src2, src1, self_loops=False, copy=False)
+                    case _:
+                        # A phrase graph allows one token to have multiple COREF edges
+                        # Turn them into SUBSUM edges
+                        for _, src2 in G_coref.out_edges(src1):
+                            G_subsum.add_edge(src1, src2)
 
-            # 5.2. Not COREF: normalize the phrase
-            phrase = expand_phrase(token)
-            lemma = " ".join(t.lemma_ for t in simplify_phrase(phrase))
+        def _expand_phrase(src):
+            root_token = document.get_token_with_src(src)
 
-            if len(coref_src_list) > 1:
-                # Technically phrase graph allows a phrase to have more than one COREF edges
-                # Turn these edges into SUBSUM edges for the ease of processing
+            if (base_phrase := root_token._.ent) is None:
+                return None
 
-                for ref_src in coref_src_list:
-                    stage1_graph.edges[src, ref_src]["relationship"] = "SUBSUM"
+            right_boundary = base_phrase.end
 
-                normalized_terms.add(f"{lemma} {src}")
-                continue
+            for child in sorted(filter(lambda t: t.i >= right_boundary, root_token.rights)):
+                child_indices = sorted(t.i for t in child.subtree)
 
-            # Skip empty string (NLP error) and "you" (entity but meaningless)
-            if lemma in ["", "you", "user"]:
-                continue
-
-            match data["type"]:
-                case "DATA":
-                    normalized_terms.update(self.data_phrase_normalizer.normalize(phrase))
-
-                    if len(normalized_terms) == 0:
-                        if lemma in DATATYPE_KEYWORDS or lemma in TRIVIAL_WORDS:
-                            normalized_terms.add('UNSPECIFIC')
-                        else:
-                            normalized_terms.add(lemma)
-                case "ACTOR":
-                    # if there is any proper noun, run entity_mapper to find company names
-                    if any(t.pos_ == "PROPN" for t in phrase):
-                        normalized_terms.update(self.entity_mapper.match_name(phrase.text))
-
-                    # try rule-based normalizer
-                    normalized_terms.update(self.actor_phrase_normalizer.normalize(phrase))
-
-                    # try lemmatizer
-                    if len(normalized_terms) == 0:
-                        if lemma in ACTOR_KEYWORDS or lemma in TRIVIAL_WORDS:
-                            normalized_terms.add("UNSPECIFIC")
-                        else:
-                            normalized_terms.add(lemma)
-
-            if "UNSPECIFIC" in normalized_terms:
-                normalized_terms.remove("UNSPECIFIC")
-                if data.get("has_subsum_or_coref"):
-                    normalized_terms.add(f"{lemma} {src}")
+                if (
+                    child.dep_ not in {'punct', "dep", "meta", "cc", "preconj", "conj"}
+                    and all(t._.src not in token_type_map for t in child.subtree)      # No overlap w/ other nodes
+                    and right_boundary == child_indices[0]                             # Continuous
+                    and child_indices[-1] - child_indices[0] + 1 == len(child_indices) # Continuous subtree
+                ):
+                    right_boundary = child_indices[-1] + 1
                 else:
-                    normalized_terms.add("UNSPECIFIC_" + data["type"])
+                    break
 
-            logging.info("Phrase %r (%s) -> %r", phrase.text, data["type"], ", ".join(normalized_terms))
-            data["normalized_terms"].update(normalized_terms)
+            return root_token.doc[base_phrase.start:right_boundary]
 
-        return stage1_graph
+        def normalize_terms():
+            """Step 5: Run phrase normalization."""
 
-    def __build_graph_stage2(self, document: PolicyDocument, stage1_graph: nx.DiGraph):
-        stage2_graph = nx.MultiDiGraph()
+            for src, token_type in token_type_map.items():
+                normalized_terms_map[src] = terms = set()
 
-        for _, node_data in stage1_graph.nodes(data=True):
-            stage2_graph.add_nodes_from(node_data["normalized_terms"], type=node_data["type"])
+                if (phrase := _expand_phrase(src)) is None:
+                    continue
 
-        for src1, src2, edge_data in stage1_graph.edges(data=True):
-            relationship = edge_data["relationship"]
+                lemma = " ".join(t.lemma_ for t in simplify_phrase(phrase))
 
-            if relationship == "COREF":
-                continue
+                # Skip empty string (NLP error) and "you" (entity but meaningless)
+                if lemma in ("", "you", "user"):
+                    continue
 
-            coref_main1 = stage1_graph.nodes[src1]["coref_main"]
-            coref_main2 = stage1_graph.nodes[src2]["coref_main"]
+                match token_type:
+                    case "DATA":
+                        terms.update(self.data_phrase_normalizer.normalize(phrase))
 
-            normalized_terms1 = stage1_graph.nodes[coref_main1]["normalized_terms"]
-            normalized_terms2 = stage1_graph.nodes[coref_main2]["normalized_terms"]
+                        if len(terms) == 0:
+                            if lemma in DATATYPE_KEYWORDS or lemma in TRIVIAL_WORDS:
+                                terms.add('UNSPECIFIC')
+                            else:
+                                terms.add(lemma)
+                    case "ACTOR":
+                        # if there is any proper noun, run entity_mapper to find company names
+                        if any(t.pos_ == "PROPN" for t in phrase):
+                            terms.update(self.entity_mapper.match_name(phrase.text))
 
-            edge_sentences = []
+                        # try rule-based normalizer
+                        terms.update(self.actor_phrase_normalizer.normalize(phrase))
 
-            for segment_id in sorted({coref_main1[0], coref_main2[0]}):
-                doc = document.get_doc_without_context(document.segments[segment_id])
+                        # try lemmatizer
+                        if len(terms) == 0:
+                            if lemma in ACTOR_KEYWORDS or lemma in TRIVIAL_WORDS:
+                                terms.add("UNSPECIFIC")
+                            else:
+                                terms.add(lemma)
 
-                for sent in doc.sents:
-                    if any(t._.src in {coref_main1, coref_main2} for t in sent):
-                        edge_sentences.append(sent.text)
+                if "UNSPECIFIC" in terms:
+                    terms.remove("UNSPECIFIC")
 
-            for n1, n2 in itertools.product(normalized_terms1, normalized_terms2):
-                if relationship == "SUBSUM":
+                    if src in G_subsum and G_subsum.out_degree(src) > 0:
+                        terms.add(f"{lemma} {src}")
+                    else:
+                        terms.add(f"UNSPECIFIC_{token_type}")
+
+                G_final.add_nodes_from(terms, type=token_type)
+
+                logging.info("Phrase %r (%s) -> %r", phrase.text, token_type, ", ".join(terms))
+
+        def merge_subsum_graph():
+            """Step 6: Populate SUBSUM edges in G_final from G_subsum."""
+
+            relationship = "SUBSUM"
+
+            for src1, src2 in G_subsum.edges():
+                sent1 = document.get_token_with_src(src1).sent.text
+                sent2 = document.get_token_with_src(src2).sent.text
+
+                src1_terms = normalized_terms_map[src1]
+                src2_terms = normalized_terms_map[src2]
+
+                token_type = token_type_map[src1]
+
+                for n1, n2 in itertools.product(src1_terms, src2_terms):
+                    if not G_final.nodes[n1]['type'] == G_final.nodes[n2]['type'] == token_type:
+                        continue
+
                     # Some sentences lead to subsumption relationship between 1st/3rd parties.
                     # Workaround: Simply ignore all subsumption edges to "we" / "third party"
                     if n2 in ["we", "third party", "UNSPECIFIC_DATA", "UNSPECIFIC_ACTOR"]:
@@ -359,32 +295,59 @@ class GraphBuilder:
                         logging.warning("Invalid edge: %r -> %r", n1, n2)
                         continue
 
-                if not stage2_graph.has_edge(n1, n2, key=relationship):
-                    if dag_add_edge(stage2_graph, n1, n2, key=relationship, sources=[], text=[]):
-                        if relationship in ["COLLECT", "NOT_COLLECT"]:
-                            stage2_graph[n1][n2][relationship]["purposes"] = []
-                    else:
-                        continue
+                    if not G_final.has_edge(n1, n2, key=relationship):
+                        dag_add_edge(G_final, n1, n2, key=relationship, text=[])
 
-                stage2_graph[n1][n2][relationship]["sources"].append([coref_main1, coref_main2])
-                stage2_graph[n1][n2][relationship]["text"].append(" | ".join(edge_sentences))
+                    if G_final.has_edge(n1, n2, key=relationship):
+                        G_final[n1][n2][relationship]["text"].append(" | ".join({sent1, sent2}))
 
-                if relationship in ["COLLECT", "NOT_COLLECT"]:
-                    stage2_graph[n1][n2][relationship]["purposes"].extend(edge_data.get("purposes", []))
+        def merge_collect_graph():
+            """Step 7: Populate COLLECT edges in G_final from G_collect."""
 
-        # Remove isolated nodes
-        for node in list(stage2_graph.nodes()):
-            if stage2_graph.in_degree(node) == stage2_graph.out_degree(node) == 0:
-                stage2_graph.remove_node(node)
+            for src1, src2, data in G_collect.edges(data=True):
+                sent1 = document.get_token_with_src(src1).sent.text
+                sent2 = document.get_token_with_src(src2).sent.text
 
-        return stage2_graph
+                src1_terms = normalized_terms_map[src1]
+                src2_terms = normalized_terms_map[src2]
+
+                relationship = data["relationship"]
+
+                for n1, n2 in itertools.product(src1_terms, src2_terms):
+                    if G_final.nodes[n1]['type'] == "ACTOR" and G_final.nodes[n2]['type'] == "DATA":
+                        if not G_final.has_edge(n1, n2, key=relationship):
+                            dag_add_edge(G_final, n1, n2, key=relationship, text=[], purposes=defaultdict(list))
+
+                        if G_final.has_edge(n1, n2, key=relationship):
+                            G_final[n1][n2][relationship]["text"].append(" | ".join({sent1, sent2}))
+                            purpose_dict = G_final[n1][n2][relationship]["purposes"]
+
+                            for purpose, text in data["purposes"]:
+                                purpose_dict[purpose].append(text)
+
+        def cleanup():
+            """Step 8: Cleanup - remove 0-degree nodes"""
+            for node in list(G_final.nodes()):
+                if G_final.in_degree(node) == G_final.out_degree(node) == 0:
+                    G_final.remove_node(node)
+
+        build_phrase_map_from_ent_labels()
+        build_collect_graph()
+        build_subsum_and_coref_graphs()
+        contract_coref_nodes()
+        normalize_terms()
+        merge_subsum_graph()
+        merge_collect_graph()
+        cleanup()
+
+        return G_final
 
 
 def trim_graph(graph):
     important_nodes = set()
 
     for d1, d2, rel in graph.edges(keys=True):
-        if rel in ["COLLECT", "NOT_COLLECT"]:
+        if rel in COLLECT_EDGE_TYPES:
             important_nodes.add(d1)
             important_nodes.add(d2)
 
@@ -423,6 +386,7 @@ def main():
     parser.add_argument("--purpose-classification", required=True, help="Purpose classification model directory")
     parser.add_argument("-p", "--phrase-map", required=True, help="Path to phrase_map.yml")
     parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
+    parser.add_argument("--pretty", action="store_true", help="Generate pretty GraphML graph for visualization")
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
 
@@ -435,12 +399,16 @@ def main():
         document = PolicyDocument.load(d, nlp)
         knowledge_graph = graph_builder.build_graph(document)
         trimmed_graph = trim_graph(knowledge_graph)
-        #colored_graph = colorize_graph(trimmed_graph)
 
-        nx.write_gml(knowledge_graph, os.path.join(d, "graph.gml"), stringizer=gml_stringizer)
-        nx.write_gml(trimmed_graph, os.path.join(d, "graph_trimmed.gml"), stringizer=gml_stringizer)
-        #nx.write_gpickle(knowledge_graph, os.path.join(d, "graph.gpickle"))
-        #nx.write_graphml(colored_graph, os.path.join(d, "graph_trimmed.graphml"))
+        with open(os.path.join(d, "graph.yml"), "w", encoding="utf-8") as fout:
+            yaml_dump_graph(knowledge_graph, fout)
+
+        with open(os.path.join(d, "graph_trimmed.yml"), "w", encoding="utf-8") as fout:
+            yaml_dump_graph(trimmed_graph, fout)
+
+        if args.pretty:
+            colored_graph = colorize_graph(trimmed_graph)
+            nx.write_graphml(colored_graph, os.path.join(d, "graph_pretty.graphml"))
 
 
 if __name__ == "__main__":

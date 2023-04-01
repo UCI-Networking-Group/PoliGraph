@@ -1,66 +1,80 @@
+"""Module of phrase normalization"""
+
 import json
 import re
+import string
 
 import regex
 
 
 class RuleBasedPhraseNormalizer:
+    """Rule-based phrase normalizer"""
+
     def __init__(self, phrase_map_rules):
-        self.positive_rules = dict()
-        self.negative_rules = dict()
+        self.regex_list = {}
 
         for norm_name, regex_list in phrase_map_rules.items():
-            self.negative_rules[norm_name] = []
-            self.positive_rules[norm_name] = []
+            positive_rules = []
+            negative_rules = []
 
-            for r in (regex_list or []):
-                if r[0] == "!":
-                    r = r[1:]
-                    l = self.negative_rules[norm_name]
+            for regex_string in (regex_list or []):
+                # Prefix "!" indicates negative rules (must not match)
+                if regex_string[0] == "!":
+                    regex_string = regex_string[1:]
+                    rule_list = negative_rules
                 else:
-                    l = self.positive_rules[norm_name]
+                    rule_list = positive_rules
 
-                # By default case insensitive. Prefixing "=" to override
-                if r[0] == "=":
-                    r = r[1:]
-                    flags = 0
+                # Prefix "=" indicates case-sensitive match (by default do case-insensitive)
+                if regex_string[0] == "=":
+                    regex_string = regex_string[1:]
+                    flag = ""
                 else:
-                    flags = re.I
+                    flag = "i"
 
-                if r[0] != "^":
-                    r = r'\b' + r
-                if r[-1] != "$":
-                    r = r + r'\b'
-                r.replace(' ', r'\s+')
+                # Prefix/Suffix '\b' (word break) unless the rule explicitly matches the starting/ending position
+                if regex_string[0] != "^":
+                    regex_string = r'\b' + regex_string
 
-                l.append(re.compile(r, flags=flags))
+                if regex_string[-1] != "$":
+                    regex_string = regex_string + r'\b'
+
+                # Allow space to match any number of white-space characters
+                regex_string.replace(' ', r'\s+')
+
+                rule_list.append(f"(?{flag}:{regex_string})")
+
+            # Concat regexes to one for efficiency
+            positive_re = re.compile("|".join(positive_rules))
+            negative_re = re.compile("|".join(negative_rules) or '$^')  # If no negative rule, '$^' matches nothing
+            self.regex_list[norm_name] = (positive_re, negative_re)
 
     def normalize(self, phrase):
-        for norm_name in self.positive_rules:
-            rejected = False
+        original_text = phrase.text.strip(string.punctuation)
+        lemma_text = phrase.lemma_.strip(string.punctuation)
 
-            for r in self.negative_rules[norm_name]:
-                if r.search(phrase.lemma_) or r.search(phrase.text):
-                    rejected = True
-                    break
-
-            if rejected:
-                continue
-
-            for r in self.positive_rules[norm_name]:
-                if r.search(phrase.lemma_) or r.search(phrase.text):
-                    yield norm_name
-                    break
+        for norm_name, (positive_regex, negative_regex) in self.regex_list.items():
+            if (
+                negative_regex.search(original_text) is None
+                and negative_regex.search(lemma_text) is None
+                and (
+                    positive_regex.search(original_text) is not None
+                    or positive_regex.search(lemma_text) is not None
+                )
+            ):
+                yield norm_name
 
 
 class EntityMatcher:
+    """Fuzzy entity (company) name matcher"""
+
     def __init__(self, entity_info_file):
         with open(entity_info_file, "r", encoding="utf-8") as fin:
             entity_info = json.load(fin)
 
-        self.entity_names = dict()
-        self.ngram_mapping = dict()
-        self.domain_mapping = dict()
+        self.entity_names = {}
+        self.ngram_mapping = {}
+        self.domain_mapping = {}
 
         for entity, info in entity_info.items():
             self.entity_names[entity] = info["aliases"]
@@ -74,7 +88,7 @@ class EntityMatcher:
         self.keyword_matching_regex = regex.compile(
             r"\b(?:\L<keywords>)\b",
             keywords=self.ngram_mapping.keys(),
-            flags=regex.I
+            flags=regex.IGNORECASE
         )
 
     def match_name(self, name):
@@ -87,10 +101,9 @@ class EntityMatcher:
 
             if oov_flag:
                 yield entity
-                continue
-
-            r = regex.compile(r"\b(?:\L<keywords>)\b", keywords=[m[0]])
-            for full_name in self.entity_names[entity]:
-                if r.search(full_name):
-                    yield entity
-                    break
+            else:
+                r = regex.compile(r"\b(?:\L<keywords>)\b", keywords=[m[0]])
+                for full_name in self.entity_names[entity]:
+                    if r.search(full_name):
+                        yield entity
+                        break

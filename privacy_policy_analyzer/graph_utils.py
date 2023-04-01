@@ -4,7 +4,7 @@ import json
 from contextlib import contextmanager
 
 import networkx as nx
-
+import yaml
 
 # Hardcode the barebone of the entity ontology
 ENTITY_ONTOLOGY = [
@@ -76,9 +76,50 @@ def gml_stringizer(obj):
         return json.dumps(obj)
 
 
+def yaml_dump_graph(G: nx.Graph, stream=None):
+    graph_data = nx.node_link_data(G)
+
+    for idx, link_dict in enumerate(graph_data['links']):
+        new_link_dict = {
+            'source': link_dict['source'],
+            'target': link_dict['target'],
+            'key': link_dict['key'],
+            'text': sorted(set(link_dict['text'])),
+        }
+
+        if 'purposes' in link_dict:
+            purposes = {}
+
+            for label, text_list in sorted(link_dict['purposes'].items()):
+                purposes[label] = sorted(set(text_list))
+
+            new_link_dict['purposes'] = purposes
+
+        graph_data['links'][idx] = new_link_dict
+
+    graph_data['links'].sort(key=lambda d: (d['key'], d['source'] != 'we', d['source'], d['target']))
+    graph_data['nodes'] = sorted(graph_data.pop('nodes'), key=lambda d: (d['type'], d['id']))
+
+    return yaml.dump(graph_data, stream=stream, sort_keys=False, Dumper=yaml.CSafeDumper)
+
+
+def yaml_load_graph(stream) -> nx.Graph:
+    graph_data = yaml.load(stream, Loader=yaml.CSafeLoader)
+    return nx.node_link_graph(graph_data)
+
+
+def _all_shortest_paths_wrap(*args, **kwargs):
+    try:
+        yield from nx.all_shortest_paths(*args, **kwargs)
+    except nx.NetworkXNoPath:
+        return
+
+
 class KGraph:
     def __init__(self, path, merge_geolocation=False):
-        kgraph = nx.read_gml(path, destringizer=gml_destringizer)
+        with open(path, "r", encoding="utf-8") as fin:
+            kgraph = yaml_load_graph(fin)
+
         self.kgraph :nx.MultiDiGraph = kgraph
 
         # NOT_COLLECT is not used
@@ -147,6 +188,22 @@ class KGraph:
             if self.kgraph.nodes[node]["type"] == node_type:
                 yield node
 
+    def descendants(self, node):
+        if node not in self.kgraph:
+            return
+
+        match node_type := self.kgraph.nodes[node]["type"]:
+            case "DATA":
+                li = nx.descendants(self.kgraph, node)
+            case "ACTOR":
+                li = nx.ancestors(self.kgraph, node)
+            case _:
+                assert False
+
+        for node in li:
+            if self.kgraph.nodes[node]["type"] == node_type:
+                yield node
+
     def subsum(self, node1, node2):
         if node1 not in self.kgraph or node2 not in self.kgraph:
             return False
@@ -165,18 +222,11 @@ class KGraph:
                 assert False
 
     def purposes(self, entity, datatype):
-
-        def all_shortest_paths_wrap(*args, **kwargs):
-            try:
-                yield from nx.all_shortest_paths(*args, **kwargs)
-            except nx.NetworkXNoPath:
-                return
-
         purposes = set()
 
         # nx.all_simple_paths or nx.all_shortest_paths?
         # I feel shortest_paths would be less affected by vague language
-        for path in all_shortest_paths_wrap(self.kgraph, entity, datatype):
+        for path in _all_shortest_paths_wrap(self.kgraph, entity, datatype):
             for u, v in zip(path[:-1], path[1:]):
                 try:
                     edge_view = self.kgraph.edges[u, v, "COLLECT"]
@@ -189,6 +239,27 @@ class KGraph:
                         yield p
 
                 break
+
+    def get_text(self, node1, node2):
+        """Get the policy texts that lead to the relation between two nodes:
+
+        Case 1: node1 COLLECT node2, the path is node1 -> node2
+        Case 2: node1 SUBSUME node2 (data types), the path is node1 -> node2
+        Case 3: node1 COLLECT node2 (entities), the path is node2 -> node1
+        """
+        all_text = set()
+
+        if self.kgraph.nodes[node2]["type"] == "ACTOR":
+            node1, node2 = node2, node1
+
+        for path in _all_shortest_paths_wrap(self.kgraph, node1, node2):
+            for u, v in zip(path[:-1], path[1:]):
+                for edge_type, data in self.kgraph.get_edge_data(u, v).items():
+                    for text in data["text"]:
+                        if text not in all_text:
+                            all_text.add(text)
+
+        return sorted(all_text)
 
     @functools.lru_cache
     def validate_collection(self, datatype):

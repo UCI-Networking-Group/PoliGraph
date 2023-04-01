@@ -17,7 +17,7 @@ import regex
 from anytree import NodeMixin, RenderTree
 from langdetect import DetectorFactory, detect_langs, lang_detect_exception
 from spacy.language import Language
-from spacy.tokens import Doc, DocBin
+from spacy.tokens import Doc, DocBin, Token
 from unidecode import unidecode
 
 # Latin-1 Supplement / Latin Extended-A / Latin Extended-B + few exceptions
@@ -216,17 +216,17 @@ class PolicyDocument:
     def iter_docs(self):
         yield from self.all_docs.values()
 
-    def get_doc_with_context(self, segment: DocumentSegment):
+    def get_doc_with_context(self, segment: DocumentSegment) -> Doc:
         for i in range(len(segment.context) - 1, 0, -1):
             if (segment.segment_id, i) in self.all_docs:
                 return self.all_docs[(segment.segment_id, i)]
 
         return self.all_docs[(segment.segment_id, 0)]
 
-    def get_doc_without_context(self, segment: DocumentSegment):
+    def get_doc_without_context(self, segment: DocumentSegment) -> Doc:
         return self.all_docs[(segment.segment_id, 0)]
 
-    def get_token_with_src(self, src):
+    def get_token_with_src(self, src: tuple) -> Token:
         segment = self.segments[src[0]]
         long_doc = self.get_doc_with_context(segment)
         rmap = long_doc.user_data["source_rmap"]

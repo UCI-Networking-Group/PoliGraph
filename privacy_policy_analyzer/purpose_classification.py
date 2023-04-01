@@ -1,5 +1,6 @@
-from setfit import SetFitModel
+import logging
 
+from setfit import SetFitModel
 
 PURPOSE_LABELS = [
     "advertising",
@@ -8,6 +9,8 @@ PURPOSE_LABELS = [
     "security",
     "services",
 ]
+
+logging.getLogger('sentence_transformers.SentenceTransformer').setLevel(logging.WARNING)
 
 
 class PurposeClassifier:
