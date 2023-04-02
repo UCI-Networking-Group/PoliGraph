@@ -273,6 +273,12 @@ class GraphBuilder:
                     else:
                         terms.add(f"UNSPECIFIC_{token_type}")
 
+                # Extension: include data subject (if no subject info then this is no-op)
+                if token_type == "DATA" and (subject := document.token_relationship.nodes[src].get('subject')):
+                    replaced_terms = [f"{term} @{subject}" for term in terms]
+                    terms.clear()
+                    terms.update(replaced_terms)
+
                 G_final.add_nodes_from(terms, type=token_type)
 
                 logging.info("Phrase %r (%s) -> %r", phrase.text, token_type, ", ".join(terms))

@@ -8,7 +8,8 @@ from privacy_policy_analyzer.annotators import (
     CoreferenceAnnotator,
     ListAnnotator,
     PurposeAnnotator,
-    SubsumptionAnnotator
+    SubsumptionAnnotator,
+    SubjectAnnotator,
 )
 from privacy_policy_analyzer.document import PolicyDocument
 from privacy_policy_analyzer.utils import setup_nlp_pipeline
@@ -30,10 +31,11 @@ def main():
         CollectionAnnotator(nlp),
         PurposeAnnotator(nlp),
         ListAnnotator(nlp),
+        SubjectAnnotator(nlp),
     ]
 
     for d in args.workdirs:
-        print(f"Processing {d} ...")
+        logging.info("Processing %s ...", d)
 
         document = PolicyDocument.load(d, nlp)
         document.token_relationship.clear()

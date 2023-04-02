@@ -5,7 +5,8 @@ DATA:
 
   personal information:
     - '^((your|user|the)\s+)?personal (data|info|information|datum)$'
-    - '^personal (data|info|information|datum) (that )?(about (you|user)|you (provide|enter|submit))'
+    - '^personal (data|info|information|datum) (that )?((about|of) (you|user)|you (provide|enter|submit)|we collect)'
+    - '=PI'
     - '!(cannot|no[nt]?)'
 
   personal identifier:
