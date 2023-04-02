@@ -1,4 +1,4 @@
-from ..document import PolicyDocument, SegmentType
+from ..document import PolicyDocument, DocumentSegment, SegmentType
 from .base import BaseAnnotator
 
 
@@ -8,7 +8,7 @@ class ListAnnotator(BaseAnnotator):
     def __init__(self, nlp):
         super().__init__(nlp)
 
-    def try_annotate_segment(self, document, root_segment):
+    def try_annotate_segment(self, document: PolicyDocument, root_segment: DocumentSegment):
         child_listitems = []
 
         for c in root_segment.children:
@@ -20,7 +20,7 @@ class ListAnnotator(BaseAnnotator):
 
         context_doc = document.get_doc_with_context(root_segment)
         context_tokens = {t._.src for t in context_doc}
-        link_to_apply = dict()
+        link_to_apply = {}
         child_tokens = []
 
         for token in context_doc:
@@ -58,15 +58,8 @@ class ListAnnotator(BaseAnnotator):
         for t in child_tokens:
             for link_spec, relationship in link_to_apply.items():
                 endpoints = (link_spec[0] or t, link_spec[1] or t)
-                existing_relationship = document.get_link(*endpoints)
-
                 self.logger.info("Edge %s: %r -> %r", relationship, endpoints[0]._.ent, endpoints[1]._.ent)
-
-                if existing_relationship:
-                    if existing_relationship != relationship:
-                        self.logger.warning("Refuse to overwrite existing relationship %s", existing_relationship)
-                else:
-                    document.link(*endpoints, relationship)
+                document.link(*endpoints, relationship)
 
     def annotate(self, document: PolicyDocument):
         for s in document.segments:

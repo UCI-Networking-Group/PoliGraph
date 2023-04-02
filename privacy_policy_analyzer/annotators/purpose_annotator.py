@@ -1,7 +1,8 @@
 from spacy.matcher import DependencyMatcher
 
-from .base import BaseAnnotator
 from ..named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS, TRIVIAL_WORDS
+from .base import BaseAnnotator
+from .collection_annotator import CollectionAnnotator
 
 
 class PurposeValidator:
@@ -148,7 +149,7 @@ class PurposeAnnotator(BaseAnnotator):
 
         for noun_phrase in doc.ents:
             for _, _, relationship in document.get_all_links(noun_phrase.root, "in"):
-                if relationship in ["COLLECT", "NOT_COLLECT"]:
+                if relationship in CollectionAnnotator.EDGE_TYPES:
                     collected_dtypes.append(noun_phrase.root)
                     break
 

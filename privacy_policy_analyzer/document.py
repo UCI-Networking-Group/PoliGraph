@@ -129,7 +129,7 @@ class PolicyDocument:
     def initialize(cls, workdir, nlp):
         obj = cls(flag=True)
         obj.workdir = Path(workdir)
-        obj.token_relationship = nx.DiGraph()
+        obj.token_relationship = nx.MultiDiGraph()
         obj.nlp = nlp
 
         with open(obj.workdir / "accessibility_tree.json", encoding="utf-8") as fin:
@@ -232,26 +232,23 @@ class PolicyDocument:
         rmap = long_doc.user_data["source_rmap"]
         return long_doc[rmap[src]]
 
-    def link(self, token1, token2, relationship, **kwargs):
+    def link(self, token1, token2, relationship):
         src1 = token1._.src
         src2 = token2._.src
 
         if src1 is None or src2 is None:
             raise ValueError("Invalid token link")
 
-        self.token_relationship.add_edge(src1, src2, relationship=relationship, **kwargs)
+        self.token_relationship.add_edge(src1, src2, key=relationship)
 
-    def get_link(self, token1, token2):
+    def get_relations(self, token1, token2):
         src1 = token1._.src
         src2 = token2._.src
 
         if src1 is None or src2 is None:
             raise ValueError("Invalid tokens")
 
-        if edge_data := self.token_relationship.get_edge_data(src1, src2):
-            return edge_data["relationship"]
-        else:
-            return None
+        yield from self.token_relationship.get_edge_data(src1, src2)
 
     def get_all_links(self, token, direction=None):
         doc = token.doc
@@ -262,14 +259,13 @@ class PolicyDocument:
 
         match direction:
             case None | "out":
-                edge_view = self.token_relationship.out_edges(token._.src, data=True)
+                edge_view = self.token_relationship.out_edges(token._.src, keys=True)
             case "in":
-                edge_view = self.token_relationship.in_edges(token._.src, data=True)
+                edge_view = self.token_relationship.in_edges(token._.src, keys=True)
             case _:
                 raise ValueError(f"Invalid direction: {direction}")
 
-        for src, dst, data in edge_view:
-            relationship = data["relationship"]
+        for src, dst, relationship in edge_view:
             src_dst_tokens = []
 
             for token_src in src, dst:

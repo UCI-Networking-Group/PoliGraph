@@ -9,6 +9,7 @@ from collections import defaultdict, deque
 import networkx as nx
 import yaml
 
+from privacy_policy_analyzer.annotators import CollectionAnnotator
 from privacy_policy_analyzer.document import PolicyDocument
 from privacy_policy_analyzer.graph_utils import yaml_dump_graph
 from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS, TRIVIAL_WORDS
@@ -49,13 +50,25 @@ def dag_add_edge(G, n1, n2, *args, **kwargs):
         return True
 
 
-COLLECT_EDGE_TYPES = frozenset({
-    "COLLECT", "NOT_COLLECT",
-    "SHARE_WITH", "NOT_SHARE_WITH",
-    "SELL_TO", "NOT_SELL_TO",
-    "USE", "NOT_USE",
-    "STORE", "NOT_STORE",
-})
+def contracted_nodes(G: nx.Graph, u, v):
+    """Contract node v into u in the graph G
+
+    If G is a multi graph, we implement contraction ourselves because
+    nx.contracted_nodes does not preserve key for multi graphs."""
+
+    if not G.is_multigraph():
+        nx.contracted_nodes(G, u, v, self_loops=False, copy=False)
+    else:
+        edges_to_remap = itertools.chain(G.in_edges(v, keys=True, data=True), G.out_edges(v, keys=True, data=True))
+
+        for (prev_w, prev_x, key, data) in edges_to_remap:
+            w = prev_w if prev_w != v else u
+            x = prev_x if prev_x != v else u
+
+            if w != x and not G.has_edge(w, x, key):
+                G.add_edge(w, x, key, **data)
+
+        G.remove_node(v)
 
 
 class GraphBuilder:
@@ -71,7 +84,7 @@ class GraphBuilder:
     def build_graph(self, document: PolicyDocument):
         token_type_map = {}
 
-        G_collect = nx.DiGraph()
+        G_collect = nx.MultiDiGraph()
         G_subsum = nx.DiGraph()
         G_coref = nx.DiGraph()
 
@@ -95,16 +108,14 @@ class GraphBuilder:
 
             data_type_purposes: dict[tuple, list[str]] = {}
 
-            for src1, src2, data in document.token_relationship.edges(data=True):
-                relationship = data["relationship"]
-
-                if relationship in COLLECT_EDGE_TYPES:
+            for src1, src2, relationship in document.token_relationship.edges(keys=True):
+                if relationship in CollectionAnnotator.EDGE_TYPES:
                     for src, expected_type in (src1, "ACTOR"), (src2, "DATA"):
                         if token_type_map.setdefault(src, expected_type) != expected_type:
                             break
                     else:
                         # Add the edge. This cannot create a circle so no need for DAG check
-                        G_collect.add_edge(src1, src2, relationship=relationship)
+                        G_collect.add_edge(src1, src2, key=relationship)
 
                         if src2 not in data_type_purposes:
                             data_type_purposes[src2] = []
@@ -113,16 +124,16 @@ class GraphBuilder:
             purpose_text_to_labels: dict[str, list[str]] = {}
 
             for data_type_src, purposes in data_type_purposes.items():
-                for _, purpose_src, edge_data in document.token_relationship.edges(data_type_src, data=True):
-                    if edge_data["relationship"] == "PURPOSE":
+                for _, purpose_src, relationship in document.token_relationship.edges(data_type_src, keys=True):
+                    if relationship == "PURPOSE":
                         purpose_root = document.get_token_with_src(purpose_src)
 
                         left = purpose_root.left_edge.i
                         right = purpose_root.right_edge.i + 1
-                        purpose_span = purpose_root.doc[left:right]
+                        purpose_text = purpose_root.doc[left:right].text.strip()
 
-                        purposes.append(purpose_span.text)
-                        purpose_text_to_labels[purpose_span.text] = []
+                        purposes.append(purpose_text)
+                        purpose_text_to_labels[purpose_text] = []
 
             for (text, labels), predictions in zip(purpose_text_to_labels.items(),
                                                    self.purpose_classifier(list(purpose_text_to_labels))):
@@ -136,7 +147,7 @@ class GraphBuilder:
                     for purpose in purpose_text_to_labels[purpose_text]:
                         edge_purposes.add((purpose, purpose_text))
 
-                for _, _, edge_data in G_collect.in_edges(data_type_src, data=True):
+                for _, _, _, edge_data in G_collect.in_edges(data_type_src, keys=True, data=True):
                     edge_data["purposes"] = sorted(edge_purposes)
 
         def build_subsum_and_coref_graphs():
@@ -152,11 +163,11 @@ class GraphBuilder:
                 src1 = bfs_queue.popleft()
                 token_type = token_type_map[src1]
 
-                in_edge_view = document.token_relationship.in_edges(src1, data=True)
-                out_edge_view = document.token_relationship.out_edges(src1, data=True)
+                in_edge_view = document.token_relationship.in_edges(src1, keys=True)
+                out_edge_view = document.token_relationship.out_edges(src1, keys=True)
 
-                for edge_from, edge_to, data in itertools.chain(in_edge_view, out_edge_view):
-                    if (relationship := data["relationship"]) in ["SUBSUM", "COREF"]:
+                for edge_from, edge_to, relationship in itertools.chain(in_edge_view, out_edge_view):
+                    if relationship in ["SUBSUM", "COREF"]:
                         src2 = edge_to if src1 == edge_from else edge_from
 
                         if token_type_map.setdefault(src2, token_type) == token_type:
@@ -182,10 +193,10 @@ class GraphBuilder:
                         (_, src2), = G_coref.out_edges(src1)
 
                         if src1 in G_collect:
-                            nx.contracted_nodes(G_collect, src2, src1, self_loops=False, copy=False)
+                            contracted_nodes(G_collect, src2, src1)
 
                         if src1 in G_subsum:
-                            nx.contracted_nodes(G_subsum, src2, src1, self_loops=False, copy=False)
+                            contracted_nodes(G_subsum, src2, src1)
                     case _:
                         # A phrase graph allows one token to have multiple COREF edges
                         # Turn them into SUBSUM edges
@@ -272,8 +283,8 @@ class GraphBuilder:
             relationship = "SUBSUM"
 
             for src1, src2 in G_subsum.edges():
-                sent1 = document.get_token_with_src(src1).sent.text
-                sent2 = document.get_token_with_src(src2).sent.text
+                sent1 = document.get_token_with_src(src1).sent.text.strip()
+                sent2 = document.get_token_with_src(src2).sent.text.strip()
 
                 src1_terms = normalized_terms_map[src1]
                 src2_terms = normalized_terms_map[src2]
@@ -304,14 +315,12 @@ class GraphBuilder:
         def merge_collect_graph():
             """Step 7: Populate COLLECT edges in G_final from G_collect."""
 
-            for src1, src2, data in G_collect.edges(data=True):
-                sent1 = document.get_token_with_src(src1).sent.text
-                sent2 = document.get_token_with_src(src2).sent.text
+            for src1, src2, relationship, data in G_collect.edges(keys=True, data=True):
+                sent1 = document.get_token_with_src(src1).sent.text.strip()
+                sent2 = document.get_token_with_src(src2).sent.text.strip()
 
                 src1_terms = normalized_terms_map[src1]
                 src2_terms = normalized_terms_map[src2]
-
-                relationship = data["relationship"]
 
                 for n1, n2 in itertools.product(src1_terms, src2_terms):
                     if G_final.nodes[n1]['type'] == "ACTOR" and G_final.nodes[n2]['type'] == "DATA":
@@ -347,7 +356,7 @@ def trim_graph(graph):
     important_nodes = set()
 
     for d1, d2, rel in graph.edges(keys=True):
-        if rel in COLLECT_EDGE_TYPES:
+        if rel in CollectionAnnotator.EDGE_TYPES:
             important_nodes.add(d1)
             important_nodes.add(d2)
 

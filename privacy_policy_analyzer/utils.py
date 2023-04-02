@@ -1,6 +1,6 @@
-from spacy.tokens import Doc, Token, Span
-from spacy.language import Language
 import spacy
+from spacy.language import Language
+from spacy.tokens import Doc, Span, Token
 
 
 def is_left_bracket(char: str) -> bool:

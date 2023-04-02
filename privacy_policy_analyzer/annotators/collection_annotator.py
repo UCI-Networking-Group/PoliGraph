@@ -307,19 +307,21 @@ class CollectionAnnotator(BaseAnnotator):
     """The collection annotator"""
 
     ACTION_MAP = {
-        ("COLLECT", False): [(0, 1, "COLLECT", "COLLECT")],
-        ("COLLECT", True):  [(0, 1, "NOT_COLLECT", "COLLECT")],
-        ("SHARE", False):   [(2, 1, "COLLECT", "SHARE_WITH"),
-                             (0, 1, "COLLECT", "COLLECT")],
-        ("SHARE", True):    [(2, 1, "NOT_COLLECT", "SHARE_WITH")],
-        ("SELL", False):    [(2, 1, "COLLECT", "SELL_TO"),
-                             (0, 1, "COLLECT", "COLLECT")],
-        ("SELL", True):     [(2, 1, "NOT_COLLECT", "SELL_TO")],
-        ("USE", False):     [(0, 1, "COLLECT", "USE")],
-        ("USE", True):      [(0, 1, "NOT_COLLECT", "USE")],
-        ("STORE", False):   [(0, 1, "COLLECT", "STORE")],
-        ("STORE", True):    [(0, 1, "NOT_COLLECT", "STORE")],
+        ("COLLECT", False): [(0, 1, "COLLECT")],
+        ("COLLECT", True):  [(0, 1, "NOT_COLLECT")],
+        ("SHARE", False):   [(2, 1, "SHARE_WITH"),
+                             (0, 1, "COLLECT")],
+        ("SHARE", True):    [(2, 1, "NOT_SHARE_WITH")],
+        ("SELL", False):    [(2, 1, "SELL_TO"),
+                             (0, 1, "COLLECT")],
+        ("SELL", True):     [(2, 1, "NOT_SELL_TO")],
+        ("USE", False):     [(0, 1, "USE")],
+        ("USE", True):      [(0, 1, "NOT_USE")],
+        ("STORE", False):   [(0, 1, "STORE")],
+        ("STORE", True):    [(0, 1, "NOT_STORE")],
     }
+
+    EDGE_TYPES = frozenset(edge_type for li in ACTION_MAP.values() for _, _, edge_type in li)
 
     def __init__(self, nlp):
         super().__init__(nlp)
@@ -360,7 +362,7 @@ class CollectionAnnotator(BaseAnnotator):
         def make_links(action, neg_flag, args):
             nonlocal matcher, sent
 
-            for entity_idx, data_idx, relation, action in self.ACTION_MAP[action, neg_flag]:
+            for entity_idx, data_idx, relation in self.ACTION_MAP[action, neg_flag]:
                 entity_tokens = args[entity_idx]
                 data_tokens = args[data_idx]
 
@@ -370,7 +372,7 @@ class CollectionAnnotator(BaseAnnotator):
                     for entity in entity_tokens:
                         for dtype in data_tokens:
                             self.logger.info("Edge %s (%s): %r -> %r", relation, action, entity._.ent, dtype._.ent)
-                            document.link(entity, dtype, relation, action=action)
+                            document.link(entity, dtype, relation)
 
         for doc in document.iter_docs():
             for sent in doc.sents:
