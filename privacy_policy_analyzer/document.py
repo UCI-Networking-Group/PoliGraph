@@ -126,11 +126,10 @@ class PolicyDocument:
     """Container of privacy policy document"""
 
     @classmethod
-    def initialize(cls, workdir, nlp):
+    def initialize(cls, workdir, nlp: Language):
         obj = cls(flag=True)
         obj.workdir = Path(workdir)
         obj.token_relationship = nx.MultiDiGraph()
-        obj.nlp = nlp
 
         with open(obj.workdir / "accessibility_tree.json", encoding="utf-8") as fin:
             accessibility_tree = json.load(fin)
@@ -166,16 +165,15 @@ class PolicyDocument:
         return obj
 
     @classmethod
-    def load(cls, workdir, nlp):
+    def load(cls, workdir, nlp: Language):
         obj = cls(flag=True)
         obj.workdir = Path(workdir)
-        obj.nlp = nlp
 
         with open(obj.workdir / "document.pickle", "rb") as fin:
             (obj.token_relationship, obj.segments, docbin_bytes) = pickle.load(fin)
 
         serialized_docs = DocBin().from_bytes(docbin_bytes)
-        obj.all_docs = dict()
+        obj.all_docs = {}
 
         for doc in serialized_docs.get_docs(nlp.vocab):
             doc_id = doc.user_data["id"]
@@ -190,9 +188,8 @@ class PolicyDocument:
         # Make linter happy
         self.workdir: Path
         self.all_docs: dict[tuple[int, int], Doc]
-        self.token_relationship: nx.DiGraph
+        self.token_relationship: nx.MultiDiGraph
         self.segments: list[DocumentSegment]
-        self.nlp: Language
 
     def print_tree(self):
         with io.StringIO() as fout:
@@ -250,7 +247,7 @@ class PolicyDocument:
 
         yield from self.token_relationship.get_edge_data(src1, src2)
 
-    def get_all_links(self, token, direction=None):
+    def get_all_links(self, token: Token, direction="out"):
         doc = token.doc
         source_rmap = doc.user_data["source_rmap"]
 
@@ -258,7 +255,7 @@ class PolicyDocument:
             return
 
         match direction:
-            case None | "out":
+            case "out":
                 edge_view = self.token_relationship.out_edges(token._.src, keys=True)
             case "in":
                 edge_view = self.token_relationship.in_edges(token._.src, keys=True)

@@ -73,7 +73,7 @@ class CoreferenceAnnotator(BaseAnnotator):
 
             for noun_phrase in sent.ents:
                 found = False
-                startswith_det = noun_phrase[0].lemma_ in {"this", "that", "these", "those"}
+                startswith_det = noun_phrase[0].lemma_ in {"this", "that", "these", "those", "such"}
 
                 if startswith_det and noun_phrase[0].head == noun_phrase[-1]:
                     # Resolve this/that/these/those xxx

@@ -2,6 +2,13 @@ import spacy
 from spacy.language import Language
 from spacy.tokens import Doc, Span, Token
 
+TRIVIAL_WORDS = frozenset([
+    "some", "all", "any", "variety", "category", "example", "more",
+    "such", "other", "following", "below", "additional", "certain", "similar",
+    "limited", "various", "further", "enough", "e.g.", "i.e.", "etc",
+    "which", "that", "collectively", "hereinafter", "detailed",
+])
+
 
 def is_left_bracket(char: str) -> bool:
     return char in ('(', '[', '{')
@@ -19,10 +26,6 @@ def get_matched_bracket(char: str) -> str:
     }[char]
 
 
-@Language.component(
-    "align_noun_phrases",
-    requires=["doc.ents", "token.ent_iob", "token.ent_type", "token.tag", "token.sent_start"],
-)
 def align_noun_phrases(doc: Doc) -> Doc:
     """Partitions noun phrases and aligns named entities
 
@@ -162,8 +165,7 @@ def align_noun_phrases(doc: Doc) -> Doc:
     requires=["doc.ents", "token.ent_iob", "token.ent_type", "token.tag", "token.sent_start"],
 )
 def label_all_phrases(doc: Doc) -> Doc:
-    if "noun_phrases" not in doc.spans:
-        doc = align_noun_phrases(doc)
+    align_noun_phrases(doc)
 
     doc.set_ents([], default="outside")
 
@@ -182,6 +184,8 @@ def label_all_phrases(doc: Doc) -> Doc:
         relabelled_ents.append(Span(doc, span.start, span.end, label))
 
     doc.set_ents(relabelled_ents, default="outside")
+    del doc.spans["noun_phrases"]
+
     return doc
 
 

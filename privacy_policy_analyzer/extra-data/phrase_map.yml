@@ -1,7 +1,7 @@
 DATA:
   UNSPECIFIC:
-    - '^(information|data|datum)(we collect| about (you|user|our user))?$'
     - '^(technology|data|datum|information)$'
+    - '^(information|data|datum)( we collect| you provide| about (you|user|our user))?$'
 
   personal information:
     - '^((your|user|the)\s+)?personal (data|info|information|datum)$'
@@ -107,8 +107,8 @@ DATA:
     - '(customer|emergency) contact$'
 
   person name:
-    - '(first|last|family|middle|given|real|legal|maiden|person|contact|passenger|personal|full|sur)\s*name'
-    - '^(your )?name$'
+    - '(your|first|last|family|middle|given|real|legal|maiden|person|contact|passenger|personal|full|sur)\s*name'
+    - '^name$'
 
   phone number:
     - '(tele)?phone (mobile )?number'
@@ -214,6 +214,9 @@ DATA:
   - '(anonymous|pseudonymous)\b.*\bidentifier'
 
 ACTOR:
+  IGNORE:
+  - '^(you|user|customer|visitor|friend)$'
+
   we:
   - '^(we|us|i)$'
   - '^our (service|(web)?site|product|server|app(lication|s)?|mobile application|system|software|company|business|platform)$'
@@ -227,6 +230,7 @@ ACTOR:
   - '(other|another|external|outside) (service|provider|partner|vendor|website|site|company|platform|contractor|party|business|organi[sz]ation|entities)$'
   - '(our|other|another|external|outside) (partner|vendor)'
   - '^(our|other|another|external|outside)?\b.*\bservice provider$'
+  - '^(affiliate|app|application|business|company|corporation|organization|partner|party|product|provider|service|site|software|subsidiary|vendor|website)$'
   - '!(ad(vertis\w+)?|social|(e-?)?mail|analytics?|measurement|market(ing)?|track(ing)?|content|search|payment|government|auth(entication)?)'
 
   advertiser:
@@ -255,7 +259,3 @@ ACTOR:
   - '(e-?mail|electronic mail)(ing)?\b.*\b(provider|service|vendor)'
   - 'provider of\b.*\bemail'
   - 'service provider\b.*\bsend e-?mail'
-
-  # Not in use
-  search engine:
-  - 'search (engine|information|result)\b.*\b(provider)?'

@@ -1,7 +1,9 @@
 import contextlib
 import functools
+import itertools
 import json
 from contextlib import contextmanager
+from .annotators import CollectionAnnotator
 
 import networkx as nx
 import yaml
@@ -115,130 +117,193 @@ def _all_shortest_paths_wrap(*args, **kwargs):
         return
 
 
+def contracted_nodes(G: nx.Graph, u, v):
+    """Contract node v into u in the graph G
+
+    If G is a multi graph, we implement contraction ourselves because
+    nx.contracted_nodes does not preserve key for multi graphs."""
+
+    if not G.is_multigraph():
+        nx.contracted_nodes(G, u, v, self_loops=False, copy=False)
+    else:
+        edges_to_remap = itertools.chain(G.in_edges(v, keys=True, data=True), G.out_edges(v, keys=True, data=True))
+
+        for (prev_w, prev_x, key, data) in edges_to_remap:
+            w = prev_w if prev_w != v else u
+            x = prev_x if prev_x != v else u
+
+            if w != x and not G.has_edge(w, x, key):
+                G.add_edge(w, x, key, **data)
+
+        G.remove_node(v)
+
+
+class KGraphRelation:
+    def __init__(self, graph: nx.MultiDiGraph, relation: str, src_node: str, dst_node: str,
+                 path: list[tuple[str, str, str]]):
+        self._graph = graph
+        self._relation = relation
+        self._src = src_node
+        self._dst = dst_node
+        self._path = path
+
+    def get_text(self):
+        all_text = set()
+
+        for u, v, key in self._path:
+            edge_data = self._graph.get_edge_data(u, v, key)
+
+            for text in edge_data['text']:
+                if text not in all_text:
+                    yield text
+                    all_text.add(text)
+
+    def __bool__(self):
+        return True
+
+
 class KGraph:
     def __init__(self, path, merge_geolocation=False):
         with open(path, "r", encoding="utf-8") as fin:
-            kgraph = yaml_load_graph(fin)
-
-        self.kgraph :nx.MultiDiGraph = kgraph
-
-        # NOT_COLLECT is not used
-        edges_to_remove = []
-        for u, v, k in kgraph.edges(keys=True):
-            if k == "NOT_COLLECT":
-                edges_to_remove.append((u, v, k))
-        kgraph.remove_edges_from(edges_to_remove)
+            kgraph: nx.MultiDiGraph = yaml_load_graph(fin)
 
         if merge_geolocation:
             # Merge geolocation / precise geolocation / coarse geolocation to align with PoliCheck
-            if "geolocation" not in kgraph:
-                kgraph.add_node("geolocation", type="DATA")
-
             for node in "precise geolocation", "coarse geolocation":
                 if node in kgraph:
-                    for parent, _, rel, data in kgraph.in_edges(node, keys=True, data=True):
-                        if parent != "geolocation":
-                            kgraph.add_edge(parent, "geolocation", key=rel, **data)
-
-                    for _, child, rel, data in kgraph.out_edges(node, keys=True, data=True):
-                        if child != "geolocation":
-                            kgraph.add_edge("geolocation", child, key=rel, **data)
-
-                    kgraph.remove_node(node)
+                    kgraph.add_node("geolocation", type="DATA")
+                    contracted_nodes(kgraph, "geolocation", "precise geolocation")
 
         # For convenience, reverse all entity subsumption
-        for u, v, rel, edge_data in list(kgraph.edges(keys=True, data=True)):
-            if rel == "SUBSUM" and kgraph.nodes[u]["type"] == "ACTOR":
-                kgraph.remove_edge(u, v, rel)
-                kgraph.add_edge(v, u, "SUBSUM_BY", **edge_data)
+        for u, v, key, data in list(kgraph.edges(keys=True, data=True)):
+            if key == "SUBSUM" and kgraph.nodes[u]["type"] == "ACTOR":
+                kgraph.remove_edge(u, v, key)
+                kgraph.add_edge(v, u, "SUBSUM_BY", **data)
+
+        # Separate positive and negative COLLECT edges to two graphs
+        self.negative_kgraph = negative_kgraph = nx.MultiDiGraph()
+        negative_kgraph.add_nodes_from(kgraph.nodes(data=True))
+        negative_edges = []
+
+        for u, v, key, data in kgraph.edges(keys=True, data=True):
+            if key in ("SUBSUM", "SUBSUM_BY"):
+                negative_kgraph.add_edge(u, v, key, **data)
+            elif key in CollectionAnnotator.NEGATIVE_EDGE_TYPES:
+                negative_kgraph.add_edge(u, v, key, **data)
+                negative_edges.append((u, v, key))
+
+        self.positive_kgraph = positive_kgraph = kgraph
+        positive_kgraph.remove_edges_from(negative_edges)
 
     @property
     def datatypes(self):
-        for node, data in self.kgraph.nodes(data=True):
+        for node, data in self.positive_kgraph.nodes(data=True):
             if data["type"] == "DATA":
                 yield node
 
     @property
     def entities(self):
-        for node, data in self.kgraph.nodes(data=True):
+        for node, data in self.positive_kgraph.nodes(data=True):
             if data["type"] == "ACTOR":
                 yield node
 
+    def can_collect(self, entity, datatype):
+        G = self.positive_kgraph
+
+        if G.nodes[entity]["type"] != "ACTOR" or G.nodes[entity]["datatype"] != "DATA":
+            return False
+        else:
+            return nx.has_path(G, entity, datatype)
+
+    def cannot_collect(self, entity, datatype):
+        G = self.negative_kgraph
+
+        if G.nodes[entity]["type"] != "ACTOR" or G.nodes[entity]["datatype"] != "DATA":
+            return False
+        else:
+            return nx.has_path(G, entity, datatype)
+
     def who_collect(self, datatype):
-        if datatype not in self.kgraph.nodes or self.kgraph.nodes[datatype]["type"] != "DATA":
+        G = self.positive_kgraph
+
+        if G.has_node(datatype) and G.nodes[datatype]["type"] == "DATA":
+            for node in nx.ancestors(G, datatype):
+                if G.nodes[node]["type"] == "ACTOR":
+                    yield node
+
+    def ancestors(self, anchor_node):
+        G = self.positive_kgraph
+
+        if anchor_node not in G:
             return
 
-        for node in nx.ancestors(self.kgraph, datatype):
-            if self.kgraph.nodes[node]["type"] == "ACTOR":
-                yield node
-
-    def ancestors(self, node):
-        if node not in self.kgraph:
-            return
-
-        match node_type := self.kgraph.nodes[node]["type"]:
+        match node_type := G.nodes[anchor_node]["type"]:
             case "DATA":
-                li = nx.ancestors(self.kgraph, node)
+                li = nx.ancestors(G, anchor_node)
             case "ACTOR":
-                li = nx.descendants(self.kgraph, node)
-            case _:
-                assert False
+                li = nx.descendants(G, anchor_node)
 
         for node in li:
-            if self.kgraph.nodes[node]["type"] == node_type:
+            if G.nodes[node]["type"] == node_type:
                 yield node
 
-    def descendants(self, node):
-        if node not in self.kgraph:
+    def descendants(self, anchor_node):
+        G = self.positive_kgraph
+
+        if anchor_node not in G:
             return
 
-        match node_type := self.kgraph.nodes[node]["type"]:
+        match node_type := G.nodes[anchor_node]["type"]:
             case "DATA":
-                li = nx.descendants(self.kgraph, node)
+                li = nx.descendants(G, anchor_node)
             case "ACTOR":
-                li = nx.ancestors(self.kgraph, node)
-            case _:
-                assert False
+                li = nx.ancestors(G, anchor_node)
 
         for node in li:
-            if self.kgraph.nodes[node]["type"] == node_type:
+            if G.nodes[node]["type"] == node_type:
                 yield node
 
     def subsum(self, node1, node2):
-        if node1 not in self.kgraph or node2 not in self.kgraph:
-            return False
+        G = self.positive_kgraph
 
-        node_type = self.kgraph.nodes[node1]["type"]
+        if not(G.has_node(node1) and G.has_node(node2)):
+            return None
 
-        if node_type != self.kgraph.nodes[node2]["type"]:
-            return False
+        node_type = G.nodes[node1]["type"]
+
+        if node_type != G.nodes[node2]["type"]:
+            return None
 
         match node_type:
             case "DATA":
-                return nx.has_path(self.kgraph, node1, node2)
+                src, dst = node1, node2
+                edge_type = "SUBSUM"
             case "ACTOR":
-                return nx.has_path(self.kgraph, node2, node1)
-            case _:
-                assert False
+                src, dst = node2, node1
+                edge_type = "SUBSUM_BY"
+
+        try:
+            shortest_path = nx.shortest_path(G, src, dst)
+        except nx.exception.NetworkXNoPath:
+            return None
+
+        keyed_path = [(u, v, edge_type) for u, v in zip(shortest_path[:-1], shortest_path[1:])]
+        return KGraphRelation(G, "SUBSUM", node1, node2, keyed_path)
 
     def purposes(self, entity, datatype):
         purposes = set()
+        G = self.positive_kgraph
 
         # nx.all_simple_paths or nx.all_shortest_paths?
         # I feel shortest_paths would be less affected by vague language
-        for path in _all_shortest_paths_wrap(self.kgraph, entity, datatype):
+        for path in _all_shortest_paths_wrap(G, entity, datatype):
             for u, v in zip(path[:-1], path[1:]):
-                try:
-                    edge_view = self.kgraph.edges[u, v, "COLLECT"]
-                except KeyError:
-                    continue
-
-                for p, _ in edge_view["purposes"]:
-                    if p is not None and p not in purposes:
-                        purposes.add(p)
-                        yield p
-
-                break
+                for key, data in G.get_edge_data(u, v).items():
+                    if key in CollectionAnnotator.POSITIVE_EDGE_TYPES:
+                        for p in data["purposes"]:
+                            if p is not None and p not in purposes:
+                                purposes.add(p)
+                                yield p
 
     def get_text(self, node1, node2):
         """Get the policy texts that lead to the relation between two nodes:
@@ -249,12 +314,12 @@ class KGraph:
         """
         all_text = set()
 
-        if self.kgraph.nodes[node2]["type"] == "ACTOR":
+        if self.positive_kgraph.nodes[node2]["type"] == "ACTOR":
             node1, node2 = node2, node1
 
-        for path in _all_shortest_paths_wrap(self.kgraph, node1, node2):
+        for path in _all_shortest_paths_wrap(self.positive_kgraph, node1, node2):
             for u, v in zip(path[:-1], path[1:]):
-                for edge_type, data in self.kgraph.get_edge_data(u, v).items():
+                for _, data in self.positive_kgraph.get_edge_data(u, v).items():
                     for text in data["text"]:
                         if text not in all_text:
                             all_text.add(text)

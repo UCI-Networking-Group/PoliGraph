@@ -11,11 +11,10 @@ import yaml
 
 from privacy_policy_analyzer.annotators import CollectionAnnotator
 from privacy_policy_analyzer.document import PolicyDocument
-from privacy_policy_analyzer.graph_utils import yaml_dump_graph
-from privacy_policy_analyzer.named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS, TRIVIAL_WORDS
+from privacy_policy_analyzer.graph_utils import yaml_dump_graph, contracted_nodes
 from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
 from privacy_policy_analyzer.purpose_classification import PurposeClassifier
-from privacy_policy_analyzer.utils import setup_nlp_pipeline
+from privacy_policy_analyzer.utils import TRIVIAL_WORDS, setup_nlp_pipeline
 
 
 def simplify_phrase(phrase):
@@ -48,27 +47,6 @@ def dag_add_edge(G, n1, n2, *args, **kwargs):
     else:
         G.add_edge(n1, n2, *args, **kwargs)
         return True
-
-
-def contracted_nodes(G: nx.Graph, u, v):
-    """Contract node v into u in the graph G
-
-    If G is a multi graph, we implement contraction ourselves because
-    nx.contracted_nodes does not preserve key for multi graphs."""
-
-    if not G.is_multigraph():
-        nx.contracted_nodes(G, u, v, self_loops=False, copy=False)
-    else:
-        edges_to_remap = itertools.chain(G.in_edges(v, keys=True, data=True), G.out_edges(v, keys=True, data=True))
-
-        for (prev_w, prev_x, key, data) in edges_to_remap:
-            w = prev_w if prev_w != v else u
-            x = prev_x if prev_x != v else u
-
-            if w != x and not G.has_edge(w, x, key):
-                G.add_edge(w, x, key, **data)
-
-        G.remove_node(v)
 
 
 class GraphBuilder:
@@ -235,41 +213,26 @@ class GraphBuilder:
                 if (phrase := _expand_phrase(src)) is None:
                     continue
 
-                lemma = " ".join(t.lemma_ for t in simplify_phrase(phrase))
-
-                # Skip empty string (NLP error) and "you" (entity but meaningless)
-                if lemma in ("", "you", "user"):
-                    continue
-
                 match token_type:
                     case "DATA":
                         terms.update(self.data_phrase_normalizer.normalize(phrase))
-
-                        if len(terms) == 0:
-                            if lemma in DATATYPE_KEYWORDS or lemma in TRIVIAL_WORDS:
-                                terms.add('UNSPECIFIC')
-                            else:
-                                terms.add(lemma)
                     case "ACTOR":
                         # if there is any proper noun, run entity_mapper to find company names
                         if any(t.pos_ == "PROPN" for t in phrase):
                             terms.update(self.entity_mapper.match_name(phrase.text))
 
                         # try rule-based normalizer
-                        terms.update(self.actor_phrase_normalizer.normalize(phrase))
+                        terms.update(self.actor_phrase_normalizer.normalize(phrase, fallback_to_stem=len(terms) == 0))
 
-                        # try lemmatizer
-                        if len(terms) == 0:
-                            if lemma in ACTOR_KEYWORDS or lemma in TRIVIAL_WORDS:
-                                terms.add("UNSPECIFIC")
-                            else:
-                                terms.add(lemma)
+                if "IGNORE" in terms:
+                    terms.clear()
+                    continue
 
                 if "UNSPECIFIC" in terms:
                     terms.remove("UNSPECIFIC")
 
                     if src in G_subsum and G_subsum.out_degree(src) > 0:
-                        terms.add(f"{lemma} {src}")
+                        terms.add(f"{phrase.root.lemma_} {src}")
                     else:
                         terms.add(f"UNSPECIFIC_{token_type}")
 
@@ -281,7 +244,7 @@ class GraphBuilder:
 
                 G_final.add_nodes_from(terms, type=token_type)
 
-                logging.info("Phrase %r (%s) -> %r", phrase.text, token_type, ", ".join(terms))
+                logging.info("Phrase %r (%s) -> %r", phrase.text, token_type, ", ".join(sorted(terms)))
 
         def merge_subsum_graph():
             """Step 6: Populate SUBSUM edges in G_final from G_subsum."""

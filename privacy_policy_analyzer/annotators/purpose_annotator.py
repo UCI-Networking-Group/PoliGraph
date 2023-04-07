@@ -1,15 +1,18 @@
 from spacy.matcher import DependencyMatcher
 
-from ..named_entity_recognition import ACTOR_KEYWORDS, DATATYPE_KEYWORDS, TRIVIAL_WORDS
+from ..utils import TRIVIAL_WORDS
 from .base import BaseAnnotator
 from .collection_annotator import CollectionAnnotator
 
 
 class PurposeValidator:
+    ADDITIONAL_STOP_WORDS = frozenset({*TRIVIAL_WORDS, "purpose", "reason", "use"})
+
     def __init__(self, vocab):
         self.deny_matcher = DependencyMatcher(vocab)
 
         patterns = []
+        # For ... period
         patterns.append([
             {
                 "RIGHT_ID": "anchor",
@@ -20,7 +23,7 @@ class PurposeValidator:
                 "REL_OP": ">",
                 "RIGHT_ID": "r00",
                 "RIGHT_ATTRS": {"LEMMA": {"IN": [
-                    "day", "week", "month", "year", "period", "time", "instance"]
+                    "day", "week", "month", "year", "period", "time", "instance", "duration"]
                 }}
             },
         ])
@@ -52,11 +55,6 @@ class PurposeValidator:
         ])
         self.deny_matcher.add("DENY", patterns)
 
-        self.additional_stop_words = {"purpose", "reason", "use"}
-        self.additional_stop_words.update(ACTOR_KEYWORDS)
-        self.additional_stop_words.update(DATATYPE_KEYWORDS)
-        self.additional_stop_words.update(TRIVIAL_WORDS)
-
     def __call__(self, span):
         if self.deny_matcher(span):
             return False
@@ -65,7 +63,9 @@ class PurposeValidator:
             return False
 
         for token in span:
-            if not(token.is_stop or token.lemma_ in self.additional_stop_words):
+            if (not token.is_stop
+                and token.ent_type_ not in ('DATA', 'ACTOR')
+                and token.lemma_ not in self.ADDITIONAL_STOP_WORDS):
                 return True
 
 

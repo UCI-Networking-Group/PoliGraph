@@ -14,10 +14,11 @@ class SubjectAnnotator(BaseAnnotator):
 
         self.matcher = DependencyMatcher(self.vocab)
 
+        # from/about children / minors / kids
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"LEMMA": "from", "DEP": "prep"},
+                "RIGHT_ATTRS": {"LEMMA": {"IN": ["from", "about"]}, "DEP": "prep"},
             },
             {
                 "LEFT_ID": "anchor",
@@ -29,35 +30,45 @@ class SubjectAnnotator(BaseAnnotator):
 
         self.matcher.add("FROM_CHILDREN", [pattern])
 
+        # from ... under ... age/years
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"LEMMA": "from", "DEP": "prep"},
+                "RIGHT_ATTRS": {"LEMMA": {"IN": ["from", "about"]}, "DEP": "prep"},
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": ">>",
                 "RIGHT_ID": "prep_under",
-                "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(under|of|in)$"}, "DEP": "prep"}
+                "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(under|of)$"}, "DEP": "prep"}
             },
             {
                 "LEFT_ID": "prep_under",
                 "REL_OP": ">",
                 "RIGHT_ID": "pobj_age",
-                "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(age|year|\d+)$"}, "DEP": "pobj"}
+                "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(age|year|old|\d+)$"}, "DEP": "pobj"}
             },
         ]
 
         self.matcher.add("UNDER_AGE", [pattern])
 
+        # children's information
+        pattern = [
+            {
+                "RIGHT_ID": "anchor",
+                "RIGHT_ATTRS": {"ENT_TYPE": "DATA"},
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": ">",
+                "RIGHT_ID": "poss",
+                "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(child|minor|kid)$"}, "DEP": "poss"}
+            },
+        ]
+
+        self.matcher.add("CHILDREN_POSS", [pattern])
+
     def annotate(self, document):
-        def poss_is_children(root_token):
-            for token in root_token.subtree:
-                if token.dep_ == "poss" and token.lemma_ in ("child", "minor", "kid"):
-                    return True
-
-            return False
-
         visited_data_src = set()
 
         for _, src2, relationship in document.token_relationship.edges(keys=True):
@@ -67,6 +78,6 @@ class SubjectAnnotator(BaseAnnotator):
                 data_token = document.get_token_with_src(src2)
                 sentence = data_token.sent
 
-                if len(self.matcher(sentence)) > 0 or poss_is_children(data_token):
+                if len(self.matcher(sentence)) > 0:
                     self.logger.info("Set children as data subject: %r", sentence.text)
                     document.token_relationship.nodes[src2]['subject'] = 'children'

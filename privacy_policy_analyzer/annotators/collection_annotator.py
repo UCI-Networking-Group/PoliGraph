@@ -35,19 +35,17 @@ def build_dependency_graph(root_token: Token):
     """
 
     def is_interrogative(token: Token):
-        if token.sent[-1].lemma_ == "?":
-            return True
-
         while token.dep_ == "conj":
             token = token.head
 
         left_edge = token.left_edge
 
-        return left_edge.head == token and token.left_edge.tag_ in (
-            "VBP", # _Do_ we ...
-            "MD",  # _Will_ we ...
-            "WRB", # _When/How_ do we ...
-            "WP",  # _What_ information do we ...
+        return left_edge.head == token and (left_edge.pos_, left_edge.tag_) in (
+            ('AUX', "VBP"),   # _Do_ we ...
+            ('AUX', "VBZ"),   # _Does_ this app ...
+            ('AUX', "MD"),    # _Will_ we ...
+            ('SCONJ', "WRB"), # _When/How_ do we ...
+            ('PRON', "WP"),   # _What_ do we ...
         )
 
     def is_negative(token: Token):
@@ -102,11 +100,22 @@ def build_dependency_graph(root_token: Token):
                 if data["dep"] == "obj":
                     modified_dep_tree.add_edge(xcomp_root_token, node, dep="subj")
 
+    def handle_ccomp(parent_token: Token, ccomp_root_token: Token):
+        modified_dep_tree.add_edge(parent_token, ccomp_root_token, dep="ccomp")
+        dfs(ccomp_root_token)
+
     def handle_appos(parent_token: Token, appos_token: Token):
         modified_dep_tree.add_node(appos_token, negation=is_negative(parent_token))
 
         for grand_parent_token, _, data in modified_dep_tree.in_edges(parent_token, data=True):
             modified_dep_tree.add_edge(grand_parent_token, appos_token, **data)
+
+    def handler_factory(graph_dep: str):
+        def func(parent_token: Token, child_token: Token):
+            modified_dep_tree.add_edge(parent_token, child_token, dep=graph_dep)
+            dfs(child_token)
+
+        return func
 
     def find_all_children(current_token: Token):
         children = list(current_token.children)
@@ -132,6 +141,16 @@ def build_dependency_graph(root_token: Token):
         important_deps = IMPORTANT_DEPS_OF_POS.get(current_token.pos_, [])
         return sorted(filter(lambda t: t.dep_ in important_deps, children))
 
+    dep_handlers = {
+        "nsubj" : handler_factory("subj"),
+        "agent" : handle_agent,
+        "dative": handle_dative,
+        "appos" : handle_appos,
+        "xcomp" : handle_xcomp,
+        "ccomp" : handle_ccomp,
+    }
+    dep_handlers["dobj"] = dep_handlers["nsubjpass"] = dep_handlers["pobj"] = handler_factory("obj")
+
     def dfs(current_token: Token):
         # Check negation
         modified_dep_tree.nodes[current_token]["negation"] = is_negative(current_token)
@@ -141,34 +160,18 @@ def build_dependency_graph(root_token: Token):
             conjuncts = immediate_child.conjuncts
             dependency = immediate_child.dep_
 
+            if dependency not in dep_handlers:
+                dep_handlers[dependency] = handler_factory(dependency)
+
             for child in itertools.chain([immediate_child], conjuncts):
-                match dependency:
-                    case "nsubj":
-                        # Nominal subject
-                        modified_dep_tree.add_edge(current_token, child, dep="subj")
-                        dfs(child)
-                    case "dobj" | "nsubjpass" | "pobj":
-                        # Object or passive subject
-                        modified_dep_tree.add_edge(current_token, child, dep="obj")
-                        dfs(child)
-                    case "agent":
-                        # "by" after a passive verb. Assign grandchildren as "subj" (subject).
-                        handle_agent(current_token, child)
-                    case "dative":
-                        # Dative or indirect object
-                        # give us something => us: dative
-                        # is given to us => to: dative, us: pobj
-                        handle_dative(current_token, child)
-                    case "xcomp":
-                        handle_xcomp(current_token, child)
-                    case "appos":
-                        handle_appos(current_token, child)
-                    case _:
-                        modified_dep_tree.add_edge(current_token, child, dep=dependency)
-                        dfs(child)
+                if not is_interrogative(child):
+                    dep_handlers[dependency](current_token, child)
 
     modified_dep_tree = nx.DiGraph()
     modified_dep_tree.add_node("")
+
+    if root_token.sent[-1].lemma_ == "?":
+        return modified_dep_tree
 
     for token in itertools.chain([root_token], root_token.conjuncts):
         if not is_interrogative(token):
@@ -309,12 +312,12 @@ class CollectionAnnotator(BaseAnnotator):
     ACTION_MAP = {
         ("COLLECT", False): [(0, 1, "COLLECT")],
         ("COLLECT", True):  [(0, 1, "NOT_COLLECT")],
-        ("SHARE", False):   [(2, 1, "SHARE_WITH"),
+        ("SHARE", False):   [(2, 1, "BE_SHARED"),
                              (0, 1, "COLLECT")],
-        ("SHARE", True):    [(2, 1, "NOT_SHARE_WITH")],
-        ("SELL", False):    [(2, 1, "SELL_TO"),
+        ("SHARE", True):    [(2, 1, "NOT_BE_SHARED")],
+        ("SELL", False):    [(2, 1, "BE_SOLD"),
                              (0, 1, "COLLECT")],
-        ("SELL", True):     [(2, 1, "NOT_SELL_TO")],
+        ("SELL", True):     [(2, 1, "NOT_BE_SOLD")],
         ("USE", False):     [(0, 1, "USE")],
         ("USE", True):      [(0, 1, "NOT_USE")],
         ("STORE", False):   [(0, 1, "STORE")],
@@ -322,6 +325,8 @@ class CollectionAnnotator(BaseAnnotator):
     }
 
     EDGE_TYPES = frozenset(edge_type for li in ACTION_MAP.values() for _, _, edge_type in li)
+    NEGATIVE_EDGE_TYPES = frozenset(filter(lambda t: t.startswith("NOT_"), EDGE_TYPES))
+    POSITIVE_EDGE_TYPES = EDGE_TYPES - NEGATIVE_EDGE_TYPES
 
     def __init__(self, nlp):
         super().__init__(nlp)

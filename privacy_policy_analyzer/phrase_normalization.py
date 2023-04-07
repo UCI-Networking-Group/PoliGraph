@@ -6,6 +6,32 @@ import string
 
 import regex
 
+from privacy_policy_analyzer.utils import TRIVIAL_WORDS
+
+
+def trim_phrase(phrase):
+    def dfs(token, state):
+        match state:
+            case "compound" | "nmod" | "pobj" | "nsubj" | "dobj":
+                next_states = {"compound", "amod", "nmod", "prep", "relcl", "acl"}
+            case "prep":
+                next_states = {"pobj"}
+            case "amod":
+                next_states = {"advmod", "npadvmod"}
+            case "relcl" | "acl":
+                next_states = {"nsubj", "dobj"}
+            case _:
+                yield token
+                return
+
+        for t in token.children:
+            if t in phrase and t.dep_ in next_states and t.lemma_ not in TRIVIAL_WORDS:
+                yield from dfs(t, t.dep_)
+
+        yield token
+
+    return sorted(dfs(phrase.root, "compound"))
+
 
 class RuleBasedPhraseNormalizer:
     """Rule-based phrase normalizer"""
@@ -49,20 +75,41 @@ class RuleBasedPhraseNormalizer:
             negative_re = re.compile("|".join(negative_rules) or '$^')  # If no negative rule, '$^' matches nothing
             self.regex_list[norm_name] = (positive_re, negative_re)
 
-    def normalize(self, phrase):
+    def normalize(self, phrase, fallback_to_stem=True):
+        if (phrase.root.lemma_ in TRIVIAL_WORDS
+            or (phrase.root.pos_ == "PRON" and phrase.root.lemma_ not in ("I", "we"))):
+            yield "UNSPECIFIC"
+            return
+
         original_text = phrase.text.strip(string.punctuation)
         lemma_text = phrase.lemma_.strip(string.punctuation)
 
+        negative_names = set()
+        has_match = False
+
+        # First try to match the full phrase or lemmatized full phrase
         for norm_name, (positive_regex, negative_regex) in self.regex_list.items():
-            if (
-                negative_regex.search(original_text) is None
-                and negative_regex.search(lemma_text) is None
-                and (
-                    positive_regex.search(original_text) is not None
-                    or positive_regex.search(lemma_text) is not None
-                )
-            ):
+            if negative_regex.search(original_text) or negative_regex.search(lemma_text):
+                negative_names.add(lemma_text)
+            elif positive_regex.search(original_text) or positive_regex.search(lemma_text):
                 yield norm_name
+                has_match = True
+
+        if not has_match:
+            # If no match, aggressively trim the phrase to get its "stem"
+            phrase_stem = " ".join(t.lemma_ for t in trim_phrase(phrase))
+
+            for norm_name, (positive_regex, negative_regex) in self.regex_list.items():
+                if (norm_name not in negative_names
+                    and positive_regex.search(phrase_stem)
+                    and not negative_regex.search(phrase_stem)):
+
+                    yield norm_name
+                    has_match = True
+
+        # If still no match, yield the stem
+        if fallback_to_stem and not has_match:
+            yield phrase_stem
 
 
 class EntityMatcher:
