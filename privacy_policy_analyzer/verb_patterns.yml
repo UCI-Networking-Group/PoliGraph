@@ -3,6 +3,7 @@ token_map:
   - share
   - trade
   - exchange
+  - disclose
 
   VERB_PROVIDE_WITH:
   - supply
@@ -65,6 +66,14 @@ token_map:
   - allow
   - permit
   - authorize
+
+  VERB_HAVE_TODO:
+  - have
+  - aim
+  - intend
+  - need
+  - seek
+  - continue
 
 patterns:
   # E1 share DT with E2
@@ -140,25 +149,44 @@ patterns:
   # ... allow E1 to collect DT from E2
   - root: '*VERB_ALLOW_TODO:root|ccomp'
     match: ['*VERB_COLLECT_FROM:xcomp,:subj@E1',
-            '*VERB_COLLECT_FROM:xcomp,:obj@DT',
+            '!*VERB_COLLECT_FROM:xcomp,:obj@DT',
             '*VERB_COLLECT_FROM:xcomp,from,:obj@E2']
     transform: ['COLLECT', 'E1', 'DT', 'E2']
 
   # ... allow E1 to share DT with E2
   - root: '*VERB_ALLOW_TODO:root|ccomp'
     match: ['*VERB_SHARE_WITH:xcomp,:subj@E1',
-            '*VERB_SHARE_WITH:xcomp,:obj@DT',
+            '!*VERB_SHARE_WITH:xcomp,:obj@DT',
             '*VERB_SHARE_WITH:xcomp,with,:obj@E2']
     transform: ['SHARE', 'E1', 'DT', 'E2']
 
   # ... allow E1 to use DT
   - root: '*VERB_ALLOW_TODO:root|ccomp'
     match: ['*VERB_USE:xcomp,:subj@E1',
-            '*VERB_USE:xcomp,:obj@DT']
+            '!*VERB_USE:xcomp,:obj@DT']
     transform: ['USE', 'E1', 'DT']
 
   # ... allow E1 to store DT
   - root: '*VERB_ALLOW_TODO:root|ccomp'
     match: ['*VERB_STORE:xcomp,:subj@E1',
-            '*VERB_STORE:xcomp,:obj@DT']
+            '!*VERB_STORE:xcomp,:obj@DT']
+    transform: ['STORE', 'E1', 'DT']
+
+  # E1 have/need to collect DT from E2
+  - root: '*VERB_HAVE_TODO:root|ccomp'
+    match: [':subj@E1',
+            '!*VERB_COLLECT_FROM:xcomp,:obj@DT',
+            '*VERB_COLLECT_FROM:xcomp,from,:obj@E2']
+    transform: ['COLLECT', 'E1', 'DT', 'E2']
+
+  # E1 have/need to use DT
+  - root: '*VERB_HAVE_TODO:root|ccomp'
+    match: [':subj@E1',
+            '!*VERB_USE:xcomp,:obj@DT']
+    transform: ['USE', 'E1', 'DT']
+
+  # E1 have/need to store DT
+  - root: '*VERB_HAVE_TODO:root|ccomp'
+    match: [':subj@E1',
+            '!*VERB_STORE:xcomp,:obj@DT']
     transform: ['STORE', 'E1', 'DT']
