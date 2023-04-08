@@ -10,8 +10,10 @@ def ent_type_is_compatible(ent1, ent2):
     t1 = ent1.root.ent_type_
     t2 = ent2.root.ent_type_
 
-    if (t1 == "DATA" and t2 in ("DATA", "NN")) or (t2 == "DATA" and t1 in ("DATA", "NN")):
-        return True
+    if t1 in ("ACTOR", "DATA"):
+        return t2 in (t1, "NN")
+    else:
+        return t2 in ("ACTOR", "DATA")
 
 
 class SubsumptionAnnotator(BaseAnnotator):
@@ -19,29 +21,31 @@ class SubsumptionAnnotator(BaseAnnotator):
         super().__init__(nlp)
         self.matcher = DependencyMatcher(nlp.vocab)
 
+        pos_is_noun = {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+
         # such as
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"LEMMA": "as", "DEP": "prep"}
+                "RIGHT_ATTRS": {"LEMMA": "as", "DEP": "prep"},
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": ";",
                 "RIGHT_ID": "r00",
-                "RIGHT_ATTRS": {"LEMMA": "such"}
+                "RIGHT_ATTRS": {"LEMMA": "such"},
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": "<",
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": pos_is_noun,
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "pobj", **pos_is_noun},
             }
         ]
         self.matcher.add("SUBSUM_SUCH_AS", [pattern])
@@ -50,19 +54,19 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"DEP": "prep", "LEMMA": {"IN": ["include", "like"]}}
+                "RIGHT_ATTRS": {"DEP": "prep", "LEMMA": {"IN": ["include", "like"]}},
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": "<",
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": pos_is_noun,
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "pobj", **pos_is_noun},
             }
         ]
         self.matcher.add("SUBSUM_INCLUDING_LIKE", [pattern])
@@ -71,19 +75,22 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"POS": "VERB", "LEMMA": "include"}
+                "RIGHT_ATTRS": {"POS": "VERB", "LEMMA": "include"},
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": ">",
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}, "DEP": "nsubj"}
+                "RIGHT_ATTRS": {"DEP": "nsubj",
+                                # e.g. Prevent false positives like "Our website include social media features..."
+                                "ENT_TYPE": {"NOT_IN": ["ACTOR"]},
+                                **pos_is_noun},
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}, "DEP": "dobj"}
+                "RIGHT_ATTRS": {"DEP": "dobj", **pos_is_noun},
             }
         ]
         self.matcher.add("SUBSUM_INCLUDE", [pattern])
@@ -92,19 +99,19 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"POS": "VERB", "DEP": "relcl", "LEMMA": "include"}
+                "RIGHT_ATTRS": {"POS": "VERB", "DEP": "relcl", "LEMMA": "include"},
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": "<",
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": pos_is_noun,
             },
             {
                 "LEFT_ID": "anchor",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}, "DEP": "dobj"}
+                "RIGHT_ATTRS": {"DEP": "dobj", **pos_is_noun},
             }
         ]
         self.matcher.add("SUBSUM_WHICH_INCLUDE", [pattern])
@@ -113,37 +120,37 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "anchor_including",
-                "RIGHT_ATTRS": {"LEMMA": "include"}
+                "RIGHT_ATTRS": {"LEMMA": "include"},
             },
             {
                 "LEFT_ID": "anchor_including",
                 "REL_OP": ">",
                 "RIGHT_ID": "anchor_limited",
-                "RIGHT_ATTRS": {"LEMMA": "limit"}
+                "RIGHT_ATTRS": {"LEMMA": "limit"},
             },
             {
                 "LEFT_ID": "anchor_limited",
                 "REL_OP": ">",
                 "RIGHT_ID": "anchor_not",
-                "RIGHT_ATTRS": {"LEMMA": "not"}
+                "RIGHT_ATTRS": {"DEP": "neg"},
             },
             {
                 "LEFT_ID": "anchor_limited",
                 "REL_OP": ">",
                 "RIGHT_ID": "anchor_to",
-                "RIGHT_ATTRS": {"LEMMA": "to"}
+                "RIGHT_ATTRS": {"LEMMA": "to"},
             },
             {
                 "LEFT_ID": "anchor_including",
                 "REL_OP": "<",
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": pos_is_noun,
             },
             {
                 "LEFT_ID": "anchor_to",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "pobj", **pos_is_noun},
             }
         ]
         self.matcher.add("SUBSUM_INCLUDING_LIMITED_TO", [pattern])
@@ -152,37 +159,37 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "anchor_include",
-                "RIGHT_ATTRS": {"LEMMA": "include"}
+                "RIGHT_ATTRS": {"LEMMA": "include"},
             },
             {
                 "LEFT_ID": "anchor_include",
                 "REL_OP": ">",
                 "RIGHT_ID": "anchor_limit",
-                "RIGHT_ATTRS": {"DEP": "conj", "LEMMA": "limit"}
+                "RIGHT_ATTRS": {"DEP": "conj", "LEMMA": "limit"},
             },
             {
                 "LEFT_ID": "anchor_limit",
                 "REL_OP": ">",
                 "RIGHT_ID": "anchor_not",
-                "RIGHT_ATTRS": {"LEMMA": "not"}
+                "RIGHT_ATTRS": {"DEP": "neg"},
             },
             {
                 "LEFT_ID": "anchor_limit",
                 "REL_OP": ">",
                 "RIGHT_ID": "anchor_to",
-                "RIGHT_ATTRS": {"LEMMA": "to"}
+                "RIGHT_ATTRS": {"LEMMA": "to"},
             },
             {
                 "LEFT_ID": "anchor_include",
                 "REL_OP": ">",
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"DEP": "nsubj", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "nsubj", **pos_is_noun},
             },
             {
                 "LEFT_ID": "anchor_to",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "pobj", **pos_is_noun},
             }
         ]
         self.matcher.add("SUBSUM_INCLUDES_LIMITS_TO", [pattern])
@@ -191,25 +198,25 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": pos_is_noun,
             },
             {
                 "LEFT_ID": "upper_token",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"DEP": "appos", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "appos", **pos_is_noun},
             },
             {
                 "LEFT_ID": "lower_token",
                 "REL_OP": ">",
                 "RIGHT_ID": "prep_for",
-                "RIGHT_ATTRS": {"LEMMA": "for"}
+                "RIGHT_ATTRS": {"LEMMA": "for"},
             },
             {
                 "LEFT_ID": "prep_for",
                 "REL_OP": ">",
                 "RIGHT_ID": "example",
-                "RIGHT_ATTRS": {"LEMMA": "example"}
+                "RIGHT_ATTRS": {"LEMMA": "example"},
             },
         ]
         self.matcher.add("SUBSUM_FOR_EXAMPLE", [pattern])
@@ -218,19 +225,19 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": pos_is_noun,
             },
             {
                 "LEFT_ID": "upper_token",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"DEP": "appos", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "appos", **pos_is_noun},
             },
             {
                 "LEFT_ID": "lower_token",
                 "REL_OP": ">",
                 "RIGHT_ID": "token_especially",
-                "RIGHT_ATTRS": {"LEMMA": {"IN": ["NOUN", "especially", "particularly"]}, "POS": 'ADV'}
+                "RIGHT_ATTRS": {"LEMMA": {"IN": ["especially", "particularly", "namely"]}, "POS": 'ADV'},
             },
         ]
         self.matcher.add("SUBSUM_ESPECIALLY", [pattern])
@@ -239,19 +246,19 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": pos_is_noun,
             },
             {
                 "LEFT_ID": "upper_token",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"DEP": "appos", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "appos", **pos_is_noun},
             },
             {
                 "LEFT_ID": "lower_token",
                 "REL_OP": ">",
                 "RIGHT_ID": "advmod_eg",
-                "RIGHT_ATTRS": {"LEMMA": {"IN": ["e.g.", "eg", "i.e.", "ie"]}}
+                "RIGHT_ATTRS": {"LEMMA": {"IN": ["e.g.", "eg", "i.e.", "ie"]}},
             },
         ]
         self.matcher.add("SUBSUM_EG", [pattern])
@@ -260,25 +267,25 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": pos_is_noun,
             },
             {
                 "LEFT_ID": "upper_token",
                 "REL_OP": ">",
                 "RIGHT_ID": "amod_such",
-                "RIGHT_ATTRS": {"DEP": "amod", "LEMMA": "such"}
+                "RIGHT_ATTRS": {"DEP": "amod", "LEMMA": "such"},
             },
             {
                 "LEFT_ID": "upper_token",
                 "REL_OP": ">",
                 "RIGHT_ID": "prep_as",
-                "RIGHT_ATTRS": {"DEP": "prep", "LEMMA": "as"}
+                "RIGHT_ATTRS": {"DEP": "prep", "LEMMA": "as"},
             },
             {
                 "LEFT_ID": "prep_as",
                 "REL_OP": ">",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "pobj", **pos_is_noun},
             },
         ]
         self.matcher.add("SUBSUM_SUCH_N_AS", [pattern])
@@ -287,7 +294,7 @@ class SubsumptionAnnotator(BaseAnnotator):
         pattern = [
             {
                 "RIGHT_ID": "upper_token",
-                "RIGHT_ATTRS": {"DEP": "appos", "POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": {"DEP": "appos", **pos_is_noun},
             },
             {
                 "LEFT_ID": "upper_token",
@@ -299,7 +306,7 @@ class SubsumptionAnnotator(BaseAnnotator):
                 "LEFT_ID": "upper_token",
                 "REL_OP": "<",
                 "RIGHT_ID": "lower_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
+                "RIGHT_ATTRS": pos_is_noun,
             },
         ]
         self.matcher.add("SUBSUM_COLLECTIVELY", [pattern])
@@ -331,8 +338,8 @@ class SubsumptionAnnotator(BaseAnnotator):
                         yield ent
 
                 for child in token.children:
-                    if (child.dep_ in ["pobj", "dobj", "conj", "appos"] or
-                        child.dep_ == "prep" and child.lemma_ in ["about", "regard"]):
+                    if (child.dep_ in ("pobj", "dobj", "conj", "appos") or
+                        child.dep_ == "prep" and child.lemma_ in ("about", "regard")):
                         bfs_queue.extend(token.children)
 
         matches = self.matcher(doc)
@@ -346,26 +353,21 @@ class SubsumptionAnnotator(BaseAnnotator):
             _, (match_spec, ) = self.matcher.get(match_id)
 
             match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
-            upper_token = match_info["upper_token"]
-            lower_token = match_info["lower_token"]
 
-            if rule_name == "SUBSUM_COLLECTIVELY":
-                lower_token = sorted(lower_token.conjuncts + (lower_token,))[0]
-            else:
-                # Make sure the upper token is always the nearest conj to the lower token
-                # Fix: "We and our partners like Google" -- sometimes "We" is linked to "Google"
-                for alt in upper_token.conjuncts:
-                    if alt.i < lower_token.i and alt.i > upper_token.i:
-                        upper_token = alt
+            # Move lower token to the first conj
+            lower_token = match_info["lower_token"]
+            lower_token = min((lower_token, *lower_token.conjuncts))
+
+            # Make sure the upper token is always the nearest conj to the lower token
+            # Fix: "We and our partners like Google" -- sometimes "We" is linked to "Google"
+            upper_token = match_info["upper_token"]
+            upper_conjuncts = filter(lambda t: (t.i > lower_token.i) == (upper_token.i > lower_token.i),
+                                     upper_token.conjuncts)
+            upper_token = min((upper_token, *upper_conjuncts), key=lambda t: abs(t.i - lower_token.i))
 
             if upper_token.pos_ == "PRON":
                 # Fix: "we/they, such as..." sounds most likely a false positive
                 continue
-
-            if rule_name == "SUBSUM_INCLUDE":
-                # prevent false positives like "Our website include social media features..."
-                if upper_token.ent_type_ == "ACTOR":
-                    continue
 
             if upper_token.dep_ == "attr" and upper_token.head.lemma_ == "be":
                 # e.g.: "Personal data" is information ..., including ...

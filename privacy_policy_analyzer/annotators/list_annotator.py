@@ -11,18 +11,23 @@ class ListAnnotator(BaseAnnotator):
     def try_annotate_segment(self, document: PolicyDocument, root_segment: DocumentSegment):
         child_listitems = []
 
-        for c in root_segment.children:
-            if c.segment_type == SegmentType.LISTITEM and len(c.children) == 1:
-                child_listitems.append(c)
+        for child in root_segment.children:
+            if child.segment_type == SegmentType.LISTITEM and len(child.children) == 1:
+                child_listitems.append(child)
 
         if len(child_listitems) == 0:
             return
 
         context_doc = document.get_doc_with_context(root_segment)
+
+        if len(context_doc) == 0:
+            return
+
         context_tokens = {t._.src for t in context_doc}
         link_to_apply = {}
         child_tokens = []
 
+        # Subsum: "following" -> list items
         for token in context_doc:
             if (token.lemma_, token.dep_) in [("follow", "amod"), ("following", "amod"), ("below", "advmod")]:
                 if ent := token.head._.ent:
@@ -30,6 +35,7 @@ class ListAnnotator(BaseAnnotator):
                     self.logger.info("SUBSUM edges from: %r", ent.sent.text)
                     break
 
+        # Duplicate edges between context and listitems
         for c in child_listitems:
             doc = document.get_doc_without_context(c.children[0])
             root_noun_phrase = next(doc.sents).root._.ent
@@ -54,6 +60,13 @@ class ListAnnotator(BaseAnnotator):
                     link_spec = (None, token2)
                     link_to_apply[link_spec] = relationship
                     self.logger.info("%s edges to: %r", relationship, token2.sent.text)
+
+        if len(link_to_apply) == 0:
+            sent, *res = context_doc.sents
+            sent_root = sent.root
+
+            if len(res) == 0 and sent_root.pos_ in ("NOUN", "PROPN", "PRON") and sent_root.ent_type_ in ('DATA', 'ACTOR'):
+                link_to_apply[(sent_root, None)] = "SUBSUM"
 
         for t in child_tokens:
             for link_spec, relationship in link_to_apply.items():

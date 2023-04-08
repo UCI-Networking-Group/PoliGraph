@@ -290,7 +290,7 @@ class DependencyPatternMatcher:
                 for _, child, data in dependency_graph.out_edges(v, data=True):
                     dfs_match_chain(child, data["dep"], {i: [] for i in range(len(self.all_chains))})
 
-                if len(unmatched_required_indices) == 0:
+                if not unmatched_required_indices:
                     action, *arg_names = self.transform_rule
                     arg_list = []
 

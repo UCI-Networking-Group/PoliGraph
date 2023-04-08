@@ -11,7 +11,7 @@ DATA:
 
   personal identifier:
     - '(personal|user) id(entifier)?'
-    - '(personally|directly)\b.*\bidentif\w+\b.*\b(information|data)'
+    - '(personally|directly)\b.*\bidentif\w+\b.*\b(information|data|datum)'
     - '=PII'
     - 'information\b.*\bidentify\b.*\b(you|individual|person|user)'
     - '!(cannot|no[nt]?)'
@@ -82,8 +82,8 @@ DATA:
   geolocation:
     - '^location$'
     - '(geo-?(graphic)?\s*)?location'
-    - '(geo-?)?location(al)? (information|data|history|detail)'
-    - 'geographic (information|data|history|detail)'
+    - '(geo-?)?location(al)? (information|data|datum|history|detail)'
+    - 'geographic (information|data|datum|history|detail)'
     - 'location (base|relate|specific)'
     - 'location (mapping|tracking) data'
     - '(physical|your) location'
@@ -107,7 +107,7 @@ DATA:
     - '(customer|emergency) contact$'
 
   person name:
-    - '(your|first|last|family|middle|given|real|legal|maiden|person|contact|passenger|personal|full|sur)\s*name'
+    - '(your|first|last|family|middle|given|real|legal|maiden|person|contact|passenger|personal|full|sur|billing)\s*name'
     - '^name$'
 
   phone number:
@@ -115,7 +115,8 @@ DATA:
     - '(mobile|fax|contact) number'
 
   email address:
-    - '(e[\s-]?mail|electronic mail)\b.*\b(address|account|address information)'
+    - '(e-?mail|electronic mail)\b.*\b(address|account|address information)'
+    - '^e-?mail( id)?$'
 
   postal address:
     - '(home|work|postal|physical|residential|street|billing|accurate|shipping|delivery|your|mail|mailing|primary) address'
@@ -127,7 +128,7 @@ DATA:
     - '(device|mobile)\b.*\bid(entifier)?'
     - 'identifier (for|of|link|associate|assign|match|tie|specific)\b.*\bdevice'
     - 'UDID$'
-    - '!(cannot|no[nt]?)'
+    - '!(cannot|no[nt]?|advertising)'
 
   software identifier:
     - 'software\b.*\bid(entifier)?'
@@ -188,7 +189,7 @@ DATA:
   # usage / activity data
   internet activity:
     - '(internet|website|app(lication)?|in-game|on-?line|player|user|system|network) (activity|usage)'
-    - '(activity|usage|access) history'
+    - '(activity|usage|access) (history|data|datum)'
 
   'browsing / search history':
     - '(browsing|search|browser?|online) (history|behaviour|behavior|activity)'

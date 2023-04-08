@@ -109,7 +109,7 @@ class RuleBasedPhraseNormalizer:
 
         # If still no match, yield the stem
         if fallback_to_stem and not has_match:
-            yield phrase_stem
+            yield phrase_stem.lower()
 
 
 class EntityMatcher:
