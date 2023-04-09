@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import re
 import json
 import logging
 import os
@@ -36,6 +37,8 @@ def main():
     parser.add_argument("-o", "--output", required=True, help="Output CSV path")
     args = parser.parse_args()
 
+    term_regex = re.compile(r'^(?P<term>.+?)(?: @(?P<subject>\S+))?(?: (?P<src>\(\d+, \d+\)))?$')
+
     with open(args.output, "w", encoding="utf-8", newline="") as fout:
         writer = csv.DictWriter(fout, fieldnames=["app_id", "entity", "datatype", "text"])
         writer.writeheader()
@@ -48,20 +51,29 @@ def main():
             kgraph_path = os.path.join(d, 'graph_trimmed.yml')
             kgraph = KGraph(kgraph_path)
 
-            first_party_entities = set(kgraph.descendants("we"))
-            first_party_entities.add("we")
+            local_dtype_map = {node: term_regex.match(node)[1] for node in kgraph.datatypes}
+
+            # First party entity names
+            first_party_entity_nodes = {"we"}
+
+            for entity_node in kgraph.entities:
+                entity = term_regex.match(entity_node)[1]
+
+                if entity == "we":
+                    first_party_entity_nodes.add(entity_node)
+                    first_party_entity_nodes.update(kgraph.descendants(entity_node))
+
             app_tuples = defaultdict(set)
 
-            for dtype in DATATYPE_MAPPING_REVERSE.keys():
-                policheck_dtype = DATATYPE_MAPPING_REVERSE[dtype]
+            for dtype_node, dtype in local_dtype_map.items():
+                if policheck_dtype := DATATYPE_MAPPING_REVERSE.get(dtype):
+                    for entity_node in kgraph.who_collect(dtype_node):
+                        all_text = kgraph.get_text(entity_node, dtype_node)
 
-                for entity in kgraph.who_collect(dtype):
-                    all_text = kgraph.get_text(entity, dtype)
-
-                    if entity in first_party_entities:
-                        app_tuples[("we", policheck_dtype)].update(all_text)
-                    else:
-                        app_tuples[("3rd-party", policheck_dtype)].update(all_text)
+                        if entity_node in first_party_entity_nodes:
+                            app_tuples[("we", policheck_dtype)].update(all_text)
+                        else:
+                            app_tuples[("3rd-party", policheck_dtype)].update(all_text)
 
             for entity, datatype in sorted(app_tuples):
                 all_text = sorted(app_tuples[entity, datatype])
