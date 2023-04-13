@@ -38,15 +38,18 @@ def build_dependency_graph(root_token: Token):
         while token.dep_ == "conj":
             token = token.head
 
-        left_edge = token.left_edge
+        aux_pos = 0xFFFF
+        subj_pos = 0
 
-        return left_edge.head == token and (left_edge.pos_, left_edge.tag_) in (
-            ('AUX', "VBP"),   # _Do_ we ...
-            ('AUX', "VBZ"),   # _Does_ this app ...
-            ('AUX', "MD"),    # _Will_ we ...
-            ('SCONJ', "WRB"), # _When/How_ do we ...
-            ('PRON', "WP"),   # _What_ do we ...
-        )
+        for child in token.lefts:
+            if child.tag_ in ('WRB', 'WP'):
+                return True
+            elif child.dep_ == "nsubj":
+                subj_pos = child.i
+            elif child.dep_ == "aux":
+                aux_pos = child.i
+
+        return aux_pos < subj_pos
 
     def is_negative(token: Token):
         for conj in itertools.chain([token], token.conjuncts):

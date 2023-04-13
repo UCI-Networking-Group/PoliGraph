@@ -46,7 +46,7 @@ class SubjectAnnotator(BaseAnnotator):
                 "LEFT_ID": "prep_under",
                 "REL_OP": ">",
                 "RIGHT_ID": "pobj_age",
-                "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(age|year|old|\d+)$"}, "DEP": "pobj"}
+                "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(age|year|old|\d+)$"}, "DEP": {"IN": ["pobj", "amod"]}}
             },
         ]
 

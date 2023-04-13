@@ -155,3 +155,5 @@ nlp_model/
 logs/
 stats/
 figs/
+# cProfile data
+profile*.bin

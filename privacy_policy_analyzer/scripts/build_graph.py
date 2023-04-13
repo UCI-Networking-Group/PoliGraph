@@ -285,38 +285,56 @@ class GraphBuilder:
                         continue
 
                     if not G_final.has_edge(n1, n2, key=relationship):
-                        dag_add_edge(G_final, n1, n2, key=relationship, text=[])
+                        dag_add_edge(G_final, n1, n2, key=relationship, ref=[])
 
                     if G_final.has_edge(n1, n2, key=relationship):
-                        G_final[n1][n2][relationship]["text"].append(" | ".join({sent1, sent2}))
+                        G_final[n1][n2][relationship]["ref"].extend((src1, src2))
 
         def merge_collect_graph():
             """Step 7: Populate COLLECT edges in G_final from G_collect."""
 
             for src1, src2, relationship, data in G_collect.edges(keys=True, data=True):
-                sent1 = document.get_token_with_src(src1).sent.text.strip()
-                sent2 = document.get_token_with_src(src2).sent.text.strip()
-
                 src1_terms = normalized_terms_map[src1]
                 src2_terms = normalized_terms_map[src2]
 
                 for n1, n2 in itertools.product(src1_terms, src2_terms):
                     if G_final.nodes[n1]['type'] == "ACTOR" and G_final.nodes[n2]['type'] == "DATA":
                         if not G_final.has_edge(n1, n2, key=relationship):
-                            dag_add_edge(G_final, n1, n2, key=relationship, text=[], purposes=defaultdict(list))
+                            dag_add_edge(G_final, n1, n2, key=relationship, ref=[], purposes=defaultdict(list))
 
                         if G_final.has_edge(n1, n2, key=relationship):
-                            G_final[n1][n2][relationship]["text"].append(" | ".join({sent1, sent2}))
+                            G_final[n1][n2][relationship]["ref"].extend((src1, src2))
                             purpose_dict = G_final[n1][n2][relationship]["purposes"]
 
                             for purpose, text in data["purposes"]:
                                 purpose_dict[purpose].append(text)
 
-        def cleanup():
-            """Step 8: Cleanup - remove 0-degree nodes"""
+        def finalize():
+            """Step 8: Finalize"""
+
+            # Clean-up zero degree nodes
             for node in list(G_final.nodes()):
                 if G_final.in_degree(node) == G_final.out_degree(node) == 0:
                     G_final.remove_node(node)
+
+            # Turn src on edges into text, remove duplications while keep the order
+            for _, _, _, data in G_final.edges(keys=True, data=True):
+                all_text = []
+
+                for src in sorted(set(data.pop("ref"))):
+                    sentence = document.get_token_with_src(src).sent.text.strip()
+                    all_text.append(sentence)
+
+                dedup_text = set()
+
+                for text in sorted(all_text, key=len, reverse=True):
+                    for existing_text in dedup_text:
+                        if text in existing_text:
+                            break
+                    else:
+                        dedup_text.add(text)
+
+                data["text"] = list(filter(dedup_text.__contains__, all_text))
 
         build_phrase_map_from_ent_labels()
         build_collect_graph()
@@ -325,7 +343,7 @@ class GraphBuilder:
         normalize_terms()
         merge_subsum_graph()
         merge_collect_graph()
-        cleanup()
+        finalize()
 
         return G_final
 

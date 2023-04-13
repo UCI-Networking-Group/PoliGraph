@@ -26,6 +26,10 @@ def get_matched_bracket(char: str) -> str:
     }[char]
 
 
+@Language.component(
+    "align_noun_phrases",
+    requires=["doc.ents", "token.ent_iob", "token.ent_type", "token.tag", "token.sent_start"],
+)
 def align_noun_phrases(doc: Doc) -> Doc:
     """Partitions noun phrases and aligns named entities
 
