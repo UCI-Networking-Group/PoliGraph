@@ -73,7 +73,7 @@ class RuleBasedPhraseNormalizer:
             self.regex_list[norm_name] = (positive_re, negative_re)
 
     def normalize(self, phrase, fallback_to_stem=True):
-        if phrase.root.pos_ == "PRON" and phrase.root.lemma_ not in ("I", "we"):
+        if phrase.root.pos_ == "PRON" and phrase.root.lemma_ not in ("I", "we", "you"):
             yield "UNSPECIFIC"
             return
 
