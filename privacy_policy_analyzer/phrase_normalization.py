@@ -9,28 +9,25 @@ import regex
 from privacy_policy_analyzer.utils import TRIVIAL_WORDS
 
 
-def trim_phrase(phrase):
-    def dfs(token, state):
-        match state:
-            case "compound" | "nmod" | "pobj" | "nsubj" | "dobj":
-                next_states = {"compound", "amod", "nmod", "prep", "relcl", "acl"}
-            case "prep":
-                next_states = {"pobj"}
-            case "amod":
-                next_states = {"advmod", "npadvmod"}
-            case "relcl" | "acl":
-                next_states = {"nsubj", "dobj"}
-            case _:
-                yield token
-                return
+TRIM_TRANSITIONS = {
+    "NOUN": frozenset({"neg", "compound", "nmod", "amod", "prep", "relcl", "acl"}),
+    "VERB": frozenset({"neg", "nsubj", "dobj", "dative", "prep"}),
+    "ADP":  frozenset({"neg", "pobj"}),
+    "ADJ":  frozenset({"neg", "advmod", "npadvmod"}),
+}
+TRIM_TRANSITIONS["PROPN"] = TRIM_TRANSITIONS["PRON"] = TRIM_TRANSITIONS["NOUN"]
 
-        for t in token.children:
-            if t in phrase and t.dep_ in next_states and t.lemma_ not in TRIVIAL_WORDS:
-                yield from dfs(t, t.dep_)
+
+def trim_phrase(phrase):
+    def dfs(token):
+        if next_states := TRIM_TRANSITIONS.get(token.pos_):
+            for child in token.children:
+                if child in phrase and child.dep_ in next_states and child.lemma_ not in TRIVIAL_WORDS:
+                    yield from dfs(child)
 
         yield token
 
-    return sorted(dfs(phrase.root, "compound"))
+    return sorted(dfs(phrase.root))
 
 
 class RuleBasedPhraseNormalizer:
@@ -76,8 +73,7 @@ class RuleBasedPhraseNormalizer:
             self.regex_list[norm_name] = (positive_re, negative_re)
 
     def normalize(self, phrase, fallback_to_stem=True):
-        if (phrase.root.lemma_ in TRIVIAL_WORDS
-            or (phrase.root.pos_ == "PRON" and phrase.root.lemma_ not in ("I", "we"))):
+        if phrase.root.pos_ == "PRON" and phrase.root.lemma_ not in ("I", "we"):
             yield "UNSPECIFIC"
             return
 

@@ -3,8 +3,8 @@ from spacy.language import Language
 from spacy.tokens import Doc, Span, Token
 
 TRIVIAL_WORDS = frozenset([
-    "some", "all", "any", "variety", "category", "example", "more",
-    "such", "other", "following", "below", "additional", "certain", "similar",
+    "some", "all", "any", "variety", "category", "example", "more", "such",
+    "other", "following", "follow", "below", "additional", "certain", "similar",
     "limited", "various", "further", "enough", "e.g.", "i.e.", "etc",
     "which", "that", "collectively", "hereinafter", "detailed",
 ])

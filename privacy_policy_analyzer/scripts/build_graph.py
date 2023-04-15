@@ -14,31 +14,7 @@ from privacy_policy_analyzer.document import PolicyDocument
 from privacy_policy_analyzer.graph_utils import yaml_dump_graph, contracted_nodes
 from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
 from privacy_policy_analyzer.purpose_classification import PurposeClassifier
-from privacy_policy_analyzer.utils import TRIVIAL_WORDS, setup_nlp_pipeline
-
-
-def simplify_phrase(phrase):
-    def dfs(token, state):
-        match state:
-            case "compound" | "nmod" | "pobj" | "nsubj" | "dobj":
-                next_states = {"compound", "amod", "nmod", "prep", "relcl", "acl"}
-            case "prep":
-                next_states = {"pobj"}
-            case "amod":
-                next_states = {"advmod", "npadvmod"}
-            case "relcl" | "acl":
-                next_states = {"nsubj", "dobj"}
-            case _:
-                yield token
-                return
-
-        for t in token.children:
-            if t in phrase and t.dep_ in next_states and t.lemma_ not in TRIVIAL_WORDS:
-                yield from dfs(t, t.dep_)
-
-        yield token
-
-    return sorted(dfs(phrase.root, "compound"))
+from privacy_policy_analyzer.utils import setup_nlp_pipeline
 
 
 def dag_add_edge(G, n1, n2, *args, **kwargs):
@@ -127,7 +103,7 @@ class GraphBuilder:
                         edge_purposes.add((purpose, purpose_text))
 
                 for _, _, _, edge_data in G_collect.in_edges(data_type_src, keys=True, data=True):
-                    edge_data["purposes"] = sorted(edge_purposes)
+                    edge_data["purposes"] = edge_purposes
 
         def build_subsum_and_coref_graphs():
             """Step 3: Infer phrase types using SUBSUM / COREF edges and copy
@@ -183,7 +159,46 @@ class GraphBuilder:
                         # A phrase graph allows one token to have multiple COREF edges
                         # Turn them into SUBSUM edges
                         for _, src2 in G_coref.out_edges(src1):
-                            G_subsum.add_edge(src1, src2)
+                            dag_add_edge(G_subsum, src1, src2)
+
+        def reduce_graph():
+            """Step 5: Reduce G_subsum / G_collect to have fewer edges without
+            changing connectivity, so the output graph can be simpler."""
+            nonlocal G_subsum, G_collect
+
+            # Reduce G_subsum
+            G_subsum = nx.transitive_reduction(G_subsum)
+
+            # Reduce G_collect
+            subsum_topo_order = {node: i for i, node in enumerate(nx.topological_sort(G_subsum))}
+            edges_to_remove = set()
+
+            for u in G_collect.nodes:
+                match token_type_map[u]:
+                    case "DATA":
+                        edges = sorted(G_collect.in_edges(u, keys=True), key=lambda k: subsum_topo_order.get(k, 0))
+                        other_idx = 0
+                    case "ACTOR":
+                        edges = sorted(G_collect.out_edges(u, keys=True), key=lambda k: subsum_topo_order.get(k, 0))
+                        other_idx = 1
+
+                for edge_tuple1, edge_tuple2 in itertools.combinations(edges, 2):
+                    v1 = edge_tuple1[other_idx]
+                    v2 = edge_tuple2[other_idx]
+
+                    try:
+                        if edge_tuple1[-1] != edge_tuple2[-1] or not nx.has_path(G_subsum, v1, v2):
+                            continue
+                    except nx.exception.NodeNotFound:
+                        continue
+
+                    purposes1 = G_collect.get_edge_data(*edge_tuple1)['purposes']
+                    purposes2 = G_collect.get_edge_data(*edge_tuple2)['purposes']
+
+                    if not purposes2.difference(purposes1):
+                        edges_to_remove.add(edge_tuple2)
+
+            G_collect.remove_edges_from(edges_to_remove)
 
         def _expand_phrase(src):
             root_token = document.get_token_with_src(src)
@@ -209,7 +224,7 @@ class GraphBuilder:
             return root_token.doc[base_phrase.start:right_boundary]
 
         def normalize_terms():
-            """Step 5: Run phrase normalization."""
+            """Step 6: Run phrase normalization."""
 
             for src, token_type in token_type_map.items():
                 normalized_terms_map[src] = terms = set()
@@ -235,7 +250,7 @@ class GraphBuilder:
                 if "UNSPECIFIC" in terms:
                     terms.remove("UNSPECIFIC")
 
-                    if src in G_subsum and G_subsum.out_degree(src) > 0:
+                    if G_subsum.has_node(src) and G_subsum.degree(src) > 0:
                         terms.add(f"{phrase.root.lemma_} {src}")
                     else:
                         terms.add(f"UNSPECIFIC_{token_type}")
@@ -256,14 +271,11 @@ class GraphBuilder:
                 logging.info("Phrase %r (%s) -> %r", phrase.text, token_type, ", ".join(sorted(terms)))
 
         def merge_subsum_graph():
-            """Step 6: Populate SUBSUM edges in G_final from G_subsum."""
+            """Step 7: Populate SUBSUM edges in G_final from G_subsum."""
 
             relationship = "SUBSUM"
 
             for src1, src2 in G_subsum.edges():
-                sent1 = document.get_token_with_src(src1).sent.text.strip()
-                sent2 = document.get_token_with_src(src2).sent.text.strip()
-
                 src1_terms = normalized_terms_map[src1]
                 src2_terms = normalized_terms_map[src2]
 
@@ -274,14 +286,9 @@ class GraphBuilder:
                         continue
 
                     # Some sentences lead to subsumption relationship between 1st/3rd parties.
-                    # Workaround: Simply ignore all subsumption edges to "we" / "third party"
-                    if n2 in ["we", "third party", "UNSPECIFIC_DATA", "UNSPECIFIC_ACTOR"]:
-                        logging.warning("Invalid edge: %r -> %r", n1, n2)
-                        continue
-
-                    # Also prevent UNSPECIFIC_* nodes from subsume anything
-                    if n1 in ["UNSPECIFIC_DATA", "UNSPECIFIC_ACTOR"]:
-                        logging.warning("Invalid edge: %r -> %r", n1, n2)
+                    # Workaround: Simply ignore all subsumption edges to "we"
+                    if n2 == "we":
+                        logging.warning("Invalid subsumption: %r -> %r", n1, n2)
                         continue
 
                     if not G_final.has_edge(n1, n2, key=relationship):
@@ -291,11 +298,12 @@ class GraphBuilder:
                         G_final[n1][n2][relationship]["ref"].extend((src1, src2))
 
         def merge_collect_graph():
-            """Step 7: Populate COLLECT edges in G_final from G_collect."""
+            """Step 8: Populate COLLECT edges in G_final from G_collect."""
 
-            for src1, src2, relationship, data in G_collect.edges(keys=True, data=True):
+            for src1, src2, relationship, edge_data in G_collect.edges(keys=True, data=True):
                 src1_terms = normalized_terms_map[src1]
                 src2_terms = normalized_terms_map[src2]
+                edge_purposes = sorted(edge_data["purposes"])
 
                 for n1, n2 in itertools.product(src1_terms, src2_terms):
                     if G_final.nodes[n1]['type'] == "ACTOR" and G_final.nodes[n2]['type'] == "DATA":
@@ -306,15 +314,15 @@ class GraphBuilder:
                             G_final[n1][n2][relationship]["ref"].extend((src1, src2))
                             purpose_dict = G_final[n1][n2][relationship]["purposes"]
 
-                            for purpose, text in data["purposes"]:
+                            for purpose, text in edge_purposes:
                                 purpose_dict[purpose].append(text)
 
         def finalize():
-            """Step 8: Finalize"""
+            """Step 9: Finalize"""
 
             # Clean-up zero degree nodes
             for node in list(G_final.nodes()):
-                if G_final.in_degree(node) == G_final.out_degree(node) == 0:
+                if G_final.degree(node) == 0:
                     G_final.remove_node(node)
 
             # Turn src on edges into text, remove duplications while keep the order
@@ -340,6 +348,7 @@ class GraphBuilder:
         build_collect_graph()
         build_subsum_and_coref_graphs()
         contract_coref_nodes()
+        reduce_graph()
         normalize_terms()
         merge_subsum_graph()
         merge_collect_graph()
