@@ -52,8 +52,15 @@ def build_dependency_graph(root_token: Token):
         return aux_pos < subj_pos
 
     def is_negative(token: Token):
-        for conj in itertools.chain([token], token.conjuncts):
-            if conj.i <= token.i and any(c.dep_ == "neg" for c in conj.children):
+        if any(c.dep_ == "neg" for c in token.lefts):
+            return True
+
+        while token.dep_ == "conj":
+            token = token.head
+
+            if any((c.dep_, c.lemma_) == ("cc", "but") for c in token.rights):
+                return False
+            elif any(c.dep_ == "neg" for c in token.lefts):
                 return True
 
         return False
@@ -361,7 +368,7 @@ class CollectionAnnotator(BaseAnnotator):
                     return True
                 elif tok.ent_type_ == "NN":
                     for _, linked_token, relationship in document.get_all_links(tok):
-                        if relationship in ["SUBSUM", "COREF"] and linked_token not in visited_tokens:
+                        if relationship in ("SUBSUM", "COREF") and linked_token not in visited_tokens:
                             bfs_queue.append(linked_token)
                             visited_tokens.add(linked_token)
 
