@@ -311,6 +311,30 @@ class SubsumptionAnnotator(BaseAnnotator):
         ]
         self.matcher.add("SUBSUM_COLLECTIVELY", [pattern])
 
+        # some/all/any/types/variety/categories of information
+        pattern = [
+            {
+                "RIGHT_ID": "anchor",
+                "RIGHT_ATTRS": {"ORTH": "of", "POS": "ADP"}
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": "<",
+                "RIGHT_ID": "lower_token",
+                "RIGHT_ATTRS": {
+                    "LEMMA": {"IN": ["some", "all", "any", "type", "kind", "variety", "category", "example"]},
+                    "POS": {"IN": ["NOUN", "PRON"]}
+                }
+            },
+            {
+                "LEFT_ID": "anchor",
+                "REL_OP": ">",
+                "RIGHT_ID": "upper_token",
+                "RIGHT_ATTRS": pos_is_noun,
+            }
+        ]
+        self.matcher.add("COREF_SOME_OF", [pattern])
+
     def annotate_subsum_patterns(self, document, doc):
 
         def has_negation(matched_tokens):

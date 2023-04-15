@@ -10,31 +10,6 @@ from .base import BaseAnnotator
 class CoreferenceAnnotator(BaseAnnotator):
     def __init__(self, nlp):
         super().__init__(nlp)
-        self.matcher = DependencyMatcher(nlp.vocab)
-
-        # some/all/any/types/variety/categories of information
-        pattern = [
-            {
-                "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"ORTH": "of", "POS": "ADP"}
-            },
-            {
-                "LEFT_ID": "anchor",
-                "REL_OP": "<",
-                "RIGHT_ID": "coref_token",
-                "RIGHT_ATTRS": {
-                    "LEMMA": {"IN": ["some", "all", "any", "type", "variety", "category", "example"]},
-                    "POS": {"IN": ["NOUN", "PRON"]}
-                }
-            },
-            {
-                "LEFT_ID": "anchor",
-                "REL_OP": ">",
-                "RIGHT_ID": "main_token",
-                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}}
-            }
-        ]
-        self.matcher.add("COREF_SOME_OF", [pattern])
 
     def annotate_one_doc(self, document, doc):
 
@@ -120,20 +95,6 @@ class CoreferenceAnnotator(BaseAnnotator):
                 current_sentence_ents.append(noun_phrase)
 
             last_sentence_ents = current_sentence_ents
-
-        # Handle special patterns
-        for match_id, matched_tokens in self.matcher(doc):
-            rule_name = self.vocab.strings[match_id]
-            _, (match_spec, ) = self.matcher.get(match_id)
-            match_info = {s["RIGHT_ID"]: doc[t] for t, s in zip(matched_tokens, match_spec)}
-
-            coref_noun_phrase = match_info["coref_token"]._.ent
-            main_noun_phrase = match_info["main_token"]._.ent
-
-            if coref_noun_phrase and main_noun_phrase and coref_noun_phrase != main_noun_phrase:
-                self.logger.info("Rule %s matches %r", rule_name, main_noun_phrase.sent.text)
-                self.logger.info("Edge COREF: %r -> %r", coref_noun_phrase.text, main_noun_phrase.text)
-                document.link(coref_noun_phrase.root, main_noun_phrase.root, "COREF")
 
     def annotate(self, document):
         for doc in document.iter_docs():
