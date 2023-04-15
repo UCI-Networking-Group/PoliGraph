@@ -30,17 +30,17 @@ class SubjectAnnotator(BaseAnnotator):
 
         self.matcher.add("FROM_CHILDREN", [pattern])
 
-        # from ... under ... age/years
+        # NOUN under/between ... age/years
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"LEMMA": {"IN": ["from", "about"]}, "DEP": "prep"},
+                "RIGHT_ATTRS": {"POS": {"IN": ["NOUN", "PROPN", "PRON"]}},
             },
             {
                 "LEFT_ID": "anchor",
-                "REL_OP": ">>",
+                "REL_OP": ">",
                 "RIGHT_ID": "prep_under",
-                "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(under|of)$"}, "DEP": "prep"}
+                "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(under|between)$"}, "DEP": "prep"}
             },
             {
                 "LEFT_ID": "prep_under",
