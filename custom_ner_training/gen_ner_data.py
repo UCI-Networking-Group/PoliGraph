@@ -14,15 +14,22 @@ from privacy_policy_analyzer.document import PolicyDocument
 from privacy_policy_analyzer.utils import align_noun_phrases
 
 DATATYPE_KEYWORDS = frozenset([
-    "information", "data", "datum", "address", "number", "location", "geolocation",
-    "identifier", "id", "preference", "setting", "cookie",
+    "information", "data", "datum", "address", "number", "location",
+    "geolocation", "identifier", "id", "preference", "setting", "cookie",
 ])
 ACTOR_KEYWORDS = frozenset([
-    'agency', 'advertiser', 'affiliate', 'analytic', 'analytics', 'app', 'application',
-    'broker', 'business', 'carrier', 'company', 'corporation', 'distributor',
-    'group', 'institution', 'network', 'operator', 'organization',
-    'partner', 'party', 'platform', 'processor', 'product', 'provider', 'publisher',
-    'service', 'site', 'software', 'subsidiary', 'vendor', 'website',
+    'agency', 'advertiser', 'affiliate', 'analytic', 'analytics', 'app',
+    'application', 'broker', 'business', 'carrier', 'company', 'corporation',
+    'distributor', 'group', 'institution', 'network', 'operator',
+    'organization', 'partner', 'party', 'platform', 'processor', 'product',
+    'provider', 'publisher', 'service', 'site', 'software', 'subsidiary',
+    'vendor', 'website',
+])
+IGNORE_KEYWORDS = frozenset([
+    'right', 'purpose', 'policy', 'notice', 'security', 'protection', 'fraud',
+    'practice', 'law', 'disclosure', 'obligation', 'question', 'agreement',
+    'mean', 'behalf', 'basis', 'child', 'kid', 'parent', 'minor', 'friend',
+    'user', 'consumer', 'customer', 'visitor', 'guest',
 ])
 
 
@@ -54,6 +61,8 @@ def rule_based_ner(doc: Doc):
             new_ent_label = "DATA"
         elif root_token.lemma_.lower() in ACTOR_KEYWORDS:
             new_ent_label = "ACTOR"
+        elif root_token.lemma_.lower() in IGNORE_KEYWORDS and root_token.pos_ == "NOUN":
+            new_ent_label = None
         elif root_token.pos_ == "PRON":
             new_ent_label = None
         else:
