@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
+from urllib.parse import urlparse
 import csv
-import hashlib
+from base64 import urlsafe_b64encode
 import os
 import shlex
 import sys
@@ -16,7 +17,13 @@ seen_id = set()
 with open(input_csv, newline="") as fin:
     for row in csv.DictReader(fin, fieldnames=policheck_csv_columns):
         privacy_policy_url = row["privacy_policy"]
-        privacy_policy_id = hashlib.blake2s(privacy_policy_url.encode()).hexdigest()
+
+        parsed_url = urlparse(row["privacy_policy"])
+
+        if parsed_url.scheme not in ["http", "https"]:
+            continue
+
+        privacy_policy_id = urlsafe_b64encode(privacy_policy_url.encode()).decode()
 
         if privacy_policy_id in seen_id:
             continue
