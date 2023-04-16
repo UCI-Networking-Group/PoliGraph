@@ -20,19 +20,23 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--nlp", required=True, help="NLP model directory")
+    parser.add_argument("--disable", default="", help="Disable annotators for ablation study")
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
 
     nlp = setup_nlp_pipeline(args.nlp)
 
-    annotators = [
-        SubsumptionAnnotator(nlp),
-        CoreferenceAnnotator(nlp),
-        CollectionAnnotator(nlp),
-        PurposeAnnotator(nlp),
-        ListAnnotator(nlp),
-        SubjectAnnotator(nlp),
-    ]
+    disabled_annotators = frozenset(args.disable.split(","))
+    annotators = []
+
+    for annotator_class in (SubsumptionAnnotator,
+                            CoreferenceAnnotator,
+                            CollectionAnnotator,
+                            PurposeAnnotator,
+                            ListAnnotator,
+                            SubjectAnnotator):
+        if annotator_class.__name__ not in disabled_annotators:
+            annotators.append(annotator_class(nlp))
 
     for d in args.workdirs:
         logging.info("Processing %s ...", d)
