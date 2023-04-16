@@ -4,7 +4,10 @@ import argparse
 import csv
 import itertools
 import logging
+import functools
 import os
+import re
+import networkx as nx
 
 from rapidfuzz import fuzz, process
 
@@ -19,6 +22,63 @@ def get_purposes_in_sentence(graph, text, edge_tuple):
         if any(phrase in text for phrase in phrase_list):
             yield purpose
             break
+
+
+class EdgeMatcher:
+    def __init__(self, graph):
+        self.graph = graph
+        self.text_to_collect_edges = text_to_collect_edges = {}
+        self.text_to_subsum_edges = text_to_subsum_edges = {}
+
+        for u, v, relationship, data in graph.edges(keys=True, data=True):
+            for text in data["text"]:
+                if relationship in CollectionAnnotator.EDGE_TYPES:
+                    text_to_collect_edges.setdefault(text, [])
+                    text_to_collect_edges[text].append((u, v, relationship))
+                elif relationship == "SUBSUM":
+                    text_to_subsum_edges.setdefault(text, [])
+                    text_to_subsum_edges[text].append((u, v))
+
+    @functools.cache
+    def get_edges(self, sentence):
+        def _get_edges(text_to_edges):
+            patial_matches = process.extract(sentence, text_to_edges.keys(),
+                                             scorer=fuzz.partial_ratio, score_cutoff=90.0)
+
+            if len(patial_matches) > 0:
+                poligraph_sent, *_ = process.extractOne(sentence, [m[0] for m in patial_matches], scorer=fuzz.WRatio)
+                return text_to_edges[poligraph_sent]
+            else:
+                return []
+
+        collect_edges = _get_edges(self.text_to_collect_edges)
+        subsum_edges = _get_edges(self.text_to_subsum_edges)
+
+        mini_ontology = nx.DiGraph()
+        mini_ontology.add_edges_from(subsum_edges)
+
+        expanded_collect_edges = set()
+
+        for u, v, rel in collect_edges:
+            edge_data = self.graph.edges[u, v, rel]
+            purposes_set = set()
+
+            for purpose, phrase_list in edge_data['purposes'].items():
+                if any(phrase in sentence for phrase in phrase_list):
+                    purposes_set.add(purpose)
+
+            purposes = frozenset(purposes_set)
+
+            mini_ontology.add_node(u)
+            mini_ontology.add_node(v)
+            expanded_collect_edges.add((u, v, rel, purposes))
+
+            for su, sv in itertools.product(nx.descendants(mini_ontology, u), nx.descendants(mini_ontology, v)):
+                expanded_collect_edges.add((su, sv, rel, purposes))
+
+        return sorted(expanded_collect_edges)
+
+
 
 
 def main():
@@ -64,6 +124,7 @@ def main():
                 if tuple_pair not in contradiction_info:
                     contradiction_info.append(tuple_pair)
 
+    term_regex = re.compile(r'^(?P<term>.+?)(?: @(?P<subject>\S+))?(?: (?P<src>\(\d+, \d+\)))?$')
 
     with open(args.output, "w", encoding="utf-8", newline="") as fout:
         csv_writer = csv.DictWriter(fout, ["app_id", "pos_text", "neg_text", "tuples", "labels"])
@@ -79,83 +140,87 @@ def main():
                 graph = yaml_load_graph(fin)
 
             kgraph = KGraph(os.path.join(workdir, "graph.yml"))
-
-            # Map PoliGraph text to edges
-            poligraph_text_to_edges = {}
-
-            for u, v, relationship, data in graph.edges(keys=True, data=True):
-                if relationship in CollectionAnnotator.EDGE_TYPES:
-                    for text in data["text"]:
-                        poligraph_text_to_edges.setdefault(text, [])
-                        poligraph_text_to_edges[text].append((u, v, relationship))
-
-            # Map PolicyLint text to PoliGraph text
-            text_map = {}
-
-            for sent in set(itertools.chain(*contradiction_info.keys())):
-                patial_matches = process.extract(sent, poligraph_text_to_edges.keys(),
-                                                scorer=fuzz.partial_ratio, score_cutoff=90.0)
-
-                if len(patial_matches) > 0:
-                    text_map[sent], *_ = process.extractOne(sent, [m[0] for m in patial_matches], scorer=fuzz.WRatio)
-                else:
-                    text_map[sent] = None
+            edge_matcher = EdgeMatcher(graph)
 
             for (pos_sent, neg_sent), tuple_pairs in contradiction_info.items():
-                poligraph_pos_sent = text_map[pos_sent]
-                poligraph_neg_sent = text_map[neg_sent]
+                pos_edges = edge_matcher.get_edges(pos_sent)
+                neg_edges = edge_matcher.get_edges(neg_sent)
+
+                pos_edges = list(filter(lambda t: not t[2].startswith("NOT_"), pos_edges))
+                neg_edges = list(filter(lambda t: t[2].startswith("NOT_"), neg_edges))
+
                 results = []
+                conflicted_edge_pairs = []
+                weak_conflicted_edge_pairs = []
 
-                if poligraph_pos_sent is None or poligraph_neg_sent is None:
-                    pos_edges = neg_edges = []
-                else:
-                    pos_edges = poligraph_text_to_edges[poligraph_pos_sent]
-                    neg_edges = poligraph_text_to_edges[poligraph_neg_sent]
+                # Find possible PoliGraph edges that match the contradicted tuples
+                for pos_tuple, neg_tuple in itertools.product(pos_edges, neg_edges):
+                    pos_e, pos_d, *_ = pos_tuple
+                    neg_e, neg_d, *_ = neg_tuple
 
-                    # Discard invalid tuples
-                    pos_edges = list(filter(lambda t: not t[2].startswith("NOT_"), pos_edges))
-                    neg_edges = list(filter(lambda t: t[2].startswith("NOT_"), neg_edges))
+                    pos_d = term_regex.match(pos_d)['term']
+                    neg_d = term_regex.match(neg_d)['term']
+                    pos_e = term_regex.match(pos_e)['term']
+                    neg_e = term_regex.match(neg_e)['term']
 
-                if len(pos_edges) == 0 or len(neg_edges) == 0:
-                    results.append("INVALID")
+                    pos_d_is_first_party = bool(kgraph.subsum("we", pos_e))
+                    neg_d_is_first_party = bool(kgraph.subsum("we", neg_e))
 
-                if "INVALID" not in results:
-                    # Check action
+                    if pos_d_is_first_party and neg_d_is_first_party:
+                        e_conflict = any(t1[0] == t2[0] == "we" for t1, t2 in tuple_pairs)
+                    elif pos_d_is_first_party or neg_d_is_first_party:
+                        e_conflict = False
+                    else:
+                        e_conflict = (
+                            any(not(t1[0] == t2[0] == "we") for t1, t2 in tuple_pairs)
+                            and (neg_e == pos_e or kgraph.subsum(neg_e, pos_e) or 'UNSPECIFIC_ACTOR' in (pos_e, neg_e))
+                        )
+
+                    d_conflict = neg_d == pos_d or kgraph.subsum(neg_d, pos_d) or 'UNSPECIFIC_DATA' in (pos_d, neg_d)
+
+                    if e_conflict and d_conflict:
+                        conflicted_edge_pairs.append((pos_tuple, neg_tuple))
+                    elif e_conflict:
+                        weak_conflicted_edge_pairs.append((pos_tuple, neg_tuple))
+
+                if len(conflicted_edge_pairs) == 0:
+                    if len(weak_conflicted_edge_pairs) == 0:
+                        results.append("INVALID")
+                    else:
+                        # May fail to match because of different term normalization.
+                        # Fallback to match entity only
+                        conflicted_edge_pairs = weak_conflicted_edge_pairs
+
+                if len(results) == 0:
+                    # Check action / subjects / purposes
                     diff_action_flags = []
+                    diff_subject_flags = []
+                    diff_purpose_flags = []
 
-                    for (pos_e, pos_d, pos_a), (neg_e, neg_d, neg_a) in itertools.product(pos_edges, neg_edges):
-                        # Do not compare data types here to work around likely different normalization
-                        if pos_e == neg_e or ('UNSPECIFIC_ACTOR' in (pos_e, neg_e) and 'we' not in (pos_e, neg_e)):
-                            diff_action_flags.append(pos_a != neg_a.split("_", 1)[-1])
+                    for pos_tuple, neg_tuple in conflicted_edge_pairs:
+                        pos_e, pos_d, pos_a, pos_purposes = pos_tuple
+                        neg_e, neg_d, neg_a, neg_purposes = neg_tuple
+
+                        diff_action_flags.append(pos_a != neg_a.split("_", 1)[-1])
+                        diff_subject_flags.append((pos_d.split("@", 1) + [""])[1] != (neg_d.split("@", 1) + [""])[1])
+                        diff_purpose_flags.append(len(neg_purposes) > 0 and len(pos_purposes & neg_purposes) == 0)
 
                     if len(diff_action_flags) > 0 and all(diff_action_flags):
                         results.append("DIFF_ACTIONS")
 
-                    # Check subject
-                    pos_subjects = {(d.split("@", 1) + [""])[1] for _, d, _ in pos_edges}
-                    neg_subjects = {(d.split("@", 1) + [""])[1] for _, d, _ in neg_edges}
-
-                    if len(pos_subjects & neg_subjects) == 0:
+                    if len(diff_subject_flags) > 0 and all(diff_subject_flags):
                         results.append("DIFF_SUBJECTS")
 
-                    # Check purposes
-                    pos_purposes = set()
-                    for edge_tuple in pos_edges:
-                        pos_purposes.update(get_purposes_in_sentence(graph, poligraph_pos_sent, edge_tuple))
-
-                    neg_purposes = set()
-                    for edge_tuple in neg_edges:
-                        neg_purposes.update(get_purposes_in_sentence(graph, poligraph_neg_sent, edge_tuple))
-
-                    if len(neg_purposes) > 0 and len(pos_purposes & neg_purposes) == 0:
+                    if len(diff_purpose_flags) > 0 and all(diff_purpose_flags):
                         results.append("DIFF_PURPOSES")
 
-                if len(results) == 0 and any(pos_tuple != neg_tuple for pos_tuple, neg_tuple in tuple_pairs):
-                    for (pos_e, pos_d, _), (neg_e, neg_d, _) in itertools.product(pos_edges, neg_edges):
+                if len(results) == 0:
+                    for (pos_e, pos_d, *_), (neg_e, neg_d, *_) in conflicted_edge_pairs:
                         if kgraph.subsum(neg_e, pos_e) and kgraph.subsum(neg_d, pos_d):
                             break
                     else:
-                        results.append("ONTOLOGY")
+                        if all(pos_e != neg_e or pos_d != neg_d for (pos_e, pos_d), (neg_e, neg_d) in tuple_pairs):
+                            results.append("ONTOLOGY")
 
                 tuples_text = []
                 for (pos_e, pos_d), (neg_e, neg_d) in tuple_pairs:
