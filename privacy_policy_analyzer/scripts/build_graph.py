@@ -154,7 +154,7 @@ class GraphBuilder:
                             contracted_nodes(G_collect, src2, src1)
 
                         if src1 in G_subsum:
-                            contracted_nodes(G_subsum, src2, src1)
+                            contracted_nodes(G_subsum, src2, src1, ensure_dag=True)
                     case _:
                         # A phrase graph allows one token to have multiple COREF edges
                         # Turn them into SUBSUM edges

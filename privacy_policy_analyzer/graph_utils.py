@@ -117,11 +117,20 @@ def _all_shortest_paths_wrap(*args, **kwargs):
         return
 
 
-def contracted_nodes(G: nx.Graph, u, v):
+def contracted_nodes(G: nx.Graph, u, v, ensure_dag=False):
     """Contract node v into u in the graph G
 
     If G is a multi graph, we implement contraction ourselves because
     nx.contracted_nodes does not preserve key for multi graphs."""
+
+    if ensure_dag:
+        # DAG work around: If contracting causes circle, give up.
+        while G.has_edge(u, v):
+            G.remove_edge(u, v)
+
+        if u in G and u in G and (nx.has_path(G, u, v) or nx.has_path(G, v, u)):
+            G.remove_node(v)
+            return
 
     if not G.is_multigraph():
         nx.contracted_nodes(G, u, v, self_loops=False, copy=False)
