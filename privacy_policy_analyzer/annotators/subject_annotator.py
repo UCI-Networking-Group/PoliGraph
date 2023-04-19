@@ -14,11 +14,11 @@ class SubjectAnnotator(BaseAnnotator):
 
         self.matcher = DependencyMatcher(self.vocab)
 
-        # from/about children / minors / kids
+        # from/about/of children / minors / kids
         pattern = [
             {
                 "RIGHT_ID": "anchor",
-                "RIGHT_ATTRS": {"LEMMA": {"IN": ["from", "about"]}, "DEP": "prep"},
+                "RIGHT_ATTRS": {"LEMMA": {"IN": ["from", "about", "of"]}, "DEP": "prep"},
             },
             {
                 "LEFT_ID": "anchor",
@@ -38,7 +38,7 @@ class SubjectAnnotator(BaseAnnotator):
             },
             {
                 "LEFT_ID": "anchor",
-                "REL_OP": ">",
+                "REL_OP": ">>",
                 "RIGHT_ID": "prep_under",
                 "RIGHT_ATTRS": {"LEMMA": {"REGEX": r"^(under|between)$"}, "DEP": "prep"}
             },

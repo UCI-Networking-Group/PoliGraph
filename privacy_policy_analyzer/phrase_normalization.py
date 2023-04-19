@@ -11,7 +11,7 @@ from privacy_policy_analyzer.utils import TRIVIAL_WORDS
 
 TRIM_TRANSITIONS = {
     "NOUN": frozenset({"neg", "compound", "nmod", "amod", "prep", "relcl", "acl"}),
-    "VERB": frozenset({"neg", "nsubj", "dobj", "dative", "prep"}),
+    "VERB": frozenset({"neg", "nsubj", "dobj", "pobj", "dative", "prep"}),
     "ADP":  frozenset({"neg", "pobj"}),
     "ADJ":  frozenset({"neg", "advmod", "npadvmod"}),
 }
