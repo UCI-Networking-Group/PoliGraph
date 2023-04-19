@@ -33,13 +33,13 @@ def main():
 
             if app_tuple not in app_tuple_annotations:
                 logging.warning("Missing annotation: %r", ",".join(app_tuple))
+                false_positives.add(app_tuple)
                 continue
 
             if app_tuple_annotations[app_tuple]:
                 true_positives.add(app_tuple)
             else:
                 false_positives.add(app_tuple)
-                print("FP:", ",".join(app_tuple))
 
         false_negatives = set()
 
@@ -47,11 +47,18 @@ def main():
             if state and app_tuple not in true_positives:
                 false_negatives.add(app_tuple)
 
-    recall = len(true_positives) / (len(true_positives) + len(false_negatives))
-    precision = len(true_positives) / (len(true_positives) + len(false_positives))
+    for entities in (("we",), ("3rd-party",), ("we", "3rd-party")):
+        TP = sum(1 for _ in filter(lambda t: t[1] in entities, true_positives))
+        FP = sum(1 for _ in filter(lambda t: t[1] in entities, false_positives))
+        FN = sum(1 for _ in filter(lambda t: t[1] in entities, false_negatives))
 
-    print(f"precision = {precision * 100:5.2f}%")
-    print(f"   recall = {recall * 100:5.2f}%")
+        recall = TP / (TP + FN)
+        precision = TP / (TP + FP)
+
+        print(entities)
+        print(f"precision = {precision * 100:5.2f}%")
+        print(f"   recall = {recall * 100:5.2f}%")
+
 
 if __name__ == "__main__":
     main()
