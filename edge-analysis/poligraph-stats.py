@@ -4,13 +4,14 @@ import csv
 import os
 
 import networkx as nx
-from privacy_policy_analyzer.graph_utils import KGraph
+from privacy_policy_analyzer.annotators import CollectionAnnotator
+from privacy_policy_analyzer.graph_utils import yaml_load_graph
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
-    parser.add_argument("-o", "--output-dir", required=True, help="Output dir")
+    parser.add_argument("-o", "--output-path", required=True, help="Output edge stat path")
     args = parser.parse_args()
 
     empty_kgraph_count = 0
@@ -19,7 +20,7 @@ def main():
     collect_edge_count = 0
     collect_sentence_count = 0
     collect_edge_with_purposes_count = 0
-    purpose_sentence_count = 0
+    purpose_phrase_count = 0
 
     has_we_collect = set()
     has_unspecific = set()
@@ -30,27 +31,31 @@ def main():
     for d in args.workdirs:
         print(f"Processing {d} ...")
 
-        kgraph_path = os.path.join(d, 'graph_trimmed.gml')
-        kgraph = KGraph(kgraph_path)
+        kgraph_path = os.path.join(d, 'graph-original.yml')
+        with open(kgraph_path, encoding="utf-8") as fin:
+            graph = yaml_load_graph(fin)
+
         subsum_sentences = set()
         collect_sentences = set()
-        purpose_sentences = set()
+        purpose_phrases = set()
 
-        if nx.is_empty(kgraph.kgraph):
+        if nx.is_empty(graph):
             empty_kgraph_count += 1
 
-        for u, v, rel, data in kgraph.kgraph.edges(keys=True, data=True):
+        for u, v, rel, data in graph.edges(keys=True, data=True):
             edge_statistics[(u, v, rel)] += 1
 
             if rel == "SUBSUM":
                 subsum_edge_count += 1
                 subsum_sentences.update(data["text"])
-            elif rel == "COLLECT":
+            elif rel in CollectionAnnotator.EDGE_TYPES:
                 collect_edge_count += 1
                 collect_sentences.update(data["text"])
-                purpose_sentences.update(p[1] for p in data["purposes"])
 
-                if len(data["purposes"]) > 0:
+                for phrases in data["purposes"].values():
+                    purpose_phrases.update(phrases)
+
+                if data["purposes"]:
                     collect_edge_with_purposes_count += 1
                     edge_purpose_statistics[(u, v, rel)] += 1
 
@@ -62,16 +67,16 @@ def main():
 
         subsum_sentence_count += len(subsum_sentences)
         collect_sentence_count += len(collect_sentences)
-        purpose_sentence_count += len(purpose_sentences)
+        purpose_phrase_count += len(purpose_phrases)
 
     print("empty graphs: ", empty_kgraph_count)
     print("SUBSUM:", subsum_edge_count, subsum_sentence_count)
     print("COLLECT:", collect_edge_count, collect_sentence_count)
-    print("PURPOSE", collect_edge_with_purposes_count, purpose_sentence_count)
+    print("PURPOSE", collect_edge_with_purposes_count, purpose_phrase_count)
     print("# we COLLECT:", len(has_we_collect))
     print("# UNSPECIFIC:", len(has_unspecific))
 
-    with open(os.path.join(args.output_dir, "edge_stats.csv"), "w", newline="") as fout:
+    with open(args.output_path, "w", encoding="utf-8", newline="") as fout:
         writer = csv.DictWriter(fout, fieldnames=["u", "v", "rel", "count", "purpose_count"])
         writer.writeheader()
 

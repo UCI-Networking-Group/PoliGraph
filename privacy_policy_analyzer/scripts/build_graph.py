@@ -26,7 +26,7 @@ def dag_add_edge(G, n1, n2, *args, **kwargs):
 
 
 class GraphBuilder:
-    def __init__(self, phrase_map, entity_map, purpose_classification_model_path, simulate_policheck=False):
+    def __init__(self, phrase_map, entity_map, purpose_classification_model_path, variant):
         with open(phrase_map, "r", encoding="utf-8") as fin:
             phrase_map_rules = yaml.safe_load(fin)
 
@@ -34,7 +34,7 @@ class GraphBuilder:
         self.data_phrase_normalizer = RuleBasedPhraseNormalizer(phrase_map_rules["DATA"])
         self.actor_phrase_normalizer = RuleBasedPhraseNormalizer(phrase_map_rules["ACTOR"])
         self.purpose_classifier = PurposeClassifier(purpose_classification_model_path)
-        self.simulate_policheck = simulate_policheck
+        self.variant = variant
 
     def build_graph(self, document: PolicyDocument):
         token_type_map = {}
@@ -69,11 +69,16 @@ class GraphBuilder:
                         if token_type_map.setdefault(src, expected_type) != expected_type:
                             break
                     else:
-                        # Add the edge. This cannot create a circle so no need for DAG check
-                        G_collect.add_edge(src1, src2, key=relationship)
-
-                        if src2 not in data_type_purposes:
-                            data_type_purposes[src2] = []
+                        match self.variant:
+                            case "original" | "policylint":
+                                # Only "COLLECT" edges
+                                if not relationship.startswith("NOT_"):
+                                    G_collect.add_edge(src1, src2, key="COLLECT")
+                                    data_type_purposes.setdefault(src2, [])
+                            case "default":
+                                # Extension: keep all edges
+                                G_collect.add_edge(src1, src2, key=relationship)
+                                data_type_purposes.setdefault(src2, [])
 
             # Annotate purposes
             purpose_text_to_labels: dict[str, list[str]] = {}
@@ -140,7 +145,7 @@ class GraphBuilder:
             G_collect into their main mentions.
             """
 
-            if self.simulate_policheck:
+            if self.variant == "policylint":
                 return
 
             for src1 in nx.topological_sort(G_coref):
@@ -255,16 +260,21 @@ class GraphBuilder:
                     else:
                         terms.add(f"UNSPECIFIC_{token_type}")
 
-                # Extension: include data subject (if no subject info then this is no-op)
-                if token_type == "DATA" and (subject := document.token_relationship.nodes[src].get('subject')):
-                    replaced_terms = [f"{term} @{subject}" for term in terms]
-                    terms.clear()
-                    terms.update(replaced_terms)
-
-                if self.simulate_policheck:
-                    replaced_terms = [f"{term} {src}" for term in terms]
-                    terms.clear()
-                    terms.update(replaced_terms)
+                match self.variant:
+                    case "default":
+                        # Extension: include data subject (if no subject info then this is no-op)
+                        if self.variant == "default":
+                            if token_type == "DATA":
+                                if subject := document.token_relationship.nodes[src].get('subject'):
+                                    replaced_terms = [f"{term} @{subject}" for term in terms]
+                                    terms.clear()
+                                    terms.update(replaced_terms)
+                    case "policylint":
+                        # PolicyLint simulation -- Make every term unique
+                        if self.variant == "policylint":
+                            replaced_terms = [f"{term} {src}" for term in terms]
+                            terms.clear()
+                            terms.update(replaced_terms)
 
                 G_final.add_nodes_from(terms, type=token_type)
 
@@ -358,6 +368,7 @@ class GraphBuilder:
 
 
 def trim_graph(graph):
+    """Remove SUBSUM edges that do not generate any collect(n, d) relations"""
     important_nodes = set()
 
     for d1, d2, rel in graph.edges(keys=True):
@@ -400,31 +411,36 @@ def main():
     parser.add_argument("--purpose-classification", required=True, help="Purpose classification model directory")
     parser.add_argument("-p", "--phrase-map", required=True, help="Path to phrase_map.yml")
     parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
-    parser.add_argument("--simulate-policheck", action="store_true", help="Simulate PoliCheck for ablation study")
+    parser.add_argument("-v", "--variant", choices=["default", "original", "policylint"], default="default",
+                        help="Variant of the graph")
     parser.add_argument("--pretty", action="store_true", help="Generate pretty GraphML graph for visualization")
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
 
     nlp = setup_nlp_pipeline(args.nlp)
-    graph_builder = GraphBuilder(args.phrase_map, args.entity_info, args.purpose_classification,
-                                 args.simulate_policheck)
+    graph_builder = GraphBuilder(args.phrase_map, args.entity_info, args.purpose_classification, args.variant)
 
     for d in args.workdirs:
         logging.info("Processing %s ...", d)
 
         document = PolicyDocument.load(d, nlp)
-        knowledge_graph = graph_builder.build_graph(document)
-        trimmed_graph = trim_graph(knowledge_graph)
 
-        with open(os.path.join(d, "graph.yml"), "w", encoding="utf-8") as fout:
-            yaml_dump_graph(knowledge_graph, fout)
+        # Full graph includes unused SUBSUM edges -- For debug use
+        full_graph = graph_builder.build_graph(document)
 
-        with open(os.path.join(d, "graph_trimmed.yml"), "w", encoding="utf-8") as fout:
+        with open(os.path.join(d, f"graph-{args.variant}.full.yml"), "w", encoding="utf-8") as fout:
+            yaml_dump_graph(full_graph, fout)
+
+        # Trimmed graph excludes unused SUBSUM edges
+        trimmed_graph = trim_graph(full_graph)
+
+        with open(os.path.join(d, f"graph-{args.variant}.yml"), "w", encoding="utf-8") as fout:
             yaml_dump_graph(trimmed_graph, fout)
 
+        # GraphML version for visualization
         if args.pretty:
             colored_graph = colorize_graph(trimmed_graph)
-            nx.write_graphml(colored_graph, os.path.join(d, "graph_pretty.graphml"))
+            nx.write_graphml(colored_graph, os.path.join(d, "graph-{args.variant}.graphml"))
 
 
 if __name__ == "__main__":

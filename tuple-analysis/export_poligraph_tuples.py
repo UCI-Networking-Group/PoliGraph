@@ -34,6 +34,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
+    parser.add_argument("-v", "--variant", default="original", help="Variant of the graph")
     parser.add_argument("-o", "--output", required=True, help="Output CSV path")
     args = parser.parse_args()
 
@@ -48,7 +49,7 @@ def main():
 
             app_id = os.path.basename(os.path.realpath(d))
 
-            kgraph_path = os.path.join(d, 'graph_trimmed.yml')
+            kgraph_path = os.path.join(d, f'graph-{args.variant}.yml')
             kgraph = KGraph(kgraph_path)
 
             local_dtype_map = {node: term_regex.match(node)[1] for node in kgraph.datatypes}
