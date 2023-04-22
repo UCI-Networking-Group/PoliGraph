@@ -13,6 +13,7 @@ from privacy_policy_analyzer.graph_utils import KGraph, load_ontologies
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
+    parser.add_argument("-o", "--output", required=True, help="Output path")
     parser.add_argument("-y", "--ontology", required=True, help="Ontology directory")
     parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     args = parser.parse_args()
@@ -27,7 +28,7 @@ def main():
     for d in args.workdirs:
         print(f"Processing {d} ...")
 
-        kgraph_path = os.path.join(d, 'graph_trimmed.gml')
+        kgraph_path = os.path.join(d, 'graph-original.yml')
         kgraph = KGraph(kgraph_path)
 
         common_datatypes = set(data_ontology.nodes) & set(kgraph.datatypes)
@@ -59,7 +60,7 @@ def main():
         entity_counters[0].update(kgraph.entities)
         entity_counters[1].update(special_entity_terms)
 
-    with open("stats/self_defined_terms.csv", "w", newline="") as fout:
+    with open(args.output, "w", encoding="utf-8", newline="") as fout:
         writer = csv.DictWriter(fout, fieldnames=["type", "term", "def_count", "use_count", "possible_meanings"])
         writer.writeheader()
 

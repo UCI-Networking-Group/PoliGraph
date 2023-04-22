@@ -5,7 +5,7 @@ import csv
 import os
 
 import networkx as nx
-from privacy_policy_analyzer.graph_utils import load_ontologies
+from privacy_policy_analyzer.graph_utils import load_ontologies, yaml_load_graph
 
 
 def check_definitions(kgraph, data_ontology, entity_ontology):
@@ -53,18 +53,16 @@ def main():
     data_ontology, entity_ontology = load_ontologies(args.ontology, args.entity_info)
 
     for d in args.workdirs:
-        kgraph_path = os.path.join(d, 'graph_trimmed.gml')
-
-        if not os.path.isfile(kgraph_path):
-            continue
-
         print(f"Processing {d} ...")
 
-        kgraph = nx.read_gml(kgraph_path)
+        kgraph_path = os.path.join(d, 'graph-original.yml')
+
+        with open(kgraph_path, encoding="utf-8") as fin:
+            kgraph = yaml_load_graph(fin)
 
         bad_datatype_links, bad_entity_links = check_definitions(kgraph, data_ontology, entity_ontology)
 
-        with open(os.path.join(d, "misleading_definitions.csv"), "w") as fout:
+        with open(os.path.join(d, "misleading_definitions.csv"), "w", encoding="utf-8") as fout:
             writer = csv.DictWriter(fout, fieldnames=["type", "parent", "child"])
             writer.writeheader()
 
