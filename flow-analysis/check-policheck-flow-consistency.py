@@ -36,7 +36,7 @@ def main():
     parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     args = parser.parse_args()
 
-    with open(args.flow_json) as fin:
+    with open(args.flow_json, encoding="utf-8") as fin:
         input_data = json.load(fin)
 
     domain_mapper = DomainMapper(args.entity_info)
@@ -44,13 +44,13 @@ def main():
 
     all_data_types = set()
 
-    with open(args.out_csv, "w", newline="") as fout:
+    with open(args.out_csv, "w", encoding="utf-8", newline="") as fout:
         writer = csv.DictWriter(fout, fieldnames=["app_id", "data_type", "dest_entity",
                                                   "collection_consistency", "policheck_consistency", "purposes"])
         writer.writeheader()
 
         for app_id, app_info in input_data.items():
-            kgraph_path = os.path.join(args.privacy_policy_root, app_info["privacy_policy_id"], "graph.gml")
+            kgraph_path = os.path.join(args.privacy_policy_root, app_info["privacy_policy_id"], "graph-original.yml")
 
             if not os.path.exists(kgraph_path):
                 continue

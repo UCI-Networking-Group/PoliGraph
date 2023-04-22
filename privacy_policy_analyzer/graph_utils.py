@@ -181,7 +181,7 @@ class KGraph:
             for node in "precise geolocation", "coarse geolocation":
                 if node in kgraph:
                     kgraph.add_node("geolocation", type="DATA")
-                    contracted_nodes(kgraph, "geolocation", "precise geolocation")
+                    contracted_nodes(kgraph, "geolocation", node)
 
         # For convenience, reverse all entity subsumption
         for u, v, key, data in list(kgraph.edges(keys=True, data=True)):
@@ -361,28 +361,28 @@ class ExtKGraph(KGraph):
         self.entity_ontology = entity_ontology
 
         def try_add_node(node, node_type):
-            if node in self.kgraph:
-                return node_type == self.kgraph.nodes[node]["type"]
+            if node in self.positive_kgraph:
+                return node_type == self.positive_kgraph.nodes[node]["type"]
             else:
-                self.kgraph.add_node(node, type=node_type)
+                self.positive_kgraph.add_node(node, type=node_type)
                 return True
 
         try_add_node("UNSPECIFIC_DATA", "DATA")
-        try_add_node("UNSPECIFIC_ACTOR", "ENTITY")
+        try_add_node("UNSPECIFIC_ACTOR", "ACTOR")
 
         for u, v in data_ontology.edges():
             try_add_node(u, "DATA")
 
-            if data_ontology.nodes[v]["is_precise"] == 0 or v in self.kgraph.nodes:
+            if data_ontology.nodes[v]["is_precise"] == 0 or v in self.positive_kgraph.nodes:
                 if try_add_node(v, "DATA"):
-                    self.kgraph.add_edge(u, v, key="SUBSUM", text=["ONTOLOGY"])
+                    self.positive_kgraph.add_edge(u, v, key="SUBSUM", text=["ONTOLOGY"])
 
         for u, v in entity_ontology.edges():
             try_add_node(u, "ACTOR")
 
-            if entity_ontology.nodes[v]["is_precise"] == 0 or v in self.kgraph.nodes:
+            if entity_ontology.nodes[v]["is_precise"] == 0 or v in self.positive_kgraph.nodes:
                 if try_add_node(v, "ACTOR"):
-                    self.kgraph.add_edge(v, u, key="SUBSUM_BY", text=["ONTOLOGY"])
+                    self.positive_kgraph.add_edge(v, u, key="SUBSUM_BY", text=["ONTOLOGY"])
 
     @contextmanager
     def attach_node(self, node, node_type):
@@ -390,22 +390,22 @@ class ExtKGraph(KGraph):
 
         ontology = self.data_ontology if node_type == "DATA" else self.entity_ontology
 
-        if node in self.kgraph.nodes or node not in ontology.nodes:
+        if node in self.positive_kgraph.nodes or node not in ontology.nodes:
             yield
             return
 
         try:
-            self.kgraph.add_node(node, type=node_type)
+            self.positive_kgraph.add_node(node, type=node_type)
             for u, _ in ontology.in_edges(node):
-                if self.kgraph.nodes[u]["type"] == node_type:
+                if self.positive_kgraph.nodes[u]["type"] == node_type:
                     if node_type == "DATA":
-                        self.kgraph.add_edge(u, node, key="SUBSUM", text=["ONTOLOGY"])
+                        self.positive_kgraph.add_edge(u, node, key="SUBSUM", text=["ONTOLOGY"])
                     else:
-                        self.kgraph.add_edge(node, u, key="SUBSUM_BY", text=["ONTOLOGY"])
+                        self.positive_kgraph.add_edge(node, u, key="SUBSUM_BY", text=["ONTOLOGY"])
 
             yield
         finally:
-            self.kgraph.remove_node(node)
+            self.positive_kgraph.remove_node(node)
 
     @contextmanager
     def accept_unspecific_data(self):
@@ -415,9 +415,9 @@ class ExtKGraph(KGraph):
             if data_type != "UNSPECIFIC_DATA":
                 tmp_edges.append(("UNSPECIFIC_DATA", data_type, "SUBSUM"))
 
-        self.kgraph.add_edges_from(tmp_edges)
+        self.positive_kgraph.add_edges_from(tmp_edges)
         yield
-        self.kgraph.remove_edges_from(tmp_edges)
+        self.positive_kgraph.remove_edges_from(tmp_edges)
 
     @contextmanager
     def accept_unspecific_actor(self):
@@ -427,9 +427,9 @@ class ExtKGraph(KGraph):
             if entity != "UNSPECIFIC_ACTOR":
                 tmp_edges.append((entity, "UNSPECIFIC_ACTOR", "SUBSUM_BY"))
 
-        self.kgraph.add_edges_from(tmp_edges)
+        self.positive_kgraph.add_edges_from(tmp_edges)
         yield
-        self.kgraph.remove_edges_from(tmp_edges)
+        self.positive_kgraph.remove_edges_from(tmp_edges)
 
     def who_collect(self, datatype):
         # Limitation: Precise company names are not returned unless already in the KGraph
