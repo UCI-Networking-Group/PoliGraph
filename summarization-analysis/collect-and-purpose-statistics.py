@@ -7,11 +7,10 @@ from pathlib import Path
 import networkx as nx
 import pandas as pd
 
-from privacy_policy_analyzer.graph_utils import ExtKGraph, KGraph, load_ontologies
+from privacy_policy_analyzer.graph_utils import KGraph, load_ontologies
 
 DATATYPE_CATEGORIES = [
     "UNSPECIFIC_DATA",
-
     #"device identifier",
     "software identifier",
     "hardware identifier",
@@ -109,8 +108,7 @@ class ParallelHelper:
         return result
 
     def run(self, privacy_policy_path):
-        kgraph_path = os.path.join(privacy_policy_path, 'graph_trimmed.gml')
-
+        kgraph_path = os.path.join(privacy_policy_path, 'graph-original.yml')
         kgraph = KGraph(kgraph_path)
 
         return self.run_on_graph(kgraph)
@@ -186,7 +184,7 @@ def main():
     entity_stats.to_csv(output_dir / "entity_stats.csv")
     purpose_stats.to_csv(output_dir / "purpose_stats.csv")
 
-    with open(output_dir / "app_num_stats.csv", "w", newline="") as fout:
+    with open(output_dir / "app_num_stats.csv", "w", encoding="utf-8", newline="") as fout:
         writer = csv.DictWriter(fout, fieldnames=["data_category", "sharing", "non_core_purpose"])
         writer.writeheader()
 
