@@ -255,9 +255,12 @@ class GraphBuilder:
                 if "UNSPECIFIC" in terms:
                     terms.remove("UNSPECIFIC")
 
-                    if G_subsum.has_node(src) and G_subsum.degree(src) > 0:
+                    if G_subsum.has_node(src) and G_subsum.out_degree(src) > 0:
+                        # If the phrase subsumes anything, normalize it into a unique node
                         terms.add(f"{phrase.root.lemma_} {src}")
-                    else:
+                    elif len(terms) == 0 and not(G_subsum.has_node(src) and G_subsum.in_degree(src) > 0):
+                        # If the phrase has no specific normalization, and does not subsumed or is subsumed by anything
+                        # normalize it into UNSPECIFIC_DATA/ACTOR
                         terms.add(f"UNSPECIFIC_{token_type}")
 
                 match self.variant:
@@ -440,7 +443,7 @@ def main():
         # GraphML version for visualization
         if args.pretty:
             colored_graph = colorize_graph(trimmed_graph)
-            nx.write_graphml(colored_graph, os.path.join(d, "graph-{args.variant}.graphml"))
+            nx.write_graphml(colored_graph, os.path.join(d, f"graph-{args.variant}.graphml"))
 
 
 if __name__ == "__main__":

@@ -26,10 +26,11 @@ ACTOR_KEYWORDS = frozenset([
     'vendor', 'website',
 ])
 IGNORE_KEYWORDS = frozenset([
-    'right', 'purpose', 'policy', 'notice', 'security', 'protection', 'fraud',
-    'practice', 'law', 'disclosure', 'obligation', 'question', 'agreement',
-    'mean', 'behalf', 'basis', 'child', 'kid', 'parent', 'minor', 'friend',
-    'user', 'consumer', 'customer', 'visitor', 'guest',
+    'act', 'regulartion', 'law', 'policy', 'jurisdiction', 'purpose', 'notice',
+    'security', 'safety', 'question', 'protection', 'behalf', 'consent', 'term',
+    'disclosure', 'obligation', 'agreement', 'mean', 'stage', 'right', 'fraud',
+    'practice', 'basis', 'device', 'friend', 'consumer', 'child', 'kid', 'age',
+    'user', 'parent', 'guardian', 'minor', 'customer', 'visitor', 'guest',
 ])
 
 
@@ -55,7 +56,8 @@ def rule_based_ner(doc: Doc):
             new_ent_label = ent_label
         elif ent_label in {"EVENT", "FAC", "ORG", "PERSON", "PRODUCT", "WORK_OF_ART"}:
             new_ent_label = "ACTOR"
-        elif ent_label in {"LAW", "LANGUAGE", "DATE", "TIME", "PERCENT", "MONEY", "QUANTITY", "ORDINAL", "CARDINAL"}:
+        elif ent_label in {"LAW", "LANGUAGE", "GPE", "DATE", "TIME", "PERCENT", "MONEY",
+                           "QUANTITY", "ORDINAL", "CARDINAL"}:
             new_ent_label = None
         elif root_token.lemma_.lower() in DATATYPE_KEYWORDS:
             new_ent_label = "DATA"

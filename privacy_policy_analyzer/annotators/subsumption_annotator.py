@@ -416,17 +416,21 @@ class SubsumptionAnnotator(BaseAnnotator):
                     self.logger.info("Edge SUBSUM: %r -> %r", upper_ent.text, child_ent.text)
 
     def annotate_first_party_appos(self, document, doc):
+        """Find synonyms to "we" -- the first party"""
+
         for sent in doc.sents:
             appos_graph = nx.Graph()
             first_party_references = []
 
-            for token in sent:
-                if token.dep_ == "appos":
-                    appos_graph.add_edge(token.i, token.head.i)
+            for ent in sent.ents:
+                ent_root = ent.root
 
-                if (token.lemma_, token.pos_) == ("we", "PRON"):
-                    first_party_references.append(token.i)
-                    appos_graph.add_node(token.i)
+                if ent_root.dep_ == "appos":
+                    appos_graph.add_edge(ent_root.i, ent_root.head.i)
+
+                if ent.lemma_.lower() == "we":
+                    first_party_references.append(ent_root.i)
+                    appos_graph.add_node(ent_root.i)
 
             if first_party_references:
                 upper_ent = doc[first_party_references[0]]._.ent

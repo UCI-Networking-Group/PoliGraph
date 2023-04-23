@@ -88,7 +88,7 @@ DATA:
     - 'location (base|relate|specific)'
     - 'location (mapping|tracking) data'
     - '(physical|your) location'
-    - '!(precise|A?GPS|coarse|non-precise|approximate|broad)'
+    - '!(precise|A?GPS|coarse|non-precise|approximate|broad|country|city)'
 
   precise geolocation:
     - '(precise|gps)\b.*\b(geo-?(graphic)?\s*)?location'
@@ -98,7 +98,7 @@ DATA:
     - '!(non-precise)'
 
   coarse geolocation:
-    - '(coarse|imprecise|broad|non-precise|approximate)\b.*\b(geo-?(graphic)?\s*)?location'
+    - '(coarse|imprecise|broad|non-precise|approximate|country|city)\b.*\b(geo-?(graphic)?\s*)?location'
 
   # contact information
   contact information:
@@ -217,7 +217,7 @@ DATA:
 
 ACTOR:
   IGNORE:
-  - '^(you|user|customer|visitor|friend)$'
+  - '^(you|user|customer|visitor|friend|individual)$'
 
   we:
   - '^(we|us|i)$'
@@ -225,15 +225,12 @@ ACTOR:
   - '^our\b.*\b(affiliated?|subsidiary|(group )?company)'
   - '^(this|the) (website|site|app(s|lication)?|software|service?|company|owner)$'
   - '(services?|software|app(s|lication)?)\b.*\b(we (offer|provide))'
-  - '=^(Company|Softwares?|App(lications?)?|Products?|Services?|Websites?)$'
+  - '=^(Company|Softwares?|App(lication)?s?|Products?|Services?|Websites?|Sites?|Games?)$'
 
   UNSPECIFIC:
   - '^(some|all|any|variety|category|example|type|kind)$'
-  - '(third|external|outside|other)[\s-]?(party|data processor)'
-  - '(other|another|external|outside) (service|provider|partner|vendor|website|site|company|platform|contractor|party|business|organi[sz]ation|entities)$'
-  - '(our|other|another|external|outside) (partner|vendor)'
-  - '^(our|other|another|external|outside)?\b.*\bservice provider$'
-  - '^(affiliate|app|application|business|company|corporation|organization|partner|party|product|provider|service|site|software|subsidiary|vendor|website)$'
+  - '(third|external|outside|other|another)[\s-]?party'
+  - '^(affiliate|app|application|business|company|corporation|organi[sz]ation|partner|party|product|provider|service|site|software|subsidiary|vendor|website|agent|entity)$'
   - '!(ad(vertis\w+)?|social|(e-?)?mail|analytics?|measurement|market(ing)?|track(ing)?|content|search|payment|government|auth(entication)?)'
 
   advertiser:

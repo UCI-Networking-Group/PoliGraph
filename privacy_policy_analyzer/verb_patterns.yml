@@ -42,7 +42,6 @@ token_map:
   - process
   - utilize
   - analyze
-  - infer
   - need
 
   VERB_STORE:
@@ -206,3 +205,9 @@ patterns:
   - root: 'include:root|ccomp'
     match: [':subj@DT,*VERB_STORE:relcl,:subj@E1']
     transform: ['STORE', 'E1', 'DT']
+
+  # E1 use ... to collect DT
+  - root: '*VERB_USE:root|ccomp'
+    match: [':subj@E1',
+            '!*VERB_COLLECT_FROM:xcomp,:obj@DT']
+    transform: ['COLLECT', 'E1', 'DT', 'X']
