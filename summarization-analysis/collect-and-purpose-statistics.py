@@ -148,6 +148,7 @@ def main():
     apps_sharing = {d: set() for d in DATATYPE_CATEGORIES}
     non_core_purpose_apps = {d: set() for d in DATATYPE_CATEGORIES}
     set_policy_collect_known_category = set()
+    set_policy_sharing_other_data = set()
     set_policy_non_core_purpose = set()
     set_policy_ad_purpose = set()
 
@@ -165,6 +166,9 @@ def main():
 
                 if ent_cat not in ["we", "UNSPECIFIC_ACTOR"]:
                     apps_sharing[data_cat].add(path)
+
+                    if data_cat not in ["software identifier", "UNSPECIFIC_DATA"]:
+                        set_policy_sharing_other_data.add(path)
 
             for purpose in kgraph_result[data_cat]["purposes"]:
                 purpose_stats.loc[data_cat, purpose] += 1
@@ -196,6 +200,8 @@ def main():
             })
 
     print("# of policies that disclose the collection of known categories:", len(set_policy_collect_known_category))
+    print("# of policies that disclose to share categories other than software identifiers:",
+          len(set_policy_sharing_other_data))
     print("# of policies that disclose non-core usage purposes:", len(set_policy_non_core_purpose))
     print("# of policies that disclose advertising purpose:", len(set_policy_ad_purpose))
 
