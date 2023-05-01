@@ -228,6 +228,25 @@ class GraphBuilder:
 
             return root_token.doc[base_phrase.start:right_boundary]
 
+        def _eliminate_intermediate_node(src):
+            if G_collect.has_node(src):
+                if token_type_map[src] == "DATA":
+                    for u, _, rel, data in G_collect.in_edges(src, keys=True, data=True):
+                        for _, v in G_subsum.out_edges(src):
+                            G_collect.add_edge(u, v, rel, **data)
+                elif token_type_map[src] == "ACTOR":
+                    for _, v, rel, data in G_collect.out_edges(src, keys=True, data=True):
+                        for _, u in G_subsum.out_edges(src):
+                            G_collect.add_edge(u, v, rel, **data)
+
+                G_collect.remove_node(src)
+
+            for u, _ in G_subsum.in_edges(src):
+                for _, v in G_subsum.out_edges(src):
+                    dag_add_edge(G_subsum, u, v)
+
+            G_subsum.remove_node(src)
+
         def normalize_terms():
             """Step 6: Run phrase normalization."""
 
@@ -237,31 +256,34 @@ class GraphBuilder:
                 if (phrase := _expand_phrase(src)) is None:
                     continue
 
+                # Fallback to lemmatization only if token types from NER and graph relation agrees
+                flag_use_stem = phrase.root.ent_type_ == token_type
+
                 match token_type:
                     case "DATA":
-                        terms.update(self.data_phrase_normalizer.normalize(phrase))
+                        terms.update(self.data_phrase_normalizer.normalize(phrase, flag_use_stem))
                     case "ACTOR":
-                        # if there is any proper noun, run entity_mapper to find company names
+                        # If there is any proper noun, run entity_mapper to find company names
                         if any(t.pos_ == "PROPN" for t in phrase):
                             terms.update(self.entity_mapper.match_name(phrase.text))
+                            flag_use_stem = flag_use_stem and not terms
 
-                        # try rule-based normalizer
-                        terms.update(self.actor_phrase_normalizer.normalize(phrase, fallback_to_stem=len(terms) == 0))
+                        # Try rule-based normalizer
+                        terms.update(self.actor_phrase_normalizer.normalize(phrase, flag_use_stem))
 
-                if "IGNORE" in terms:
-                    terms.clear()
-                    continue
+                has_subsum = G_subsum.has_node(src) and G_subsum.out_degree(src) > 0
+                be_subsumed = G_subsum.has_node(src) and G_subsum.in_degree(src) > 0
 
-                if "UNSPECIFIC" in terms:
+                if "UNSPECIFIC" in terms and len(terms) == 1 and not has_subsum and not be_subsumed:
+                    # UNSPECIFIC node cannot subsume or be subsumed by any other node
                     terms.remove("UNSPECIFIC")
+                    terms.add(f"UNSPECIFIC_{token_type}")
+                else:
+                    terms.discard("UNSPECIFIC")
 
-                    if G_subsum.has_node(src) and G_subsum.out_degree(src) > 0:
-                        # If the phrase subsumes anything, normalize it into a unique node
-                        terms.add(f"{phrase.root.lemma_} {src}")
-                    elif len(terms) == 0 and not(G_subsum.has_node(src) and G_subsum.in_degree(src) > 0):
-                        # If the phrase has no specific normalization, and does not subsumed or is subsumed by anything
-                        # normalize it into UNSPECIFIC_DATA/ACTOR
-                        terms.add(f"UNSPECIFIC_{token_type}")
+                    if has_subsum and not terms:
+                        # If the phrase subsumes anything, at least fallback to an intermediate node
+                        _eliminate_intermediate_node(src)
 
                 match self.variant:
                     case "default":

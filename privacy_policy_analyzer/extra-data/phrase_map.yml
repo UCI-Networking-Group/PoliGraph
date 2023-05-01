@@ -1,8 +1,7 @@
 DATA:
   UNSPECIFIC:
-    - '^(some|all|any|variety|category|example|type|kind)$'
-    - '^(technology|data|datum|information)$'
-    - '^(information|data|datum)( we collect| you provide| about (you|user|our user))?$'
+    - '^(some|all|any|variety|category|example|type|kind|thing)$'
+    - '^(data|datum|information|detail)$'
 
   personal information:
     - '^((your|user|the)\s+)?personal (data|info|information|datum)$'
@@ -84,7 +83,7 @@ DATA:
     - '^location$'
     - '(geo-?(graphic)?\s*)?location'
     - '(geo-?)?location(al)? (information|data|datum|history|detail)'
-    - 'geographic (information|data|datum|history|detail)'
+    - 'geographic(al)? (information|data|datum|history|detail)'
     - 'location (base|relate|specific)'
     - 'location (mapping|tracking) data'
     - '(physical|your) location'
@@ -190,6 +189,7 @@ DATA:
   # usage / activity data
   internet activity:
     - '(internet|website|app(lication)?|in-game|on-?line|player|user|system|network) (activity|usage)'
+    - 'information about (activity|usage|access)'
     - '(activity|usage|access) (history|data|datum)'
 
   'browsing / search history':
@@ -216,9 +216,6 @@ DATA:
   - '(anonymous|pseudonymous)\b.*\bidentifier'
 
 ACTOR:
-  IGNORE:
-  - '^(you|user|customer|visitor|friend|individual)$'
-
   we:
   - '^(we|us|i)$'
   - '^our (service|(web)?site|product|server|app(lication|s)?|mobile application|system|software|company|business|platform)$'
@@ -228,7 +225,7 @@ ACTOR:
   - '=^(Company|Softwares?|App(lication)?s?|Products?|Services?|Websites?|Sites?|Games?)$'
 
   UNSPECIFIC:
-  - '^(some|all|any|variety|category|example|type|kind)$'
+  - '^(some|all|any|variety|category|example|type|kind|thing)$'
   - '(third|external|outside|other|another)[\s-]?party'
   - '^(affiliate|app|application|business|company|corporation|organi[sz]ation|partner|party|product|provider|service|site|software|subsidiary|vendor|website|agent|entity)$'
   - '!(ad(vertis\w+)?|social|(e-?)?mail|analytics?|measurement|market(ing)?|track(ing)?|content|search|payment|government|auth(entication)?)'
