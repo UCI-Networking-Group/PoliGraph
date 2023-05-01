@@ -56,8 +56,8 @@ def main():
         precision = TP / (TP + FP)
 
         print(entities)
-        print(f"precision = {precision * 100:5.2f}%")
-        print(f"   recall = {recall * 100:5.2f}%")
+        print(f"precision = {precision * 100:4.1f}%")
+        print(f"   recall = {recall * 100:4.1f}%")
 
 
 if __name__ == "__main__":

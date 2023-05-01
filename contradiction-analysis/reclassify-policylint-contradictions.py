@@ -16,9 +16,6 @@ from privacy_policy_analyzer.graph_utils import KGraph, yaml_load_graph
 def check_subsum_conflict(kgraph: KGraph, pos_term, neg_term):
     if pos_term == neg_term:
         return True
-    elif pos_term != neg_term and kgraph.subsum(pos_term, neg_term):
-        # A narrow definition as defined in PolicyLint
-        return False
 
     neg_term_children = set(kgraph.descendants(neg_term))
     neg_term_children.add(neg_term)
@@ -57,6 +54,10 @@ class EdgeMapper:
         ),
         (
             r'\baccount\b.*\b(data|datum|information)\b',
+            {'account information'}
+        ),
+        (
+            r'\b(data|datum|information)\b.*\baccount',
             {'account information'}
         ),
         (
@@ -291,7 +292,7 @@ def main():
                 reasons = edge_mapper.classify_contradiction(pos_edge, neg_edge)
 
                 if not reasons:
-                    conflicting_edges.append((pos_edge, neg_edge, frozenset(reasons)))
+                    conflicting_edges.append((pos_edge, neg_edge, {"CONFLICT"}))
                 elif "INVALID" in reasons:
                     invalid_edges.append((pos_edge, neg_edge, frozenset(reasons)))
                 elif "ONTOLOGY" in reasons:
@@ -300,6 +301,11 @@ def main():
                     valid_edges.append((pos_edge, neg_edge, frozenset(reasons)))
 
             selected_edge_pairs = conflicting_edges or ontology_conflicting_edges or valid_edges or invalid_edges
+
+            if len(selected_edge_pairs) == 0:
+                print(app_id)
+                print(neg_sentences, neg_tuple, neg_edges)
+                print(pos_sentences, pos_tuple, pos_edges)
 
             for pos_edge, neg_edge, reasons in selected_edge_pairs:
                 pos_e, pos_d, pos_action, pos_purposes = pos_edge

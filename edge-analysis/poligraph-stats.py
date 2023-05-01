@@ -14,7 +14,7 @@ def main():
     parser.add_argument("-o", "--output-path", required=True, help="Output edge stat path")
     args = parser.parse_args()
 
-    empty_kgraph_count = 0
+    non_empty_kgraph_count = 0
     subsum_edge_count = 0
     subsum_sentence_count = 0
     collect_edge_count = 0
@@ -39,8 +39,8 @@ def main():
         collect_sentences = set()
         purpose_phrases = set()
 
-        if nx.is_empty(graph):
-            empty_kgraph_count += 1
+        if not nx.is_empty(graph):
+            non_empty_kgraph_count += 1
 
         for u, v, rel, data in graph.edges(keys=True, data=True):
             edge_statistics[(u, v, rel)] += 1
@@ -69,7 +69,7 @@ def main():
         collect_sentence_count += len(collect_sentences)
         purpose_phrase_count += len(purpose_phrases)
 
-    print("empty graphs: ", empty_kgraph_count)
+    print("non-empty graphs: ", non_empty_kgraph_count)
     print("SUBSUM:", subsum_edge_count, subsum_sentence_count)
     print("COLLECT:", collect_edge_count, collect_sentence_count)
     print("PURPOSE", collect_edge_with_purposes_count, purpose_phrase_count)
