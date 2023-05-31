@@ -10,7 +10,7 @@ import networkx as nx
 import yaml
 
 from privacy_policy_analyzer.annotators import CollectionAnnotator
-from privacy_policy_analyzer.document import PolicyDocument
+from privacy_policy_analyzer.document import PolicyDocument, SegmentType
 from privacy_policy_analyzer.graph_utils import yaml_dump_graph, contracted_nodes
 from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
 from privacy_policy_analyzer.purpose_classification import PurposeClassifier
@@ -70,7 +70,7 @@ class GraphBuilder:
                             break
                     else:
                         match self.variant:
-                            case "original" | "policylint":
+                            case "original" | "policylint" | "per_section":
                                 # Only "COLLECT" edges
                                 if not relationship.startswith("NOT_"):
                                     G_collect.add_edge(src1, src2, key="COLLECT")
@@ -247,6 +247,15 @@ class GraphBuilder:
 
             G_subsum.remove_node(src)
 
+        def _get_section_id(src):
+            """Get the section ID for per_section ablative configuration"""
+            segment = document.segments[src[0]]
+
+            while segment is not None and segment.segment_type != SegmentType.HEADING:
+                segment = segment.parent
+
+            return segment.segment_id if segment is not None else 0
+
         def normalize_terms():
             """Step 6: Run phrase normalization."""
 
@@ -288,18 +297,22 @@ class GraphBuilder:
                 match self.variant:
                     case "default":
                         # Extension: include data subject (if no subject info then this is no-op)
-                        if self.variant == "default":
-                            if token_type == "DATA":
-                                if subject := document.token_relationship.nodes[src].get('subject'):
-                                    replaced_terms = [f"{term} @{subject}" for term in terms]
-                                    terms.clear()
-                                    terms.update(replaced_terms)
+                        if token_type == "DATA":
+                            if subject := document.token_relationship.nodes[src].get('subject'):
+                                replaced_terms = [f"{term} @{subject}" for term in terms]
+                                terms.clear()
+                                terms.update(replaced_terms)
                     case "policylint":
                         # PolicyLint simulation -- Make every term unique
-                        if self.variant == "policylint":
-                            replaced_terms = [f"{term} {src}" for term in terms]
-                            terms.clear()
-                            terms.update(replaced_terms)
+                        replaced_terms = [f"{term} {src}" for term in terms]
+                        terms.clear()
+                        terms.update(replaced_terms)
+                    case "per_section":
+                        # "per-segment" simulation -- Limit relations within a segment
+                        section_id = _get_section_id(src)
+                        replaced_terms = [f"{term} {(section_id, 0)}" for term in terms]
+                        terms.clear()
+                        terms.update(replaced_terms)
 
                 G_final.add_nodes_from(terms, type=token_type)
 
@@ -436,8 +449,8 @@ def main():
     parser.add_argument("--purpose-classification", required=True, help="Purpose classification model directory")
     parser.add_argument("-p", "--phrase-map", required=True, help="Path to phrase_map.yml")
     parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
-    parser.add_argument("-v", "--variant", choices=["default", "original", "policylint"], default="default",
-                        help="Variant of the graph")
+    parser.add_argument("-v", "--variant", choices=["default", "original", "policylint", "per_section"],
+                        default="default", help="Variant of the graph")
     parser.add_argument("--pretty", action="store_true", help="Generate pretty GraphML graph for visualization")
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
