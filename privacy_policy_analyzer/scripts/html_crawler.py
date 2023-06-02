@@ -82,8 +82,9 @@ def main():
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("url", help="input URL or path")
-    parser.add_argument("output", help="output dir")
+    parser.add_argument("url", help="Input URL or path")
+    parser.add_argument("output", help="Output dir")
+    parser.add_argument("--no-readability-js", action="store_true", help="Disable readability.js")
     args = parser.parse_args()
 
     access_url = url_arg_handler(args.url)
@@ -145,7 +146,7 @@ def main():
         # Apply readability.js
         page.evaluate("window.stop()")
         page.add_script_tag(content=get_readability_js())
-        readability_info = page.evaluate(r"""() => {
+        readability_info = page.evaluate(r"""(no_readability_js) => {
             window.stop();
 
             const documentClone = document.cloneNode(true);
@@ -154,7 +155,7 @@ def main():
 
             document.querySelectorAll('[aria-hidden=true]').forEach((x) => x.setAttribute("aria-hidden", false));
 
-            if (isProbablyReaderable(document)) {
+            if (isProbablyReaderable(document) && !no_readability_js) {
                 documentClone.body.innerHTML = article.content;
 
                 if (documentClone.body.innerText.search(/(data|privacy|cookie)\s*(policy|notice)/) >= 0) {
@@ -167,7 +168,7 @@ def main():
                 elem.remove();
 
             return article;
-        }""", [])
+        }""", [args.no_readability_js])
         cleaned_html = page.content()
 
         # Check language
