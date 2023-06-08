@@ -1,7 +1,7 @@
 DATA:
   UNSPECIFIC:
     - '^(some|all|any|variety|category|example|type|kind|thing)$'
-    - '^(data|datum|information|detail)$'
+    - '^(data|datum|information|detail|technology)$'
 
   personal information:
     - '^((your|user|the)\s+)?personal (data|info|information|datum)$'
