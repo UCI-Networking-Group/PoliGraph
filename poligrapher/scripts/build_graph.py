@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 
 import argparse
+from collections import defaultdict, deque
+import importlib.resources as pkg_resources
 import itertools
 import logging
 import os
-from collections import defaultdict, deque
 
 import networkx as nx
 import yaml
 
-from privacy_policy_analyzer.annotators import CollectionAnnotator
-from privacy_policy_analyzer.document import PolicyDocument, SegmentType
-from privacy_policy_analyzer.graph_utils import yaml_dump_graph, contracted_nodes
-from privacy_policy_analyzer.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
-from privacy_policy_analyzer.purpose_classification import PurposeClassifier
-from privacy_policy_analyzer.utils import setup_nlp_pipeline
+import poligrapher
+from poligrapher.annotators import CollectionAnnotator
+from poligrapher.document import PolicyDocument, SegmentType
+from poligrapher.graph_utils import contracted_nodes, yaml_dump_graph
+from poligrapher.phrase_normalization import EntityMatcher, RuleBasedPhraseNormalizer
+from poligrapher.purpose_classification import PurposeClassifier
+from poligrapher.utils import setup_nlp_pipeline
 
 
 def dag_add_edge(G, n1, n2, *args, **kwargs):
@@ -447,13 +449,20 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--nlp", required=True, help="NLP model directory")
     parser.add_argument("--purpose-classification", required=True, help="Purpose classification model directory")
-    parser.add_argument("-p", "--phrase-map", required=True, help="Path to phrase_map.yml")
-    parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
+    parser.add_argument("-p", "--phrase-map", default="", help="Path to phrase_map.yml")
+    parser.add_argument("-e", "--entity-info", default="", help="Path to entity_info.json")
     parser.add_argument("-v", "--variant", choices=["default", "original", "policylint", "per_section"],
                         default="default", help="Variant of the graph")
     parser.add_argument("--pretty", action="store_true", help="Generate pretty GraphML graph for visualization")
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
+
+    with pkg_resources.path(poligrapher, "extra-data") as extra_data:
+        if not args.phrase_map:
+            args.phrase_map = extra_data / "phrase_map.yml"
+
+        if not args.entity_info:
+            args.entity_info = extra_data / "entity_info.json"
 
     nlp = setup_nlp_pipeline(args.nlp)
     graph_builder = GraphBuilder(args.phrase_map, args.entity_info, args.purpose_classification, args.variant)

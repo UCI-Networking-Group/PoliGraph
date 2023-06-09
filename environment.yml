@@ -302,6 +302,7 @@ dependencies:
   - spacy-legacy=3.0.12=pyhd8ed1ab_0
   - spacy-loggers=1.0.1=pyhd3eb1b0_0
   - spacy-model-en_core_web_lg=3.5.0=pyhd8ed1ab_0
+  - spacy-model-en_core_web_md=3.5.0=pyhd8ed1ab_0
   - spacy-model-en_core_web_sm=3.5.0=pyhd8ed1ab_0
   - spacy-model-en_core_web_trf=3.5.0=pyh55bf090_0
   - spacy-transformers=1.2.4=py310hfb6f7a9_0

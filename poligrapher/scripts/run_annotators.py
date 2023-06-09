@@ -3,7 +3,7 @@
 import argparse
 import logging
 
-from privacy_policy_analyzer.annotators import (
+from poligrapher.annotators import (
     CollectionAnnotator,
     CoreferenceAnnotator,
     ListAnnotator,
@@ -11,8 +11,8 @@ from privacy_policy_analyzer.annotators import (
     SubsumptionAnnotator,
     SubjectAnnotator,
 )
-from privacy_policy_analyzer.document import PolicyDocument
-from privacy_policy_analyzer.utils import setup_nlp_pipeline
+from poligrapher.document import PolicyDocument
+from poligrapher.utils import setup_nlp_pipeline
 
 
 def main():

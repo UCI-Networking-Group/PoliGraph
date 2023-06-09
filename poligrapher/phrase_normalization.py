@@ -6,7 +6,7 @@ import string
 
 import regex
 
-from privacy_policy_analyzer.utils import TRIVIAL_WORDS
+from .utils import TRIVIAL_WORDS
 
 
 TRIM_TRANSITIONS = {

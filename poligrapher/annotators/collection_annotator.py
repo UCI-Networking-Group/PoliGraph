@@ -6,7 +6,7 @@ import networkx as nx
 import yaml
 from spacy.tokens import Token
 
-import privacy_policy_analyzer
+import poligrapher
 
 from .base import BaseAnnotator
 
@@ -341,7 +341,7 @@ class CollectionAnnotator(BaseAnnotator):
     def __init__(self, nlp):
         super().__init__(nlp)
 
-        with pkg_resources.open_text(privacy_policy_analyzer, "verb_patterns.yml") as fin:
+        with pkg_resources.open_text(poligrapher, "verb_patterns.yml") as fin:
             config = yaml.safe_load(fin)
 
         token_map = config["token_map"]

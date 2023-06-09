@@ -3,7 +3,8 @@
 from setuptools import setup
 
 setup(
-    name='Privacy Policy Analyzer',
+    name='poligrapher',
     author='UCI Networking Group',
-    packages=['privacy_policy_analyzer'],
+    include_package_data=True,
+    packages=['poligrapher', 'poligrapher.annotators', 'poligrapher.scripts'],
 )
