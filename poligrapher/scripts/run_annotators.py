@@ -19,7 +19,7 @@ def main():
     logging.basicConfig(format='%(asctime)s [%(levelname)s] <%(name)s> %(message)s', level=logging.INFO)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--nlp", required=True, help="NLP model directory")
+    parser.add_argument("--nlp", default="", help="NLP model directory")
     parser.add_argument("--disable", default="", help="Disable annotators for ablation study")
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()

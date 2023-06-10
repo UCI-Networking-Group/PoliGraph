@@ -447,8 +447,8 @@ def main():
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--nlp", required=True, help="NLP model directory")
-    parser.add_argument("--purpose-classification", required=True, help="Purpose classification model directory")
+    parser.add_argument("--nlp", default="", help="NLP model directory")
+    parser.add_argument("--purpose-classification", default="", help="Purpose classification model directory")
     parser.add_argument("-p", "--phrase-map", default="", help="Path to phrase_map.yml")
     parser.add_argument("-e", "--entity-info", default="", help="Path to entity_info.json")
     parser.add_argument("-v", "--variant", choices=["default", "original", "policylint", "per_section"],
@@ -457,7 +457,11 @@ def main():
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
 
+    # Load resources from extra-data folder unless overridden in the args
     with pkg_resources.path(poligrapher, "extra-data") as extra_data:
+        if not args.purpose_classification:
+            args.purpose_classification = extra_data / "purpose_classification"
+
         if not args.phrase_map:
             args.phrase_map = extra_data / "phrase_map.yml"
 

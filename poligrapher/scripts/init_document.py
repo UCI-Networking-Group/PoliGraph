@@ -23,7 +23,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
-    parser.add_argument("--nlp", required=True, help="NLP model directory")
+    parser.add_argument("--nlp", default="", help="NLP model directory")
     parser.add_argument("--debug", action="store_true", help="Show NER results")
     parser.add_argument("--gpu-memory-threshold", default=0.9, type=float,
                         help="Max GPU usage to trigger manual cache cleaning")

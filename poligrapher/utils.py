@@ -1,6 +1,10 @@
+import importlib.resources as pkg_resources
+
 import spacy
 from spacy.language import Language
 from spacy.tokens import Doc, Span, Token
+
+import poligrapher
 
 TRIVIAL_WORDS = frozenset([
     "some", "all", "any", "variety", "category", "example", "more", "such",
@@ -194,8 +198,13 @@ def label_all_phrases(doc: Doc) -> Doc:
 
 
 def setup_nlp_pipeline(ner_path: str):
+    if not ner_path:
+        with pkg_resources.path(poligrapher, "extra-data") as extra_data:
+            our_ner = spacy.load(extra_data / "named_entity_recognition")
+    else:
+        our_ner = spacy.load(ner_path)
+
     nlp = spacy.load("en_core_web_trf", disable=["ner"])
-    our_ner = spacy.load(ner_path)
 
     # Disable spaCy's NER and use our NER
     our_ner.replace_listeners("transformer", "ner", ["model.tok2vec"])
@@ -213,7 +222,7 @@ def setup_nlp_pipeline(ner_path: str):
     return nlp
 
 
-def token_to_ent(token: Token) -> Span:
+def token_to_ent(token: Token):
     doc = token.doc
     if token.ent_iob_ not in "BI":
         return None
