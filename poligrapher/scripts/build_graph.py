@@ -72,12 +72,12 @@ class GraphBuilder:
                             break
                     else:
                         match self.variant:
-                            case "original" | "policylint" | "per_section":
+                            case "original" | "per_sentence" | "per_section":
                                 # Only "COLLECT" edges
                                 if not relationship.startswith("NOT_"):
                                     G_collect.add_edge(src1, src2, key="COLLECT")
                                     data_type_purposes.setdefault(src2, [])
-                            case "default":
+                            case "extended":
                                 # Extension: keep all edges
                                 G_collect.add_edge(src1, src2, key=relationship)
                                 data_type_purposes.setdefault(src2, [])
@@ -147,7 +147,7 @@ class GraphBuilder:
             G_collect into their main mentions.
             """
 
-            if self.variant == "policylint":
+            if self.variant == "per_sentence":
                 return
 
             for src1 in nx.topological_sort(G_coref):
@@ -297,20 +297,20 @@ class GraphBuilder:
                         _eliminate_intermediate_node(src)
 
                 match self.variant:
-                    case "default":
+                    case "extended":
                         # Extension: include data subject (if no subject info then this is no-op)
                         if token_type == "DATA":
                             if subject := document.token_relationship.nodes[src].get('subject'):
                                 replaced_terms = [f"{term} @{subject}" for term in terms]
                                 terms.clear()
                                 terms.update(replaced_terms)
-                    case "policylint":
+                    case "per_sentence":
                         # PolicyLint simulation -- Make every term unique
                         replaced_terms = [f"{term} {src}" for term in terms]
                         terms.clear()
                         terms.update(replaced_terms)
                     case "per_section":
-                        # "per-segment" simulation -- Limit relations within a segment
+                        # "per_section" simulation -- Limit relations within a section
                         section_id = _get_section_id(src)
                         replaced_terms = [f"{term} {(section_id, 0)}" for term in terms]
                         terms.clear()
@@ -451,8 +451,8 @@ def main():
     parser.add_argument("--purpose-classification", default="", help="Purpose classification model directory")
     parser.add_argument("-p", "--phrase-map", default="", help="Path to phrase_map.yml")
     parser.add_argument("-e", "--entity-info", default="", help="Path to entity_info.json")
-    parser.add_argument("-v", "--variant", choices=["default", "original", "policylint", "per_section"],
-                        default="default", help="Variant of the graph")
+    parser.add_argument("-v", "--variant", choices=["original", "extended", "per_sentence", "per_section"],
+                        default="original", help="Variant of the graph")
     parser.add_argument("--pretty", action="store_true", help="Generate pretty GraphML graph for visualization")
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     args = parser.parse_args()
