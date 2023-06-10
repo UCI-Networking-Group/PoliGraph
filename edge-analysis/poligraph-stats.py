@@ -62,7 +62,7 @@ def main():
                 if u == "we":
                     has_we_collect.add(d)
 
-                if u == "UNSPECIFIC_ACTOR" or v == "UNSPECIFIC_ENTITY":
+                if u == "UNSPECIFIED_ACTOR" or v == "UNSPECIFIED_ENTITY":
                     has_unspecific.add(d)
 
         subsum_sentence_count += len(subsum_sentences)
@@ -74,7 +74,7 @@ def main():
     print("COLLECT:", collect_edge_count, collect_sentence_count)
     print("PURPOSE", collect_edge_with_purposes_count, purpose_phrase_count)
     print("# we COLLECT:", len(has_we_collect))
-    print("# UNSPECIFIC:", len(has_unspecific))
+    print("# UNSPECIFIED:", len(has_unspecific))
 
     with open(args.output_path, "w", encoding="utf-8", newline="") as fout:
         writer = csv.DictWriter(fout, fieldnames=["u", "v", "rel", "count", "purpose_count"])

@@ -367,8 +367,8 @@ class ExtKGraph(KGraph):
                 self.positive_kgraph.add_node(node, type=node_type)
                 return True
 
-        try_add_node("UNSPECIFIC_DATA", "DATA")
-        try_add_node("UNSPECIFIC_ACTOR", "ACTOR")
+        try_add_node("UNSPECIFIED_DATA", "DATA")
+        try_add_node("UNSPECIFIED_ACTOR", "ACTOR")
 
         for u, v in data_ontology.edges():
             try_add_node(u, "DATA")
@@ -412,8 +412,8 @@ class ExtKGraph(KGraph):
         tmp_edges = []
 
         for data_type in self.datatypes:
-            if data_type != "UNSPECIFIC_DATA":
-                tmp_edges.append(("UNSPECIFIC_DATA", data_type, "SUBSUM"))
+            if data_type != "UNSPECIFIED_DATA":
+                tmp_edges.append(("UNSPECIFIED_DATA", data_type, "SUBSUM"))
 
         self.positive_kgraph.add_edges_from(tmp_edges)
         yield
@@ -424,8 +424,8 @@ class ExtKGraph(KGraph):
         tmp_edges = []
 
         for entity in self.entities:
-            if entity != "UNSPECIFIC_ACTOR":
-                tmp_edges.append((entity, "UNSPECIFIC_ACTOR", "SUBSUM_BY"))
+            if entity != "UNSPECIFIED_ACTOR":
+                tmp_edges.append((entity, "UNSPECIFIED_ACTOR", "SUBSUM_BY"))
 
         self.positive_kgraph.add_edges_from(tmp_edges)
         yield

@@ -1,5 +1,5 @@
 DATA:
-  UNSPECIFIC:
+  UNSPECIFIED:
     - '^(some|all|any|variety|category|example|type|kind|thing)$'
     - '^(data|datum|information|detail|technology)$'
 
@@ -224,7 +224,7 @@ ACTOR:
   - '(services?|software|app(s|lication)?)\b.*\b(we (offer|provide))'
   - '=^(Company|Softwares?|App(lication)?s?|Products?|Services?|Websites?|Sites?|Games?)$'
 
-  UNSPECIFIC:
+  UNSPECIFIED:
   - '^(some|all|any|variety|category|example|type|kind|thing)$'
   - '(third|external|outside|other|another)[\s-]?party'
   - '^(affiliate|app|application|business|company|corporation|organi[sz]ation|partner|party|product|provider|service|site|software|subsidiary|vendor|website|agent|entity)$'

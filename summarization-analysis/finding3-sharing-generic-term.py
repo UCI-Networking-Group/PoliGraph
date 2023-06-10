@@ -18,7 +18,7 @@ DATATYPE_CATEGORIES = [
 ]
 
 ENTITY_CATEGORIES = [
-    "UNSPECIFIC_ACTOR",
+    "UNSPECIFIED_ACTOR",
     "advertiser",
     "analytic provider",
     "auth provider",
@@ -86,7 +86,7 @@ def main():
     data_category_mapping = {}
 
     for data_cat in DATATYPE_CATEGORIES:
-        if data_cat != "UNSPECIFIC_DATA":
+        if data_cat != "UNSPECIFIED_DATA":
             data_category_mapping[data_cat] = data_cat
 
             for child in nx.descendants(data_ontology, data_cat):

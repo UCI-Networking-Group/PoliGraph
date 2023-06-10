@@ -10,7 +10,7 @@ import pandas as pd
 from privacy_policy_analyzer.graph_utils import KGraph, load_ontologies
 
 DATATYPE_CATEGORIES = [
-    "UNSPECIFIC_DATA",
+    "UNSPECIFIED_DATA",
     #"device identifier",
     "software identifier",
     "hardware identifier",
@@ -25,7 +25,7 @@ DATATYPE_CATEGORIES = [
 ENTITY_CATEGORIES = [
     "we",
 
-    "UNSPECIFIC_ACTOR",
+    "UNSPECIFIED_ACTOR",
 
     "advertiser",
     "analytic provider",
@@ -62,7 +62,7 @@ class ParallelHelper:
             collect_entities = set()
 
             child_data_types = [data_cat]
-            if data_cat != "UNSPECIFIC_DATA":
+            if data_cat != "UNSPECIFIED_DATA":
                 child_data_types.extend(nx.descendants(self.data_ontology, data_cat))
 
             for data_type in child_data_types:
@@ -156,7 +156,7 @@ def main():
         path, kgraph_result = output_queue.get()
 
         for data_cat in kgraph_result:
-            if data_cat != "UNSPECIFIC_DATA":
+            if data_cat != "UNSPECIFIED_DATA":
                 set_policy_collect_known_category.add(path)
 
             entity_stats.loc[data_cat, "total"] += 1
@@ -164,10 +164,10 @@ def main():
             for ent_cat in kgraph_result[data_cat]["entities"]:
                 entity_stats.loc[data_cat, ent_cat] += 1
 
-                if ent_cat not in ["we", "UNSPECIFIC_ACTOR"]:
+                if ent_cat not in ["we", "UNSPECIFIED_ACTOR"]:
                     apps_sharing[data_cat].add(path)
 
-                    if data_cat not in ["software identifier", "UNSPECIFIC_DATA"]:
+                    if data_cat not in ["software identifier", "UNSPECIFIED_DATA"]:
                         set_policy_sharing_other_data.add(path)
 
             for purpose in kgraph_result[data_cat]["purposes"]:

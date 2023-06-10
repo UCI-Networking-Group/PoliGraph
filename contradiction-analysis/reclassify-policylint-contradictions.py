@@ -29,7 +29,7 @@ def check_subsum_conflict(kgraph: KGraph, pos_term, neg_term):
 class EdgeMapper:
     _DATA_TERM_MAP = (
         (
-            r'^UNSPECIFIC_DATA$',
+            r'^UNSPECIFIED_DATA$',
             {'pii', 'information about you', 'user information'},
         ),
         (
@@ -104,7 +104,7 @@ class EdgeMapper:
 
     _ENTITY_TERM_MAP = (
         (
-            r'^(UNSPECIFIC_ACTOR|service provider|contractor|platform)$',
+            r'^(UNSPECIFIED_ACTOR|service provider|contractor|platform)$',
             {'third party'}
         ),
         (

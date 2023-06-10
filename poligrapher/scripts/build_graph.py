@@ -285,12 +285,12 @@ class GraphBuilder:
                 has_subsum = G_subsum.has_node(src) and G_subsum.out_degree(src) > 0
                 be_subsumed = G_subsum.has_node(src) and G_subsum.in_degree(src) > 0
 
-                if "UNSPECIFIC" in terms and len(terms) == 1 and not has_subsum and not be_subsumed:
-                    # UNSPECIFIC node cannot subsume or be subsumed by any other node
-                    terms.remove("UNSPECIFIC")
-                    terms.add(f"UNSPECIFIC_{token_type}")
+                if "UNSPECIFIED" in terms and len(terms) == 1 and not has_subsum and not be_subsumed:
+                    # UNSPECIFIED node cannot subsume or be subsumed by any other node
+                    terms.remove("UNSPECIFIED")
+                    terms.add(f"UNSPECIFIED_{token_type}")
                 else:
-                    terms.discard("UNSPECIFIC")
+                    terms.discard("UNSPECIFIED")
 
                     if has_subsum and not terms:
                         # If the phrase subsumes anything, at least fallback to an intermediate node

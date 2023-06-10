@@ -94,7 +94,7 @@ def main():
                 if kgraph.validate_sharing(entity, data_type):
                     row["policheck_consistency"] = "clear"
                 elif ext_kgraph.validate_sharing(entity, data_type, accept_unspecific_data=False) \
-                    or ext_kgraph.validate_sharing("UNSPECIFIC_ACTOR", data_type, accept_unspecific_data=False):
+                    or ext_kgraph.validate_sharing("UNSPECIFIED_ACTOR", data_type, accept_unspecific_data=False):
                     row["policheck_consistency"] = "vague"
                 else:
                     row["policheck_consistency"] = "omitted"
@@ -110,7 +110,7 @@ def main():
                     for p in ext_kgraph.purposes(entity, data_type):
                         possible_purposes.add(p)
 
-                    for p in ext_kgraph.purposes("UNSPECIFIC_ACTOR", data_type):
+                    for p in ext_kgraph.purposes("UNSPECIFIED_ACTOR", data_type):
                         possible_purposes.add(p)
 
                 row["purposes"] = "|".join(sorted(possible_purposes))
