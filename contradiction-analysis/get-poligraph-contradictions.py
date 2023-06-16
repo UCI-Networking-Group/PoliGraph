@@ -5,8 +5,8 @@ import csv
 import logging
 import os
 
-from privacy_policy_analyzer.annotators import CollectionAnnotator
-from privacy_policy_analyzer.graph_utils import KGraph
+from poligrapher.annotators import CollectionAnnotator
+from poligrapher.graph_utils import KGraph
 
 
 def check_subsum_conflict(kgraph: KGraph, pos_term, neg_term):

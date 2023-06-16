@@ -35,7 +35,7 @@ with open(input_csv, newline="") as fin:
         args1 = ['test', '-e', output_dir]
         args2 = [
             'python', '-u',
-            '-m', 'privacy_policy_analyzer.scripts.html_crawler',
+            '-m', 'poligrapher.scripts.html_crawler',
             privacy_policy_url,
             os.path.join(target_dir, privacy_policy_id)
         ]

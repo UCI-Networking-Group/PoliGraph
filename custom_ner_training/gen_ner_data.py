@@ -10,8 +10,8 @@ from requests_cache import CachedSession
 from spacy.tokens import Doc, Span
 from unidecode import unidecode
 
-from privacy_policy_analyzer.document import PolicyDocument
-from privacy_policy_analyzer.utils import align_noun_phrases
+from poligrapher.document import PolicyDocument
+from poligrapher.utils import align_noun_phrases
 
 DATATYPE_KEYWORDS = frozenset([
     "information", "data", "datum", "address", "number", "location",

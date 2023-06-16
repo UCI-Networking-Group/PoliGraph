@@ -5,20 +5,16 @@ from collections import Counter, defaultdict
 import csv
 import os
 
-import networkx as nx
-from privacy_policy_analyzer.graph_utils import KGraph, load_ontologies
-
+from poligrapher.graph_utils import KGraph, load_ontologies
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
     parser.add_argument("-o", "--output", required=True, help="Output path")
-    parser.add_argument("-y", "--ontology", required=True, help="Ontology directory")
-    parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     args = parser.parse_args()
 
-    data_ontology, entity_ontology = load_ontologies(args.ontology, args.entity_info)
+    data_ontology, entity_ontology = load_ontologies()
     datatype_counters = [Counter(), Counter()]
     entity_counters = [Counter(), Counter()]
     possible_meanings_data = defaultdict(set)

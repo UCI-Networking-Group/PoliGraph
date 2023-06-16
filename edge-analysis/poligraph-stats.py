@@ -4,8 +4,8 @@ import csv
 import os
 
 import networkx as nx
-from privacy_policy_analyzer.annotators import CollectionAnnotator
-from privacy_policy_analyzer.graph_utils import yaml_load_graph
+from poligrapher.annotators import CollectionAnnotator
+from poligrapher.graph_utils import yaml_load_graph
 
 
 def main():

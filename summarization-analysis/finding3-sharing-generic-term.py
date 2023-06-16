@@ -2,9 +2,8 @@ import argparse
 import os
 
 import networkx as nx
-import pandas as pd
 
-from privacy_policy_analyzer.graph_utils import KGraph, load_ontologies
+from poligrapher.graph_utils import KGraph, load_ontologies
 
 DATATYPE_CATEGORIES = [
     "software identifier",
@@ -78,11 +77,9 @@ def check_sharing_in_generic_terms(data_category_mapping, entity_ontology, kgrap
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
-    parser.add_argument("-y", "--ontology", required=True, help="Ontology directory")
-    parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     args = parser.parse_args()
 
-    data_ontology, entity_ontology = load_ontologies(args.ontology, args.entity_info)
+    data_ontology, entity_ontology = load_ontologies()
     data_category_mapping = {}
 
     for data_cat in DATATYPE_CATEGORIES:

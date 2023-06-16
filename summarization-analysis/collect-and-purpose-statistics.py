@@ -7,7 +7,7 @@ from pathlib import Path
 import networkx as nx
 import pandas as pd
 
-from privacy_policy_analyzer.graph_utils import KGraph, load_ontologies
+from poligrapher.graph_utils import KGraph, load_ontologies
 
 DATATYPE_CATEGORIES = [
     "UNSPECIFIED_DATA",
@@ -114,8 +114,8 @@ class ParallelHelper:
         return self.run_on_graph(kgraph)
 
 
-def worker(args, input, output):
-    data_ontology, entity_ontology = load_ontologies(args.ontology, args.entity_info)
+def worker(input, output):
+    data_ontology, entity_ontology = load_ontologies()
     helper = ParallelHelper(data_ontology, entity_ontology)
 
     for path in iter(input.get, None):
@@ -126,8 +126,6 @@ def worker(args, input, output):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
-    parser.add_argument("-y", "--ontology", required=True, help="Ontology directory")
-    parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     parser.add_argument("-o", "--output-dir", required=True, help="Output dir")
     args = parser.parse_args()
 
@@ -136,7 +134,7 @@ def main():
     output_queue = mp.Queue()
 
     for _ in range(nproc):
-        mp.Process(target=worker, args=(args, input_queue, output_queue)).start()
+        mp.Process(target=worker, args=(input_queue, output_queue)).start()
 
     for path in args.workdirs:
         input_queue.put(path)

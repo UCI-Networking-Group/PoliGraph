@@ -8,8 +8,8 @@ import os
 import re
 from collections import defaultdict
 
-from privacy_policy_analyzer.document import PolicyDocument
-from privacy_policy_analyzer.utils import setup_nlp_pipeline
+from poligrapher.document import PolicyDocument
+from poligrapher.utils import setup_nlp_pipeline
 
 # PoliCheck data types to PoliGraph data types
 DATATYPE_REGEX = {

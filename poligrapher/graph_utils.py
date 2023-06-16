@@ -1,12 +1,15 @@
 import contextlib
+from contextlib import contextmanager
 import functools
+import importlib.resources as pkg_resources
 import itertools
 import json
-from contextlib import contextmanager
-from .annotators import CollectionAnnotator
 
 import networkx as nx
 import yaml
+
+import poligrapher
+from poligrapher.annotators import CollectionAnnotator
 
 # Hardcode the barebone of the entity ontology
 ENTITY_ONTOLOGY = [
@@ -37,7 +40,13 @@ def load_ontology_from_graphml(path):
     return ontology
 
 
-def load_ontologies(data_ontology_path, entity_info_json_path):
+def load_ontologies(data_ontology_path="", entity_info_json_path=""):
+    with pkg_resources.path(poligrapher, "extra-data") as extra_data:
+        if not data_ontology_path:
+            data_ontology_path = extra_data / "data_ontology_readable.graphml"
+        if not entity_info_json_path:
+            entity_info_json_path = extra_data / "entity_info.json"
+
     data_ontology = load_ontology_from_graphml(data_ontology_path)
     entity_ontology = nx.DiGraph()
 
@@ -62,20 +71,6 @@ def load_ontologies(data_ontology_path, entity_info_json_path):
                 entity_ontology.add_edge(entity_category, entity)
 
     return data_ontology, entity_ontology
-
-
-def gml_destringizer(s):
-    if s.startswith('[') or s.startswith('{'):
-        return json.loads(s)
-    else:
-        return s
-
-
-def gml_stringizer(obj):
-    if isinstance(obj, str):
-        return obj
-    else:
-        return json.dumps(obj)
 
 
 def yaml_dump_graph(G: nx.Graph, stream=None):

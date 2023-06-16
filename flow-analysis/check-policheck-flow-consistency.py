@@ -5,7 +5,7 @@ import os
 from functools import lru_cache
 
 import tldextract
-from privacy_policy_analyzer.graph_utils import ExtKGraph, KGraph, load_ontologies
+from poligrapher.graph_utils import ExtKGraph, KGraph, load_ontologies
 
 
 class DomainMapper:

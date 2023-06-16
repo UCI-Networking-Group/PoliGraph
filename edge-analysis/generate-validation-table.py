@@ -4,7 +4,7 @@ import os
 import random
 import itertools
 
-from privacy_policy_analyzer.graph_utils import yaml_load_graph
+from poligrapher.graph_utils import yaml_load_graph
 
 
 def get_existing_data(graph, existing_data):

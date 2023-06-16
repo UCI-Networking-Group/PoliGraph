@@ -5,7 +5,8 @@ import csv
 import os
 
 import networkx as nx
-from privacy_policy_analyzer.graph_utils import load_ontologies, yaml_load_graph
+
+from poligrapher.graph_utils import load_ontologies, yaml_load_graph
 
 
 def check_definitions(kgraph, data_ontology, entity_ontology):
@@ -46,11 +47,9 @@ def check_definitions(kgraph, data_ontology, entity_ontology):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("workdirs", nargs="+", help="Input directories")
-    parser.add_argument("-y", "--ontology", required=True, help="Ontology directory")
-    parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     args = parser.parse_args()
 
-    data_ontology, entity_ontology = load_ontologies(args.ontology, args.entity_info)
+    data_ontology, entity_ontology = load_ontologies()
 
     for d in args.workdirs:
         print(f"Processing {d} ...")

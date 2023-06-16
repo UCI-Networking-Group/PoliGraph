@@ -9,8 +9,8 @@ import re
 
 from rapidfuzz import fuzz, process
 
-from privacy_policy_analyzer.annotators import CollectionAnnotator
-from privacy_policy_analyzer.graph_utils import KGraph, yaml_load_graph
+from poligrapher.annotators import CollectionAnnotator
+from poligrapher.graph_utils import KGraph, yaml_load_graph
 
 
 def check_subsum_conflict(kgraph: KGraph, pos_term, neg_term):
@@ -129,10 +129,10 @@ class EdgeMapper:
     ENTITY_TERM_MAP = [(re.compile(r, re.I), frozenset(s)) for r, s in _ENTITY_TERM_MAP]
 
     def __init__(self, workdir):
-        with open(os.path.join(workdir, "graph-default.yml"), encoding="utf-8") as fin:
+        with open(os.path.join(workdir, "graph-extended.yml"), encoding="utf-8") as fin:
             self.graph = yaml_load_graph(fin)
 
-        self.kgraph = KGraph(os.path.join(workdir, "graph-default.yml"))
+        self.kgraph = KGraph(os.path.join(workdir, "graph-extended.yml"))
 
         self.text_to_collect_edges = text_to_collect_edges = {}
 

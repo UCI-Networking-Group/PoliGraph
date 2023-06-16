@@ -8,7 +8,7 @@ import logging
 import os
 from collections import defaultdict
 
-from privacy_policy_analyzer.graph_utils import KGraph
+from poligrapher.graph_utils import KGraph
 
 # PoliCheck data types to PoliGraph data types
 DATATYPE_MAPPING = {

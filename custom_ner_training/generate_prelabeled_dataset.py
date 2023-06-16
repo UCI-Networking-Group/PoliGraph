@@ -8,7 +8,7 @@ import random
 
 import spacy
 
-from privacy_policy_analyzer.document import PolicyDocument, SegmentType
+from poligrapher.document import PolicyDocument, SegmentType
 
 
 def main():
