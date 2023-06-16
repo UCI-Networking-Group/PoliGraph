@@ -1,6 +1,6 @@
 [submodule "external_datasets/crunchbase-data"]
-	path = external_datasets/crunchbase-data
+	path = datasets/crunchbase-data
 	url = https://github.com/notpeter/crunchbase-data.git
 [submodule "external_datasets/tracker-radar"]
-	path = external_datasets/tracker-radar
+	path = datasets/tracker-radar
 	url = https://github.com/duckduckgo/tracker-radar.git
