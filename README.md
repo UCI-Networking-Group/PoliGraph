@@ -1,177 +1,136 @@
-# Privacy Policy Analyzer
+# PoliGraph: Automated Privacy Policy Analysis using Knowledge Graphs
 
-The NLP-based privacy policy analyzer.
+In USENIX 2023, we proposed PoliGraph, a framework to represent data collection statements in a privacy policy as a knowledge graph. We implemented an NLP-based tool, PoliGraph-er, to generate PoliGraphs and allow us to perform many analyses.
 
+This repository is hosts the source code for PoliGraph, including:
 
-## Setup
+- PoliGraph-er software - see instructions below.
+- Evaluation scripts under `evals/`.
+- PoliGraph analyses scripts under `analyses/`
+- Dataset preparation scripts under `datasets/`.
+- Model training scripts under `models/`.
 
-### Dependencies
+## Citation
 
-**Hardware**: An NVIDIA GPU with CUDA support and at least 8GB memory is recommended. All the instructions are tested with RTX A5000 GPU.
+If you create a publication based on PoliGraph, please cite the paper as follows:
 
-**System**: All the instructions are tested on Debian 11. Any modern GNU/Linux distribution should be sufficient.
-
-We use conda to manage the Python environment. Please follow [this instruction](https://conda.io/projects/conda/en/latest/user-guide/install/linux.html) to download and install conda.
-
-Create a new conda environment with dependencies installed:
-
-```sh
-$ conda env create -n nlp -f environment.yml
-$ conda activate nlp
+```bibtex
+@inproceedings{cui2023poligraph,
+  title     = {{PoliGraph: Automated Privacy Policy Analysis using Knowledge Graphs}},
+  author    = {Cui, Hao and Trimananda, Rahmadi and Markopoulou, Athina and Jordan, Scott},
+  booktitle = {Proceedings of the 32nd USENIX Security Symposium (USENIX Security 23)},
+  year      = {2023}
+}
 ```
 
-Playwright library (used by the crawler script) needs to be initialized:
+## System Requirements
+
+We test all the code in this repository on a server with the following configuration:
+- CPU: Intel Xeon Silver 4316 (2 sockets x 20 cores x 2 threads)
+- Memory: 512 GiB
+- GPU: NVIDIA RTX A5000 (24 GiB of video memory)
+- OS: Debian GNU/Linux 11 (bullseye)
+
+A Linux server with 32 GiB of memory, 20 GiB of free disk space (after installing conda), and a similar NVIDIA GPU should suffice to run everything. Note that PoliGraph-er can run without a GPU, but the performance would be much worse.
+
+## PoliGraph-er
+
+PoliGraph-er is the software to generate PoliGraph from the text of a privacy policy.
+
+### Installation
+
+PoliGraph-er is written in Python. We use conda to manage the Python dependencies. Please follow [this instruction](https://conda.io/projects/conda/en/latest/user-guide/install/linux.html) to download and install conda first.
+
+After cloning this repository, change the working directory to the cloned directory.
+
+Create a new conda environment named `poligraph` with dependencies installed:
+
+```sh
+$ conda env create -n poligraph -f environment.yml
+$ conda activate poligraph
+```
+
+Initialize Playwright library (used by the crawler script):
 
 ```sh
 $ playwright install
 ```
 
-### Cloning This Repository
-
-Use `git` to download this repository to local machine:
+Download `poligrapher-extra-data.tar.gz` from [here](https://drive.google.com/file/d/1qHifRx93EfTkg2x1e2W_lgQAgk7HcXhP/view?usp=sharing). Extract its content to `poligrapher/extra-data`:
 
 ```sh
-$ git clone https://github.uci.edu/NetworkingGroup/privacy_policy_analyzer.git
+$ tar xf /path/to/poligrapher-extra-data.tar.gz -C poligrapher/extra-data
 ```
 
-Clone external datasets as git submodules:
+Install the PoliGraph-er (`poligrapher`) library:
 
 ```sh
-$ git submodule init
-$ git submodule update
+$ pip install --editable .
 ```
 
+### Basic Usage
 
-## NLP Pipeline Setup
-
-### Pretrained NLP Pipelines
-
-Install spaCy's English NLP pipelines:
+Here we illustrate how to generate a PoliGraph from a real privacy policy. We use the following privacy policy webpage as the example:
 
 ```sh
-$ python -m spacy download en_core_web_trf
-$ python -m spacy download en_core_web_md
-$ python -m spacy download en_core_web_sm
+$ POLICY_URL="https://web.archive.org/web/20230330161225id_/https://proteygames.github.io/"
 ```
 
-### Custom NER Training
-
-Note that you may skip this step and use our released model checkpoint instead (see the next step).
-
-All code related to NER training are inside `custom_ner_training` folder:
+First, run the HTML crawler script to download the webpage:
 
 ```sh
-$ cd custom_ner_training/
+$ python -m poligrapher.scripts.html_crawler ${POLICY_URL} example/
 ```
 
-Run `get_actor_entity_list.py` to fetch a list of entity names from Wikidata:
+The directory `example/` will be used to store all the intermediate and final output associated with this privacy policy.
+
+Second, run the `init_document` script to preprocess the webpage and run NLP pipeline on the privacy policy document:
 
 ```sh
-$ python get_actor_entity_list.py
-# Output: actor_entities.list
+$ python -m poligrapher.scripts.init_document example/
 ```
 
-Run `gen_ner_data.py` generate synthetic training data:
+Third, execute the `run_annotators` script to run annotators on the privacy policy document.
 
 ```sh
-$ python gen_ner_data.py
-# Output: train_dataset.spacy, dev_dataset.spacy
+$ python -m poligrapher.scripts.run_annotators example/
 ```
 
-Train the custom NER model:
+Last, the `build_graph` script to generate the PoliGraph:
 
 ```sh
-$ python -m spacy init fill-config base_config.cfg config.cfg
-# Output: config.cfg
-$ python -m spacy train config.cfg --output checkpoints/ --paths.train train_dataset.spacy --paths.dev dev_dataset.spacy --gpu-id 0
-# Output: checkpoints/ folder
+$ python -m poligrapher.scripts.build_graph example/
 ```
 
-The model checkpoint with best performance is saved to `checkpoints/model-best`.
+The generated graph is stored at `example/graph-original.yml`.
 
-### Packing the NLP Pipeline
+### Batch Processing
 
-Run the `repack_model` script to embed the custom NER model into spaCy's NLP pipeline.
+If multiple directories are supplied to 
 
-If you trained the NER model following the [Custom NER Training](#custom-ner-training) section, run the following commands:
+The `init_document`, `run_annotators` and `build_graph` scripts support batch processing. Simply supply multiple directories in the arguments:
 
 ```sh
-$ cd ..
-$ python -m privacy_policy_analyzer.scripts.repack_model custom_ner_training/checkpoints/model-best/ nlp_model/
-# Output: nlp_model/ folder (about 1GB size)
+$ python -m poligrapher.scripts.init_document dataset/policy1 dataset/policy2 dataset/policy3
+$ python -m poligrapher.scripts.run_annotators dataset/policy1 dataset/policy2 dataset/policy3
+$ python -m poligrapher.scripts.build_graph dataset/policy1 dataset/policy2 dataset/policy3
 ```
 
-Otherwise, please download our NER model checkpoint [here](#TODO) to `custom-ner-model.tar.gz` and run:
+If all the subdirectories under `dataset` contain valid crawled webpages, you may simply supply `dataset/*` to let UNIX shell to expand the arguments.
+
+### View PoliGraph
+
+You may use a text editor to view `graph-original.yml`. The format is human-readable and fairly straightforward.
+
+Alternatively, you can run `build_graph` with `--pretty` parameter:
 
 ```sh
-$ tar xf custom-ner-model.tar.gz
-$ python -m privacy_policy_analyzer.scripts.repack_model model-best/ nlp_model/
-# Output: nlp_model/ folder (about 1GB size)
-$ rm -rf model-best/
+$ python -m poligrapher.scripts.build_graph --pretty example/
 ```
 
-The analyzer will use the packed NLP pipeline stored in the `nlp_model` folder.
+This generates PoliGraph in the GraphML format (`example/graph-original.graphml`), which can be imported to [yEd](https://www.yworks.com/products/yed), a GUI graph editor.
 
 
-## Privacy Policy Analyzer
+## Other Scripts
 
-We will use [KAYAK privacy policy](https://www.kayak.com/privacy) as an example.
-
-### Download the Privacy Policy
-
-Run the HTML crawler script to download the privacy policy:
-
-```sh
-$ mkdir examples/
-$ python -m privacy_policy_analyzer.scripts.html_crawler https://www.kayak.com/privacy examples/kayak/
-```
-
-A successful run outputs something like:
-
-```
-2022-10-18 13:25:06,858 [INFO] Testing URL 'https://www.kayak.com/privacy' with HEAD request
-2022-10-18 13:25:08,693 [INFO] Navigating to 'https://www.kayak.com/privacy'
-2022-10-18 13:25:13,408 [INFO] Saved to examples/kayak
-```
-
-The `examples/kayak/` folder will be used by all the subsequent scripts to store intermediate data and results.
-
-### HTML Preprocessing and NLP
-
-Execute the `init_document` script to preprocess HTML and run NLP pipeline on the privacy policy document:
-
-```sh
-$ python -m privacy_policy_analyzer.scripts.init_document --nlp nlp_model examples/kayak
-```
-
-The script and subsequent scripts generally take the following arguments:
-- The `--nlp` argument specifies the path to the packed NLP pipeline.
-- Positional arguments (`examples/kayak`) specify one or more paths to privacy policies downloaded by the crawler script.
-
-If you want to run the analyzer on a batch of privacy policies, it is recommended to run each script step once with all the paths appended in the command instead of multiple runs, because loading the NLP pipeline takes time.
-
-### Annotators
-
-Execute the `run_annotators` script to run annotators on the privacy policy document.
-
-```sh
-$ python -m privacy_policy_analyzer.scripts.run_annotators --nlp nlp_model
-```
-
-### Graph Building
-
-The first time you run this step, please generate `entity_info.json` from the Tracker Radar and Crunchbase datasets:
-
-```sh
-$ python dataset_preprocessing/merge_tracker_radar_and_crunchbase.py external_datasets/tracker-radar external_datasets/crunchbase-data entity_info.json
-```
-
-The output file `entity_info.json` contains information that help to normalize company names and build the global entity ontology.
-
-Execute the `build_graph` script to generate the PoliGraph:
-
-```sh
-$ python3 -m privacy_policy_analyzer.scripts.build_graph --nlp nlp_model -p privacy_policy_analyzer/extra-data/phrase_map.yml -e entity_info.json examples/kayak
-```
-
-The output is `examples/kayak/graph_trimmed.gml`. You may use a graph viewer like [yEd](https://www.yworks.com/products/yed) to open the file.
+We will update the documentation to explain the usage of other scripts.
