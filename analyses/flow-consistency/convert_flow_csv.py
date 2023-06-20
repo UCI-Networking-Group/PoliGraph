@@ -1,14 +1,16 @@
 import csv
 import functools
-import shelve
 import hashlib
+import importlib.resources as pkg_resources
 import ipaddress
 import json
 import re
+import shelve
 import socket
 import sys
 
 import tldextract
+import poligrapher
 
 CLOUD_PROVIDERS = {
     "amazonaws.com", "amazonaws.com.cn", "cloudfront.net", "akamaitechnologies.com", "linode.com",
@@ -77,7 +79,7 @@ class DomainMapper:
         return False
 
 def main():
-    input_csv, entity_info, dns_cache, output_json = sys.argv[1:]
+    input_csv, dns_cache, output_json = sys.argv[1:]
 
     FLOW_CSV_COLUMNS = ['package_name', 'app_name', 'version_name', 'version_code',
                         'data_type', 'dest_domain', 'dest_ip', 'arb_number', 'privacy_policy']
@@ -99,6 +101,9 @@ def main():
         'real_name': 'person name',
         'gsfid': 'gsf id'
     }
+
+    with pkg_resources.path(poligrapher, "extra-data") as extra_data:
+        entity_info = extra_data / "entity_info.json"
 
     domain_mapper = DomainMapper(entity_info)
     data = {}

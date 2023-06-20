@@ -1,10 +1,12 @@
 import argparse
 import csv
+import importlib.resources as pkg_resources
 import json
 import os
 from functools import lru_cache
 
 import tldextract
+import poligrapher
 from poligrapher.graph_utils import ExtKGraph, KGraph, load_ontologies
 
 
@@ -31,16 +33,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("flow_json", help="Flow JSON file")
     parser.add_argument("out_csv", help="Output CSV file")
-    parser.add_argument("-y", "--ontology", required=True, help="Data directory")
     parser.add_argument("-p", "--privacy-policy-root", required=True, help="Input privacy policy directories")
-    parser.add_argument("-e", "--entity-info", required=True, help="Path to entity_info.json")
     args = parser.parse_args()
+
+    with pkg_resources.path(poligrapher, "extra-data") as extra_data:
+        entity_info = extra_data / "entity_info.json"
 
     with open(args.flow_json, encoding="utf-8") as fin:
         input_data = json.load(fin)
 
-    domain_mapper = DomainMapper(args.entity_info)
-    data_ontology, entity_ontology = load_ontologies(args.ontology, args.entity_info)
+    domain_mapper = DomainMapper(entity_info)
+    data_ontology, entity_ontology = load_ontologies()
 
     all_data_types = set()
 
