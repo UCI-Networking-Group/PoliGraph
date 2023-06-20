@@ -331,3 +331,7 @@ DATA,technical information,126,311,advertising id|age|aggregate / deidentified /
 ```
 
 The row indicates that the data type "technical information" is defined in 126 and used in 311 privacy policies, and possible specific data types are listed in the last column.
+
+## Additional Experiments
+
+This document only covers the four experiments mentioned in our USENIX'23 Artifact Appendix. We provide another document [Artifact Evaluation (Additional Experiments)](./usenix-artifact-evaluation-additional.md) to show how to reproduce results in Sections 5.3 and 5.4 of our main paper.

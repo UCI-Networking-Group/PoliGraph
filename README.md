@@ -132,4 +132,4 @@ This generates a PoliGraph in the GraphML format (`example/graph-original.graphm
 
 We will update the documentation under the `docs/` directory to explain the usage of other scripts.
 
-Please refer to the document [USENIX Security 2023 Artifact Evaluation](./docs/usenix-artifact-evaluation.md) for instructions on reproducing the main results in our paper.
+Please refer to the document [USENIX Security 2023 Artifact Evaluation](./docs/usenix-artifact-evaluation.md) and [Artifact Evaluation (Additional Experiments)](./docs/usenix-artifact-evaluation-additional.md) for instructions on reproducing the main results in our paper.
