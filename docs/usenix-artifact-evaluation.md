@@ -235,6 +235,12 @@ In this experiment, we reproduce main results about policies summarization prese
 
 This experiment takes less than 10 minutes to complete.
 
+Change to the `~/dataset` directory before proceeding:
+
+```
+$ cd ~/dataset
+```
+
 Step 1. The scripts needed for this experiment are in the `analyses/summarization` directory in the Git repo. Copy them to the current directory for convenience:
 
 ```
@@ -269,6 +275,12 @@ $ python summarization/plot.py summarization/ summarization/figure.pdf
 In this experiment, we use PoliGraph to assess the correctness of definitions of terms, as presented in Section 5.2 of the main paper.
 
 This experiment takes less than 10 minutes to complete.
+
+Change to the `~/dataset` directory before proceeding:
+
+```
+$ cd ~/dataset
+```
 
 Step 1. The scripts needed for this experiment are in the `analyses/term-definitions` directory in the Git repo. Copy them to the current directory for convenience:
 
