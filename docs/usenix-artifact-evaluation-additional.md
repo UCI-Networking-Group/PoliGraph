@@ -66,6 +66,12 @@ $ xsv search -s labels '\bCONFLICT\b' contradictions/policylint-reclassify.csv |
 
 In this experiment, we compare each app's data flows (i.e., the actual data collection practices observed in the network traffic) to the data collection statements inferred from its PoliGraph.
 
+Change to the `~/dataset` directory before proceeding:
+
+```
+$ cd ~/dataset
+```
+
 Step 1. Run PoliGraph-er with the historical (2019) version of privacy policies from the PoliCheck dataset to create PoliGraphs for them:
 
 ```

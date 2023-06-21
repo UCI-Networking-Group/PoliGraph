@@ -2,11 +2,11 @@
 
 This document provides instructions on how to reproduce the main results in our paper in support of the USENIX Security 2023 Artifact Evaluation.
 
-Please note that these instructions are intended for artifact reviewers, who have been given access to our test server.
+Please note the exact commands shown in this document are intended for artifact reviewers, who have been given access to a preconfigured environment. For other users, please check [README.md](../README.md) at the top level of this repository for general information about the use of our code.
 
 ## Overall Instruction
 
-For artifact reviewers, we provide access to our test server which has the recommended hardware configuration. Please check HotCRP comments for instructions on how to access the server via SSH.
+For artifact reviewers, we provide access to our test server which has the recommended hardware configuration. Please check the "Artifact access" information on HotCRP for instructions on how to access the server via SSH.
 
 We have prepared the following directories in the home directory:
 
@@ -334,4 +334,4 @@ The row indicates that the data type "technical information" is defined in 126 a
 
 ## Additional Experiments
 
-This document only covers the four experiments mentioned in our USENIX'23 Artifact Appendix. We provide another document [Artifact Evaluation (Additional Experiments)](./usenix-artifact-evaluation-additional.md) to show how to reproduce results in Sections 5.3 and 5.4 of our main paper.
+Corresponding to our USENIX '23 Artifact Appendix, this document covers experiments in Sections 4.2 (Evaluation), 5.1 (Policies Summarization), and 5.2 (Correct Definitions of Terms), which we believe showcase the main merits of PoliGraph. For those interested in Sections 5.3 (Contradiction Analysis) and 5.4 (Data Flow-to-Policy Consistency Analysis), we provide another document [Artifact Evaluation (Additional Experiments)](./usenix-artifact-evaluation-additional.md) to show how to reproduce the main results there.

@@ -10,9 +10,11 @@ This repository hosts the source code for PoliGraph, including:
 - Dataset preparation scripts under `datasets/`.
 - Model training scripts under `models/`.
 
+PoliGraph is part of [the Policy-Technology project](https://athinagroup.eng.uci.edu/projects/auditing-and-policy-analysis/) of the UCI Networking Group.
+
 ## Citation
 
-If you create a publication based on PoliGraph, please cite the paper as follows:
+If you create a publication based on PoliGraph and/or its dataset, please cite the paper as follows:
 
 ```bibtex
 @inproceedings{cui2023poligraph,
@@ -31,11 +33,11 @@ We have tested all the code in this repository on a server with the following co
 - GPU: NVIDIA RTX A5000 (24 GiB of video memory)
 - OS: Debian GNU/Linux 11 (bullseye)
 
-A Linux server with 32 GiB of memory, 20 GiB of free disk space (after installing conda), and a similar NVIDIA GPU should suffice to run everything. Note that PoliGraph-er can run without a GPU, but the performance would be significantly lower.
+A Linux server with 32 GiB of memory, 20 GiB of free disk space (after installing conda), and a similar NVIDIA GPU should suffice to run everything. A GPU is required to enable hardware acceleration for [transformer-based NLP models](https://spacy.io/usage/embeddings-transformers). Note that PoliGraph-er can run without a GPU, but the performance would be significantly lower.
 
 ## PoliGraph-er
 
-PoliGraph-er is the software used to generate PoliGraphs from the text of a privacy policy.
+PoliGraph-er is the NLP software used to generate PoliGraphs from the text of a privacy policy.
 
 ### Installation
 
@@ -102,7 +104,15 @@ Lastly, execute the `build_graph` script to generate the PoliGraph:
 $ python -m poligrapher.scripts.build_graph example/
 ```
 
-The generated graph is stored at `example/graph-original.yml`.
+The generated graph is stored at `example/graph-original.yml`. You may use a text editor to view it. The format is human-readable and fairly straightforward.
+
+Alternatively, if you run `build_graph` with the `--pretty` parameter, it will generate a PoliGraph in the GraphML format (`example/graph-original.graphml`), which can be imported to some graph editor software:
+
+```sh
+$ python -m poligrapher.scripts.build_graph --pretty example/
+```
+
+For more instructions on how to view the graphs, please refer to the document [Viewing a PoliGraph](./docs/view-poligraph.md).
 
 ### Batch Processing
 
@@ -116,19 +126,11 @@ $ python -m poligrapher.scripts.build_graph dataset/policy1 dataset/policy2 data
 
 If all the subdirectories under `dataset` contain valid crawled webpages, you may simply supply `dataset/*` to let the shell expand the arguments.
 
-### View PoliGraph
+## PoliGraph Dataset
 
-You may use a text editor to view `graph-original.yml`. The format is human-readable and fairly straightforward.
+We released the privacy policy dataset used in our paper for reproducibility and other research usages. Please visit [the dataset page](https://athinagroup.eng.uci.edu/projects/auditing-and-policy-analysis/poligraph-dataset/) to request access to the dataset.
 
-Alternatively, you can run `build_graph` with the `--pretty` parameter:
-
-```sh
-$ python -m poligrapher.scripts.build_graph --pretty example/
-```
-
-This generates a PoliGraph in the GraphML format (`example/graph-original.graphml`), which can be imported to [yEd](https://www.yworks.com/products/yed), a GUI graph editor. For more instructions, refer to the document [Viewing a PoliGraph](./docs/view-poligraph.md).
-
-## Documentation
+## Artifact Evaluation
 
 We will update the documentation under the `docs/` directory to explain the usage of other scripts.
 
