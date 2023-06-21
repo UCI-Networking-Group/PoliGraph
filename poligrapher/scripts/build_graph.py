@@ -262,13 +262,15 @@ class GraphBuilder:
             """Step 6: Run phrase normalization."""
 
             for src, token_type in token_type_map.items():
-                normalized_terms_map[src] = terms = set()
-
                 if (phrase := _expand_phrase(src)) is None:
+                    normalized_terms_map[src] = []
                     continue
 
                 # Fallback to lemmatization only if token types from NER and graph relation agrees
                 flag_use_stem = phrase.root.ent_type_ == token_type
+
+                # All candidate terms
+                terms = set()
 
                 match token_type:
                     case "DATA":
@@ -318,7 +320,8 @@ class GraphBuilder:
 
                 G_final.add_nodes_from(terms, type=token_type)
 
-                logging.info("Phrase %r (%s) -> %r", phrase.text, token_type, ", ".join(sorted(terms)))
+                normalized_terms_map[src] = sorted(terms, reverse=True)  # Stablize set order for reproducibility
+                logging.info("Phrase %r (%s) -> %r", phrase.text, token_type, ", ".join(normalized_terms_map[src]))
 
         def merge_subsum_graph():
             """Step 7: Populate SUBSUM edges in G_final from G_subsum."""
