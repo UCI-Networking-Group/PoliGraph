@@ -44,7 +44,7 @@ def main():
             logging.info("Processing %s ...", d)
 
             app_id = os.path.basename(os.path.realpath(d))
-            app_tuples = defaultdict(set)
+            app_tuples = defaultdict(list)
 
             for sentence, entity, datatype in con.execute("""
                 SELECT sentenceId, entity, data FROM AppPolicySentences S, Policy P
@@ -52,16 +52,16 @@ def main():
             """, (app_id,)):
                 if datatype in DATATYPE_MAPPING:
                     if entity == "we":
-                        app_tuples[("we", datatype)].add(sentence)
+                        app_tuples[("we", datatype)].append(sentence)
                     else:
-                        app_tuples[("3rd-party", datatype)].add(sentence)
+                        app_tuples[("3rd-party", datatype)].append(sentence)
 
             for (entity, datatype), all_text in app_tuples.items():
                 writer.writerow({
                     "app_id": app_id,
                     "entity": entity,
                     "datatype": datatype,
-                    "text": "\n".join(json.dumps(s) for s in all_text),
+                    "text": "\n".join(json.dumps(s) for s in dict.fromkeys(all_text)),
                 })
 
 

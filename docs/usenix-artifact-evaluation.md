@@ -290,8 +290,8 @@ This step will create a `misleading_definitions.csv` file in each privacy policy
 ```
 $ cat dedup/f98d62977bb0ac2e5ebe3252295b577be43a35815482bd1c07334f76c064a3b2/misleading_definitions.csv
 type,parent,child
-data,non-personal information,ip address
 data,non-personal information,device information
+data,non-personal information,ip address
 ```
 
 Step 3. Run `check-self-defined-terms.py` to aggregate non-standard terms found in privacy policies into a CSV file:

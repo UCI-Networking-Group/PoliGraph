@@ -65,10 +65,10 @@ def main():
             writer = csv.DictWriter(fout, fieldnames=["type", "parent", "child"])
             writer.writeheader()
 
-            for u, v in bad_datatype_links:
+            for u, v in sorted(bad_datatype_links):
                 writer.writerow(dict(type="data", parent=u, child=v))
 
-            for u, v in bad_entity_links:
+            for u, v in sorted(bad_entity_links):
                 writer.writerow(dict(type="entity", parent=u, child=v))
 
 if __name__ == "__main__":
